@@ -159,6 +159,19 @@ static volatile uint32_t so_w, so_r;
 #define MQ 64u
 static uint32_t midi_in_q[MQ], midi_out_q[MQ];
 static volatile uint32_t mi_w, mi_r, mo_w, mo_r;
+static volatile uint8_t midi_in_overflow;           /* a message was dropped (queue full); the app may release held notes */
+static int midi_enqueue(uint32_t pkt, uint32_t source)    /* USB-MIDI event packet into the app's ring (source: 1 USB, 2 TRS) */
+{
+    (void)source;
+    if (mi_w - mi_r >= MQ) {
+        midi_in_overflow = 1;
+        return 0;
+    }
+    midi_in_q[mi_w % MQ] = pkt;
+    RING_PUBLISH();
+    mi_w++;
+    return 1;
+}
 static void midi_out_event(uint32_t pkt)            /* from the audio ISR */
 {
     if (usb.config && mo_w - mo_r < MQ) {

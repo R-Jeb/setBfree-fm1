@@ -1,0 +1,411 @@
+<title>B3 Orgel Emulator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one console panel, drawbars on top, effect switches under them, a two-octave keyboard at the bottom. */
+:root {
+  --bg: #e6dfd2;
+  --panel: #f5f0e6;
+  --panel-2: #ebe3d3;
+  --line: #c9bda6;
+  --fg: #2a2118;
+  --muted: #6f604d;
+  --accent: #b5560f;
+  --accent-fg: #fff8ee;
+  --cap-brown: #9a5a2f;
+  --cap-white: #f3eee3;
+  --cap-black: #2b2724;
+  --cap-edge: #6d604f;
+  --key-white: #fbf8f1;
+  --key-black: #25211d;
+  --key-down: #f0a24c;
+  --font-label: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15100c; --panel: #221a13; --panel-2: #2d2218; --line: #43362a; --fg: #efe3d0; --muted: #a8977f;
+    --accent: #ffb45a; --accent-fg: #1d130a; --cap-brown: #b8703d; --cap-white: #ece6da; --cap-black: #34302c;
+    --cap-edge: #8a7a66; --key-white: #e9e2d4; --key-black: #151210; --key-down: #ffb45a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15100c; --panel: #221a13; --panel-2: #2d2218; --line: #43362a; --fg: #efe3d0; --muted: #a8977f;
+  --accent: #ffb45a; --accent-fg: #1d130a; --cap-brown: #b8703d; --cap-white: #ece6da; --cap-black: #34302c;
+  --cap-edge: #8a7a66; --key-white: #e9e2d4; --key-black: #151210; --key-down: #ffb45a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+  padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 32px;
+}
+.wrap { max-width: 860px; margin: 0 auto; display: grid; gap: 14px; }
+h1 { font-family: var(--font-label); font-weight: 700; font-size: 28px; letter-spacing: .06em; text-transform: uppercase; margin: 0; line-height: 1.1; }
+.top { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
+.sub { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; min-width: 0; }
+.label { font-family: var(--font-label); font-weight: 600; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.power { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.btn-main {
+  font-family: var(--font-label); font-weight: 700; font-size: 17px; letter-spacing: .1em; text-transform: uppercase;
+  background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 4px; padding: 10px 20px; min-height: 44px;
+}
+.btn-main[aria-pressed="true"] { background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); }
+.stat { font-family: var(--font-num); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.dbhead { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font-family: var(--font-label); font-weight: 600; font-size: 14px; letter-spacing: .08em; text-transform: uppercase;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; min-height: 36px;
+}
+.chip[aria-pressed="true"], .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+
+.bars { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; }
+.bar { display: grid; justify-items: center; gap: 6px; }
+.track {
+  position: relative; width: 100%; max-width: 54px; height: 170px; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 4px; touch-action: none; cursor: ns-resize; user-select: none;
+}
+.notch { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+.cap {
+  position: absolute; left: 4px; right: 4px; height: 22px; margin-top: -11px; border-radius: 3px; border: 1px solid var(--cap-edge);
+  box-shadow: 0 2px 0 rgba(0,0,0,.25);
+}
+.cap.brown { background: var(--cap-brown); } .cap.white { background: var(--cap-white); } .cap.black { background: var(--cap-black); }
+.cap::after { content: ""; position: absolute; left: 6px; right: 6px; top: 50%; height: 1px; background: rgba(127,127,127,.55); }
+.bar .ft { font-family: var(--font-label); font-weight: 600; font-size: 14px; letter-spacing: .02em; white-space: nowrap; }
+.bar .val { font-family: var(--font-num); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.ctl { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px 24px; }
+.grp { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg button {
+  font-family: var(--font-label); font-weight: 600; font-size: 14px; letter-spacing: .06em; text-transform: uppercase;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; min-height: 36px; min-width: 40px;
+}
+.slider { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.slider input { width: 100%; accent-color: var(--accent); min-width: 0; }
+.slider output { font-family: var(--font-num); font-size: 12px; color: var(--muted); min-width: 2.5em; text-align: right; font-variant-numeric: tabular-nums; }
+
+.scope { display: block; width: 100%; height: 54px; border-radius: 4px; background: var(--panel-2); border: 1px solid var(--line); }
+.kbbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.kb { position: relative; display: flex; height: 150px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.wk {
+  flex: 1 1 0; min-width: 0; background: var(--key-white); border: 1px solid var(--cap-edge); border-top: 0; border-radius: 0 0 4px 4px;
+  position: relative; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px;
+  font-family: var(--font-num); font-size: 10px; color: var(--muted);
+}
+.wk.on { background: var(--key-down); }
+.bk { position: absolute; top: 0; height: 62%; background: var(--key-black); border: 1px solid var(--cap-edge); border-top: 0; border-radius: 0 0 3px 3px; z-index: 2; }
+.bk.on { background: var(--key-down); }
+.hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+.note { color: var(--muted); font-size: 13px; max-width: 70ch; margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .cap, .chip, .seg button { transition: background-color .08s; } }
+@media (max-width: 480px) { .track { height: 140px; } .bars { gap: 3px; } h1 { font-size: 24px; } }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>B3 Orgel</h1>
+      <p class="sub">Tonewheel-Orgel für den M-VAVE FM-1, hier im Browser.</p>
+    </div>
+    <div class="power">
+      <button class="btn-main" id="power" aria-pressed="false">Klang starten</button>
+      <span class="stat" id="stat">Audio aus</span>
+    </div>
+  </div>
+
+  <section class="panel" aria-label="Zugriegel">
+    <div class="dbhead">
+      <span class="label">Zugriegel</span>
+      <div class="chips" id="presets" role="group" aria-label="Registrierungen"></div>
+    </div>
+    <div class="bars" id="bars"></div>
+  </section>
+
+  <section class="panel ctl" aria-label="Effekte">
+    <div class="grp"><span class="label">Vibrato / Chorus</span><div class="seg" id="vib" role="group" aria-label="Vibrato"></div></div>
+    <div class="grp"><span class="label">Leslie</span><div class="seg" id="les" role="group" aria-label="Leslie"></div></div>
+    <div class="grp"><span class="label">Percussion</span>
+      <div class="seg" id="perc" role="group" aria-label="Percussion">
+        <button data-k="on" aria-pressed="false">An</button>
+        <button data-k="third" aria-pressed="true">3.</button>
+        <button data-k="fast" aria-pressed="false">Schnell</button>
+        <button data-k="soft" aria-pressed="false">Leise</button>
+      </div>
+    </div>
+    <div class="grp"><span class="label">Overdrive</span><div class="slider"><input type="range" id="drv" min="0" max="8" step="1" value="0" aria-label="Overdrive"><output id="drvo">0</output></div></div>
+    <div class="grp"><span class="label">Schweller</span><div class="slider"><input type="range" id="swl" min="0" max="127" step="1" value="127" aria-label="Schweller"><output id="swlo">127</output></div></div>
+    <div class="grp"><span class="label">Lautstärke</span><div class="slider"><input type="range" id="vol" min="0" max="100" step="1" value="70" aria-label="Lautstärke"><output id="volo">70</output></div></div>
+  </section>
+
+  <section class="panel" aria-label="Klaviatur">
+    <div class="kbbar">
+      <span class="label">Klaviatur <span id="range" class="stat"></span></span>
+      <div class="seg" role="group" aria-label="Oktave">
+        <button id="octd" aria-label="Oktave tiefer">Okt −</button>
+        <button id="octu" aria-label="Oktave höher">Okt +</button>
+      </div>
+    </div>
+    <div class="kb" id="kb"></div>
+    <p class="hint">Computertastatur: die mittlere Tastenreihe spielt die weißen, die obere Reihe die schwarzen Tasten, beginnend mit A am linken C. Die Tasten links unten (Y und X auf deutscher Tastatur) wechseln die Oktave. USB-MIDI-Keyboards werden erkannt, wenn der Browser es erlaubt (Töne C2 bis C7, CC 70 bis 78 steuern die Zugriegel, CC 11 den Schweller).</p>
+  </section>
+
+  <section class="panel" aria-label="Signal">
+    <canvas class="scope" id="scope" width="800" height="108" aria-label="Signalverlauf"></canvas>
+  </section>
+
+  <p class="note">Diese Seite führt dieselbe Rechenroutine aus wie die FM-1-Firmware (<code>organ_core.h</code>, als WebAssembly gebaut). Der Klang entspricht damit dem der Firmware, abgesehen von Lautsprecher und Ausgangsstufe des FM-1. Ob der FM-1-Prozessor die Rechenlast schafft, zeigt nur das Gerät selbst.</p>
+</div>
+
+<script>
+const WASM_B64 = "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IAshBAsgASAGbEEEdSIBQf//ASABQf//AUgbIgFBgYB+IAFBgYB+ShsiAUEDbCABIAFsQQ92IAFsQQ91a0HVqgFsQRB1IQECQAJAIA4NACABIQkMAQtBACADIBBqIgM2AvC5gIAAIAEgA0EQdiIJQf//A3MgCSADQQBIGyIKQa/zAGxBD3ZB0IwBamxBD3UhCSABQf//ASAKa0Gv8wBsQQ92QdCMAWpsQQ91IQELIAAgACgCACAJajYCACAAQQRqIgkgCSgCACABajYCACAAQQhqIQAgAkEEaiICDQALQQAgDzYC+KCAgABBACgC9LmAgAAaQYACC2wBA38CQCAAQTxLDQACQAJAIABBH0sNAEEAKALwoICAACICQQEgAHQiAHIhA0HwoICAACEEDAELQQAoAvSggIAAIgJBASAAQWBqdCIAciEDQfSggIAAIQQLIAQgAyACIABBf3NxIAEbNgIACwshAAJAIABBCEsNACABQQhLDQAgAEHQkICAAGogAToAAAsLtAEAAkAgAEEHSw0AQQAgAEEDdEGEiICAAGooAgAiAC0AAEFQajoA0JCAgABBACAALQABQVBqOgDRkICAAEEAIAAtAAJBUGo6ANKQgIAAQQAgAC0AA0FQajoA05CAgABBACAALQAEQVBqOgDUkICAAEEAIAAtAAVBUGo6ANWQgIAAQQAgAC0ABkFQajoA1pCAgABBACAALQAHQVBqOgDXkICAAEEAIAAtAAhBUGo6ANiQgIAACwsiAQF/QQAhAQJAIABBCEsNACAAQdCQgIAAai0AACEBCyABCxcAAkAgAEEGSw0AQQAgADoA2ZCAgAALCxcAAkAgAEECSw0AQQAgADoA3pCAgAALCxcAAkAgAEEISw0AQQAgADoA35CAgAALCzoAQQAgAEEBcToA2pCAgABBACABQQFxOgDbkICAAEEAIAJBAXE6ANyQgIAAQQAgA0EBcToA3ZCAgAALGAACQCAAQf8ASw0AQQAgADoA4JCAgAALCwsAQQAoAviggIAACxgAQQBBADYC9KCAgABBAEEANgLwoICAAAsUACAAQQdxQQN0QYCIgIAAaigCAAv0AQEBf0GgfSEBAkADQCABQeCjgIAAaiAAQY3M5QBsQd/mu+MDaiIANgIAIAFB5KOAgABqIABBjczlAGxB3+a74wNqIgA2AgAgAUHoo4CA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";
+
+const FOOT = ["16", "5⅓", "8", "4", "2⅔", "2", "1⅗", "1⅓", "1"];
+const CAP = ["brown", "brown", "white", "white", "black", "white", "black", "black", "white"];
+const PRESETS = [["Voll", "888888888"], ["Jazz", "888000000"], ["Blues", "888800000"], ["Flöte", "008000000"],
+                 ["Weich", "006800000"], ["Rohr", "008642000"], ["Hell", "005888000"], ["Tief", "880000000"]];
+const VIB = ["Aus", "V1", "V2", "V3", "C1", "C2", "C3"];
+const LES = ["Aus", "Langsam", "Schnell"];
+const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const BLACK = [1, 3, 6, 8, 10];
+const KEYMAP = ["KeyA","KeyW","KeyS","KeyE","KeyD","KeyF","KeyT","KeyG","KeyY","KeyH","KeyU","KeyJ","KeyK","KeyO","KeyL","KeyP","Semicolon","Quote"];
+
+const S = { db: [8, 8, 8, 0, 0, 0, 0, 0, 0], vib: 0, les: 0, drv: 0, swl: 127, vol: 70, base: 48,
+            perc: { on: 0, third: 1, fast: 0, soft: 0 }, preset: 1 };
+let ex = null, ctx = null, gainNode = null, analyser = null;
+const down = new Map();                         /* midi note -> count of sources holding it */
+const $ = (id) => document.getElementById(id);
+const tryStore = (fn) => { try { return fn(); } catch (e) { return null; } };
+
+function push() {
+  if (!ex) return;
+  S.db.forEach((v, i) => ex.organ_drawbar(i, v));
+  ex.organ_vib(S.vib); ex.organ_leslie(S.les); ex.organ_drive(S.drv); ex.organ_swell(S.swl);
+  ex.organ_perc(S.perc.on, S.perc.third, S.perc.fast, S.perc.soft);
+  down.forEach((c, n) => ex.organ_key(n - 36, 1));
+}
+
+/* ---- drawbars */
+const barEls = [];
+function drawBar(i) {
+  const e = barEls[i];
+  e.cap.style.top = (12 + (e.h - 24) * (1 - S.db[i] / 8)) + "px";
+  e.val.textContent = S.db[i];
+  e.track.setAttribute("aria-valuenow", S.db[i]);
+}
+function setDb(i, v) {
+  v = Math.max(0, Math.min(8, v));
+  if (S.db[i] === v) return;
+  S.db[i] = v; if (ex) ex.organ_drawbar(i, v);
+  drawBar(i); markPreset();
+}
+function buildBars() {
+  const root = $("bars");
+  FOOT.forEach((f, i) => {
+    const bar = document.createElement("div"); bar.className = "bar";
+    const track = document.createElement("div"); track.className = "track";
+    track.tabIndex = 0; track.setAttribute("role", "slider");
+    track.setAttribute("aria-label", "Zugriegel " + f + " Fuß"); track.setAttribute("aria-valuemin", 0); track.setAttribute("aria-valuemax", 8);
+    for (let n = 0; n <= 8; n++) { const nt = document.createElement("div"); nt.className = "notch"; track.appendChild(nt); }
+    const cap = document.createElement("div"); cap.className = "cap " + CAP[i]; track.appendChild(cap);
+    const ft = document.createElement("div"); ft.className = "ft"; ft.textContent = f + "′";
+    const val = document.createElement("div"); val.className = "val";
+    bar.append(track, ft, val); root.appendChild(bar);
+    const e = { track, cap, val, h: 170 }; barEls.push(e);
+    const place = (ev) => {
+      const r = track.getBoundingClientRect(); e.h = r.height;
+      const t = Math.max(0, Math.min(1, (ev.clientY - r.top - 12) / (r.height - 24)));
+      setDb(i, Math.round((1 - t) * 8));
+    };
+    track.addEventListener("pointerdown", (ev) => { track.setPointerCapture(ev.pointerId); place(ev); });
+    track.addEventListener("pointermove", (ev) => { if (track.hasPointerCapture(ev.pointerId)) place(ev); });
+    track.addEventListener("keydown", (ev) => {
+      const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[ev.key];
+      if (d) { setDb(i, S.db[i] + d); ev.preventDefault(); }
+      if (ev.key === "Home") setDb(i, 0); if (ev.key === "End") setDb(i, 8);
+    });
+  });
+  const sync = () => { barEls.forEach((e, i) => { e.h = e.track.getBoundingClientRect().height || 170; drawBar(i); }); };
+  new ResizeObserver(sync).observe(root); sync();
+}
+
+/* ---- presets and switches */
+function markPreset() {
+  const cur = S.db.join("");
+  document.querySelectorAll("#presets .chip").forEach((b, i) => b.setAttribute("aria-pressed", PRESETS[i][1] === cur ? "true" : "false"));
+}
+function buildSwitches() {
+  PRESETS.forEach(([name, db], i) => {
+    const b = document.createElement("button"); b.className = "chip"; b.textContent = name; b.setAttribute("aria-pressed", "false");
+    b.onclick = () => { db.split("").forEach((c, k) => setDb(k, +c)); };
+    $("presets").appendChild(b);
+  });
+  const seg = (id, labels, key, apply) => {
+    labels.forEach((l, i) => {
+      const b = document.createElement("button"); b.textContent = l; b.setAttribute("aria-pressed", S[key] === i ? "true" : "false");
+      b.onclick = () => { S[key] = i; apply(i); [...$(id).children].forEach((c, k) => c.setAttribute("aria-pressed", k === i ? "true" : "false")); };
+      $(id).appendChild(b);
+    });
+  };
+  seg("vib", VIB, "vib", (v) => ex && ex.organ_vib(v));
+  seg("les", LES, "les", (v) => ex && ex.organ_leslie(v));
+  $("perc").querySelectorAll("button").forEach((b) => {
+    b.onclick = () => {
+      const k = b.dataset.k; S.perc[k] ^= 1; b.setAttribute("aria-pressed", S.perc[k] ? "true" : "false");
+      if (ex) ex.organ_perc(S.perc.on, S.perc.third, S.perc.fast, S.perc.soft);
+    };
+    b.setAttribute("aria-pressed", S.perc[b.dataset.k] ? "true" : "false");
+  });
+  const rng = (id, key, apply) => { $(id).oninput = () => { S[key] = +$(id).value; $(id + "o").textContent = S[key]; apply(S[key]); }; };
+  rng("drv", "drv", (v) => ex && ex.organ_drive(v));
+  rng("swl", "swl", (v) => ex && ex.organ_swell(v));
+  rng("vol", "vol", (v) => { if (gainNode) gainNode.gain.value = (v / 100) * (v / 100); });
+  markPreset();
+}
+
+/* ---- keyboard */
+let keyEls = new Map();
+const noteName = (n) => NAMES[n % 12] + (Math.floor(n / 12) - 1);
+function buildKeys() {
+  const kb = $("kb"); kb.textContent = ""; keyEls = new Map();
+  const notes = []; for (let n = S.base; n < S.base + 24; n++) notes.push(n);
+  const whites = notes.filter((n) => !BLACK.includes(n % 12));
+  whites.forEach((n) => {
+    const k = document.createElement("div"); k.className = "wk"; k.dataset.n = n;
+    if (n % 12 === 0) k.textContent = noteName(n);
+    kb.appendChild(k); keyEls.set(n, k);
+  });
+  notes.forEach((n) => {
+    if (!BLACK.includes(n % 12)) return;
+    const wi = whites.indexOf(n - 1), w = 100 / whites.length;
+    const k = document.createElement("div"); k.className = "bk"; k.dataset.n = n;
+    k.style.left = ((wi + 1) * w - w * 0.3) + "%"; k.style.width = (w * 0.6) + "%";
+    kb.appendChild(k); keyEls.set(n, k);
+  });
+  $("range").textContent = noteName(S.base) + " bis " + noteName(S.base + 23);
+  down.forEach((c, n) => paintKey(n));
+}
+function paintKey(n) { const k = keyEls.get(n); if (k) k.classList.toggle("on", down.has(n)); }
+function noteOn(n) {
+  while (n < 36) n += 12;                        /* a keyboard may play outside C2..C7: fold it in by octaves */
+  while (n > 96) n -= 12;
+  down.set(n, (down.get(n) || 0) + 1);
+  if (ex && down.get(n) === 1) ex.organ_key(n - 36, 1);
+  paintKey(n);
+}
+function noteOff(n) {
+  while (n < 36) n += 12;
+  while (n > 96) n -= 12;
+  if (!down.has(n)) return;
+  const c = down.get(n) - 1;
+  if (c <= 0) { down.delete(n); if (ex) ex.organ_key(n - 36, 0); } else down.set(n, c);
+  paintKey(n);
+}
+function setBase(b) { S.base = Math.max(36, Math.min(72, b)); buildKeys(); }
+$("octd").onclick = () => setBase(S.base - 12);
+$("octu").onclick = () => setBase(S.base + 12);
+
+const held = new Map();                          /* pointerId -> note */
+const kbEl = $("kb");
+const noteAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.dataset && el.dataset.n ? +el.dataset.n : null; };
+kbEl.addEventListener("pointerdown", (ev) => {
+  const n = noteAt(ev.clientX, ev.clientY); if (n === null) return;
+  kbEl.setPointerCapture(ev.pointerId); held.set(ev.pointerId, n); noteOn(n); ensureAudio();
+});
+kbEl.addEventListener("pointermove", (ev) => {
+  if (!held.has(ev.pointerId)) return;
+  const n = noteAt(ev.clientX, ev.clientY), old = held.get(ev.pointerId);
+  if (n !== null && n !== old) { noteOff(old); held.set(ev.pointerId, n); noteOn(n); }
+});
+const release = (ev) => { if (held.has(ev.pointerId)) { noteOff(held.get(ev.pointerId)); held.delete(ev.pointerId); } };
+kbEl.addEventListener("pointerup", release); kbEl.addEventListener("pointercancel", release);
+
+const typed = new Map();
+addEventListener("keydown", (ev) => {
+  if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.repeat) return;
+  if (ev.code === "KeyZ") { setBase(S.base - 12); return; }
+  if (ev.code === "KeyX") { setBase(S.base + 12); return; }
+  const i = KEYMAP.indexOf(ev.code); if (i < 0 || typed.has(ev.code)) return;
+  const n = S.base + i; typed.set(ev.code, n); noteOn(n); ensureAudio();
+});
+addEventListener("keyup", (ev) => { if (typed.has(ev.code)) { noteOff(typed.get(ev.code)); typed.delete(ev.code); } });
+addEventListener("blur", () => { typed.forEach((n) => noteOff(n)); typed.clear(); held.forEach((n) => noteOff(n)); held.clear(); });
+
+/* ---- MIDI in (optional) */
+async function initMidi() {
+  if (!navigator.requestMIDIAccess) return;
+  try {
+    const acc = await navigator.requestMIDIAccess();
+    const wire = () => acc.inputs.forEach((inp) => { inp.onmidimessage = (m) => {
+      const [s, a, b] = m.data, c = s & 0xF0;
+      if (c === 0x90 && b) { noteOn(a); ensureAudio(); } else if (c === 0x80 || c === 0x90) noteOff(a);
+      else if (c === 0xB0) {
+        if (a >= 70 && a <= 78) setDb(a - 70, (b * 9) >> 7);
+        else if (a === 11) { S.swl = b; $("swl").value = b; $("swlo").textContent = b; if (ex) ex.organ_swell(b); }
+      }
+    }; });
+    wire(); acc.onstatechange = wire;
+  } catch (e) { /* MIDI refused: the on-screen and computer keys still work */ }
+}
+
+/* ---- audio */
+async function ensureAudio() {
+  if (ctx) { if (ctx.state !== "running") await ctx.resume(); return; }
+  try {
+    const bin = Uint8Array.from(atob(WASM_B64), (c) => c.charCodeAt(0));
+    const { instance } = await WebAssembly.instantiate(bin, {});
+    ex = instance.exports; ex.organ_init(12345); push();
+    ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100, latencyHint: "interactive" });
+    gainNode = ctx.createGain(); gainNode.gain.value = (S.vol / 100) * (S.vol / 100);
+    analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
+    const node = ctx.createScriptProcessor(512, 0, 2);
+    node.onaudioprocess = (e) => {
+      const L = e.outputBuffer.getChannelData(0), R = e.outputBuffer.getChannelData(1);
+      const m = new Int32Array(ex.memory.buffer), o = ex.organ_buffer() >> 2;
+      for (let h = 0; h < 2; h++) {
+        ex.organ_render();
+        for (let i = 0; i < 256; i++) { L[h * 256 + i] = m[o + 2 * i] / 32768; R[h * 256 + i] = m[o + 2 * i + 1] / 32768; }
+      }
+    };
+    node.connect(gainNode); gainNode.connect(analyser); gainNode.connect(ctx.destination);
+    if (ctx.state !== "running") await ctx.resume();
+    $("power").textContent = "Klang aus"; $("power").setAttribute("aria-pressed", "true");
+    initMidi();
+  } catch (err) { $("stat").textContent = "Audio nicht verfügbar: " + (err && err.message ? err.message : err); }
+}
+$("power").onclick = async () => {
+  if (!ctx) { await ensureAudio(); return; }
+  if (ctx.state === "running") { await ctx.suspend(); $("power").textContent = "Klang starten"; $("power").setAttribute("aria-pressed", "false"); }
+  else { await ctx.resume(); $("power").textContent = "Klang aus"; $("power").setAttribute("aria-pressed", "true"); }
+};
+
+/* ---- scope and status */
+const cv = $("scope"), g = cv.getContext("2d"), td = new Uint8Array(1024);
+function frame() {
+  const css = getComputedStyle(document.documentElement);
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.strokeStyle = css.getPropertyValue("--line").trim() || "#888"; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, cv.height / 2); g.lineTo(cv.width, cv.height / 2); g.stroke();
+  if (analyser) {
+    analyser.getByteTimeDomainData(td);
+    let s = 0; while (s < 400 && !(td[s] < 128 && td[s + 1] >= 128)) s++; if (s >= 400) s = 0;
+    g.strokeStyle = css.getPropertyValue("--accent").trim() || "#c60"; g.lineWidth = 2; g.beginPath();
+    for (let x = 0; x < cv.width; x++) { const v = td[s + Math.floor(x * 600 / cv.width)] / 255; const y = (1 - v) * cv.height; x ? g.lineTo(x, y) : g.moveTo(x, y); }
+    g.stroke();
+  }
+  requestAnimationFrame(frame);
+}
+setInterval(() => { if (ex && ctx) $("stat").textContent = ctx.state === "running" ? "Tonräder: " + ex.organ_wheels() + " von 91" : "Pause"; }, 200);
+
+buildBars(); buildSwitches(); buildKeys(); frame();
+</script>
