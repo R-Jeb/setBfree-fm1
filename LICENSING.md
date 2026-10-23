@@ -18,6 +18,14 @@ complete source under the same licence too.
 | Terminus font 8x16 (ter-u16n), rendered into `firmware/gen/felucca_font.h` | SIL OFL 1.1 | `assets/fonts/Terminus-LICENSE.txt` |
 | JieLi AC79 SDK: `uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin` are read from your SDK checkout at build time and placed in the package; no SDK files are in this tree | Apache-2.0 | <https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK> |
 
+## setBfree
+
+The organ model in `firmware/src/dinghy.c` (wheel gear ratios, drawbar footage mapping, percussion and scanner
+parameters, MIDI controller numbers) is derived from setBfree, <https://github.com/pantherb/setBfree>,
+Copyright (C) Fredrik Kilander, Will Panther, Robin Gareus, Ken Restivo and others, GPL-2.0-or-later. The code here
+is a fixed-point rewrite for the FM-1, not a copy of setBfree's source; the combined firmware is GPL-3.0-only.
+`tools/gen_organ.py` and the generated `firmware/src/organ_tab.h` carry the wheel tables.
+
 ## The logo
 
 `assets/logo.svg` / `logo.png` carry the designburg signet: Copyright (C) designburg, all rights reserved, not under
