@@ -1,0 +1,96 @@
+# Builds the FM-1 firmware package (.fwsc) with JieLi's toolchain and checks the host tests.
+# Push or pull request: both jobs run, the package is kept as a download (Actions tab, the run, "Artifacts").
+# Tag v0.2 (one digit each: X.Y): also a GitHub release with dinghy-0.2.fwsc attached.
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host:
+    name: Host tests and web emulator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: |
+          python3 -m pip install Pillow
+          sudo apt-get update
+          sudo apt-get install -y clang lld
+      - name: Firmware engine on this computer (WAV and screen PNGs)
+        run: tests/run_host.sh
+      - name: TRS MIDI IN parser
+        run: |
+          mkdir -p build
+          cc -O1 -Wall -Wno-unused-function -Wno-unused-variable -Ifirmware/src -Ifirmware/hal \
+             -o build/midi_uart_test tests/midi_uart_test.c
+          build/midi_uart_test
+      - name: Web emulator (WebAssembly)
+        run: web/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: host-output
+          path: |
+            build/host/*.wav
+            build/host/*.png
+            web/index.html
+          if-no-files-found: warn
+
+  firmware:
+    name: FM-1 package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # only used to attach the package to a release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install Pillow
+      - name: Cache toolchain and SDK
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.jieli
+            ~/fw-AC79_AIoT_SDK
+          key: jieli-AC79NN_SDK_V1.2.1_2023-12-13-v1
+      - name: Get JieLi toolchain and SDK
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          tools/get_toolchain.sh
+          test -x "$HOME/.jieli/toolchain/pi32v2/bin/clang" || { echo "::error::toolchain download did not give pi32v2/bin/clang"; exit 1; }
+          git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$HOME/fw-AC79_AIoT_SDK"
+      - name: Build
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            ./build.sh --release "${GITHUB_REF_NAME#v}"
+          else
+            ./build.sh
+          fi
+          ls -l build/*.fwsc
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: |
+            build/*.fwsc
+            build/dinghy.dis
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Package for the FM-1. Install with tools/fm1_install.py or the FM-1 Firmware Hub."
+          gh release upload "$GITHUB_REF_NAME" build/*.fwsc --clobber
