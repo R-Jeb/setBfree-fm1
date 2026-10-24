@@ -68,6 +68,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .chip[aria-pressed="true"], .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 
+.sel { font: inherit; color: var(--fg); background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; min-height: 40px; min-width: 0; max-width: 100%; }
 .bars { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; }
 .bar { display: grid; justify-items: center; gap: 6px; }
 .track {
@@ -126,24 +127,29 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
   <section class="panel" aria-label="Zugriegel">
     <div class="dbhead">
-      <span class="label">Zugriegel</span>
-      <div class="chips" id="presets" role="group" aria-label="Registrierungen"></div>
+      <label class="label" for="prog">Programm (setBfree)</label>
+      <select id="prog" class="sel" aria-label="Programm"></select>
     </div>
     <div class="bars" id="bars"></div>
   </section>
 
   <section class="panel ctl" aria-label="Effekte">
-    <div class="grp"><span class="label">Vibrato / Chorus</span><div class="seg" id="vib" role="group" aria-label="Vibrato"></div></div>
+    <div class="grp"><span class="label">Vibrato / Chorus</span>
+      <div class="seg" id="vib" role="group" aria-label="Vibrato"><button id="vup" aria-pressed="false">An</button></div>
+    </div>
     <div class="grp"><span class="label">Leslie</span><div class="seg" id="les" role="group" aria-label="Leslie"></div></div>
     <div class="grp"><span class="label">Percussion</span>
       <div class="seg" id="perc" role="group" aria-label="Percussion">
-        <button data-k="on" aria-pressed="false">An</button>
-        <button data-k="third" aria-pressed="true">3.</button>
-        <button data-k="fast" aria-pressed="false">Schnell</button>
-        <button data-k="soft" aria-pressed="false">Leise</button>
+        <button data-id="11" aria-pressed="false">An</button>
+        <button data-id="12" aria-pressed="false">3.</button>
+        <button data-id="13" aria-pressed="false">Schnell</button>
+        <button data-id="14" aria-pressed="false">Leise</button>
       </div>
     </div>
-    <div class="grp"><span class="label">Overdrive</span><div class="slider"><input type="range" id="drv" min="0" max="8" step="1" value="0" aria-label="Overdrive"><output id="drvo">0</output></div></div>
+    <div class="grp"><span class="label">Overdrive</span>
+      <div class="seg"><button id="odon" aria-pressed="false">An</button></div>
+      <div class="slider"><input type="range" id="drv" min="0" max="8" step="1" value="3" aria-label="Overdrive-Stärke"><output id="drvo">3</output></div>
+    </div>
     <div class="grp"><span class="label">Schweller</span><div class="slider"><input type="range" id="swl" min="0" max="127" step="1" value="127" aria-label="Schweller"><output id="swlo">127</output></div></div>
     <div class="grp"><span class="label">Lautstärke</span><div class="slider"><input type="range" id="vol" min="0" max="100" step="1" value="70" aria-label="Lautstärke"><output id="volo">70</output></div></div>
   </section>
@@ -157,7 +163,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
       </div>
     </div>
     <div class="kb" id="kb"></div>
-    <p class="hint">Computertastatur: die mittlere Tastenreihe spielt die weißen, die obere Reihe die schwarzen Tasten, beginnend mit A am linken C. Die Tasten links unten (Y und X auf deutscher Tastatur) wechseln die Oktave. USB-MIDI-Keyboards werden erkannt, wenn der Browser es erlaubt (Töne C2 bis C7, CC 70 bis 78 steuern die Zugriegel, CC 11 den Schweller).</p>
+    <p class="hint">Computertastatur: die mittlere Tastenreihe spielt die weißen, die obere Reihe die schwarzen Tasten, beginnend mit A am linken C. Die Tasten links unten (Y und X auf deutscher Tastatur) wechseln die Oktave. USB-MIDI-Keyboards werden erkannt, wenn der Browser es erlaubt. Es gelten die Standard-Controller von setBfree (CC 1, 7, 11, 31, 64 bis 66, 70 bis 78, 80 bis 83, 92, 93, 95) und Programmwechsel.</p>
   </section>
 
   <section class="panel" aria-label="Signal">
@@ -172,43 +178,22 @@ const WASM_B64 = "/*WASM_B64*/";
 
 const FOOT = ["16", "5⅓", "8", "4", "2⅔", "2", "1⅗", "1⅓", "1"];
 const CAP = ["brown", "brown", "white", "white", "black", "white", "black", "black", "white"];
-const PRESETS = [["Voll", "888888888"], ["Jazz", "888000000"], ["Blues", "888800000"], ["Flöte", "008000000"],
-                 ["Weich", "006800000"], ["Rohr", "008642000"], ["Hell", "005888000"], ["Tief", "880000000"]];
-const VIB = ["Aus", "V1", "V2", "V3", "C1", "C2", "C3"];
-const LES = ["Aus", "Langsam", "Schnell"];
+const VIB = ["V1", "C1", "V2", "C2", "V3", "C3"];                  /* setBfree's vibrato knob positions */
+const LES = ["Stop", "Langsam", "Schnell"];
 const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const BLACK = [1, 3, 6, 8, 10];
 const KEYMAP = ["KeyA","KeyW","KeyS","KeyE","KeyD","KeyF","KeyT","KeyG","KeyY","KeyH","KeyU","KeyJ","KeyK","KeyO","KeyL","KeyP","Semicolon","Quote"];
 
-const S = { db: [8, 8, 8, 0, 0, 0, 0, 0, 0], vib: 0, les: 0, drv: 0, swl: 127, vol: 70, base: 48,
-            perc: { on: 0, third: 1, fast: 0, soft: 0 }, preset: 1 };
-let ex = null, ctx = null, gainNode = null, analyser = null;
+let ex = null, ctx = null, gainNode = null, analyser = null, vol = 70, base = 48;
 const down = new Map();                         /* midi note -> count of sources holding it */
 const $ = (id) => document.getElementById(id);
-const tryStore = (fn) => { try { return fn(); } catch (e) { return null; } };
-
-function push() {
-  if (!ex) return;
-  S.db.forEach((v, i) => ex.organ_drawbar(i, v));
-  ex.organ_vib(S.vib); ex.organ_leslie(S.les); ex.organ_drive(S.drv); ex.organ_swell(S.swl);
-  ex.organ_perc(S.perc.on, S.perc.third, S.perc.fast, S.perc.soft);
-  down.forEach((c, n) => ex.organ_key(n - 36, 1));
-}
+const get = (id) => (ex ? ex.organ_get(id) : 0);
+const put = (id, v) => { if (ex) { ex.organ_set(id, v); render(); } };
+const cstr = (p) => { if (!p) return null; const b = new Uint8Array(ex.memory.buffer); let s = ""; while (b[p]) s += String.fromCharCode(b[p++]); return s; };
 
 /* ---- drawbars */
 const barEls = [];
-function drawBar(i) {
-  const e = barEls[i];
-  e.cap.style.top = (12 + (e.h - 24) * (1 - S.db[i] / 8)) + "px";
-  e.val.textContent = S.db[i];
-  e.track.setAttribute("aria-valuenow", S.db[i]);
-}
-function setDb(i, v) {
-  v = Math.max(0, Math.min(8, v));
-  if (S.db[i] === v) return;
-  S.db[i] = v; if (ex) ex.organ_drawbar(i, v);
-  drawBar(i); markPreset();
-}
+function setDb(i, v) { put(i, Math.max(0, Math.min(8, v))); }
 function buildBars() {
   const root = $("bars");
   FOOT.forEach((f, i) => {
@@ -221,7 +206,7 @@ function buildBars() {
     const ft = document.createElement("div"); ft.className = "ft"; ft.textContent = f + "′";
     const val = document.createElement("div"); val.className = "val";
     bar.append(track, ft, val); root.appendChild(bar);
-    const e = { track, cap, val, h: 170 }; barEls.push(e);
+    const e = { track, cap, val, h: 170, v: -1 }; barEls.push(e);
     const place = (ev) => {
       const r = track.getBoundingClientRect(); e.h = r.height;
       const t = Math.max(0, Math.min(1, (ev.clientY - r.top - 12) / (r.height - 24)));
@@ -231,46 +216,51 @@ function buildBars() {
     track.addEventListener("pointermove", (ev) => { if (track.hasPointerCapture(ev.pointerId)) place(ev); });
     track.addEventListener("keydown", (ev) => {
       const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[ev.key];
-      if (d) { setDb(i, S.db[i] + d); ev.preventDefault(); }
+      if (d) { setDb(i, get(i) + d); ev.preventDefault(); }
       if (ev.key === "Home") setDb(i, 0); if (ev.key === "End") setDb(i, 8);
     });
   });
-  const sync = () => { barEls.forEach((e, i) => { e.h = e.track.getBoundingClientRect().height || 170; drawBar(i); }); };
-  new ResizeObserver(sync).observe(root); sync();
+  new ResizeObserver(() => { barEls.forEach((e) => { e.v = -1; }); render(); }).observe(root);
 }
 
-/* ---- presets and switches */
-function markPreset() {
-  const cur = S.db.join("");
-  document.querySelectorAll("#presets .chip").forEach((b, i) => b.setAttribute("aria-pressed", PRESETS[i][1] === cur ? "true" : "false"));
-}
+/* ---- switches, program list */
+const pressed = (el, on) => el.setAttribute("aria-pressed", on ? "true" : "false");
 function buildSwitches() {
-  PRESETS.forEach(([name, db], i) => {
-    const b = document.createElement("button"); b.className = "chip"; b.textContent = name; b.setAttribute("aria-pressed", "false");
-    b.onclick = () => { db.split("").forEach((c, k) => setDb(k, +c)); };
-    $("presets").appendChild(b);
+  VIB.forEach((l, i) => { const b = document.createElement("button"); b.className = "vk"; b.textContent = l; b.onclick = () => put(9, i); $("vib").insertBefore(b, $("vup")); });
+  $("vup").onclick = () => put(10, get(10) ^ 1);
+  LES.forEach((l, i) => { const b = document.createElement("button"); b.textContent = l; b.onclick = () => put(15, i); $("les").appendChild(b); });
+  $("perc").querySelectorAll("button").forEach((b) => { b.onclick = () => put(+b.dataset.id, get(+b.dataset.id) ^ 1); });
+  $("odon").onclick = () => put(16, get(16) ^ 1);
+  $("drv").oninput = () => put(17, +$("drv").value);
+  $("swl").oninput = () => put(18, +$("swl").value);
+  $("vol").oninput = () => { vol = +$("vol").value; $("volo").textContent = vol; if (gainNode) gainNode.gain.value = (vol / 100) * (vol / 100); };
+  const sel = $("prog"), reg = document.createElement("optgroup"), sw = document.createElement("optgroup");
+  reg.label = "Registrierungen"; sw.label = "Schalter-Programme";
+  for (let n = 1; n < 128; n++) {
+    const name = cstr(ex.organ_program_name(n)); if (!name || !ex.organ_program_has_effect(n)) continue;
+    const o = document.createElement("option"); o.value = n; o.textContent = n + "  " + name;
+    (ex.organ_program_is_registration(n) ? reg : sw).appendChild(o);
+  }
+  sel.append(reg, sw);
+  sel.onchange = () => { ex.organ_select_program(+sel.value); render(); };
+}
+
+/* the page shows the engine's state: its own buttons, MIDI controllers and program changes all land here */
+function render() {
+  if (!ex) return;
+  barEls.forEach((e, i) => {
+    const v = get(i); if (v === e.v) return; e.v = v;
+    e.h = e.track.getBoundingClientRect().height || e.h;
+    e.cap.style.top = (12 + (e.h - 24) * (1 - v / 8)) + "px"; e.val.textContent = v; e.track.setAttribute("aria-valuenow", v);
   });
-  const seg = (id, labels, key, apply) => {
-    labels.forEach((l, i) => {
-      const b = document.createElement("button"); b.textContent = l; b.setAttribute("aria-pressed", S[key] === i ? "true" : "false");
-      b.onclick = () => { S[key] = i; apply(i); [...$(id).children].forEach((c, k) => c.setAttribute("aria-pressed", k === i ? "true" : "false")); };
-      $(id).appendChild(b);
-    });
-  };
-  seg("vib", VIB, "vib", (v) => ex && ex.organ_vib(v));
-  seg("les", LES, "les", (v) => ex && ex.organ_leslie(v));
-  $("perc").querySelectorAll("button").forEach((b) => {
-    b.onclick = () => {
-      const k = b.dataset.k; S.perc[k] ^= 1; b.setAttribute("aria-pressed", S.perc[k] ? "true" : "false");
-      if (ex) ex.organ_perc(S.perc.on, S.perc.third, S.perc.fast, S.perc.soft);
-    };
-    b.setAttribute("aria-pressed", S.perc[b.dataset.k] ? "true" : "false");
-  });
-  const rng = (id, key, apply) => { $(id).oninput = () => { S[key] = +$(id).value; $(id + "o").textContent = S[key]; apply(S[key]); }; };
-  rng("drv", "drv", (v) => ex && ex.organ_drive(v));
-  rng("swl", "swl", (v) => ex && ex.organ_swell(v));
-  rng("vol", "vol", (v) => { if (gainNode) gainNode.gain.value = (v / 100) * (v / 100); });
-  markPreset();
+  const vt = get(9), vu = get(10), ls = get(15), od = get(16), dr = get(17), sw = get(18), pg = get(19);
+  $("vib").querySelectorAll(".vk").forEach((b, i) => pressed(b, i === vt));
+  pressed($("vup"), vu); [...$("les").children].forEach((b, i) => pressed(b, i === ls));
+  $("perc").querySelectorAll("button").forEach((b) => pressed(b, get(+b.dataset.id)));
+  pressed($("odon"), od);
+  if (+$("drv").value !== dr) $("drv").value = dr; $("drvo").textContent = dr;
+  if (+$("swl").value !== sw) $("swl").value = sw; $("swlo").textContent = sw;
+  if ($("prog").value !== String(pg)) $("prog").value = String(pg);
 }
 
 /* ---- keyboard */
@@ -278,7 +268,7 @@ let keyEls = new Map();
 const noteName = (n) => NAMES[n % 12] + (Math.floor(n / 12) - 1);
 function buildKeys() {
   const kb = $("kb"); kb.textContent = ""; keyEls = new Map();
-  const notes = []; for (let n = S.base; n < S.base + 24; n++) notes.push(n);
+  const notes = []; for (let n = base; n < base + 24; n++) notes.push(n);
   const whites = notes.filter((n) => !BLACK.includes(n % 12));
   whites.forEach((n) => {
     const k = document.createElement("div"); k.className = "wk"; k.dataset.n = n;
@@ -292,7 +282,7 @@ function buildKeys() {
     k.style.left = ((wi + 1) * w - w * 0.3) + "%"; k.style.width = (w * 0.6) + "%";
     kb.appendChild(k); keyEls.set(n, k);
   });
-  $("range").textContent = noteName(S.base) + " bis " + noteName(S.base + 23);
+  $("range").textContent = noteName(base) + " bis " + noteName(base + 23);
   down.forEach((c, n) => paintKey(n));
 }
 function paintKey(n) { const k = keyEls.get(n); if (k) k.classList.toggle("on", down.has(n)); }
@@ -311,9 +301,9 @@ function noteOff(n) {
   if (c <= 0) { down.delete(n); if (ex) ex.organ_key(n - 36, 0); } else down.set(n, c);
   paintKey(n);
 }
-function setBase(b) { S.base = Math.max(36, Math.min(72, b)); buildKeys(); }
-$("octd").onclick = () => setBase(S.base - 12);
-$("octu").onclick = () => setBase(S.base + 12);
+function setBase(b) { base = Math.max(36, Math.min(72, b)); buildKeys(); }
+$("octd").onclick = () => setBase(base - 12);
+$("octu").onclick = () => setBase(base + 12);
 
 const held = new Map();                          /* pointerId -> note */
 const kbEl = $("kb");
@@ -333,15 +323,15 @@ kbEl.addEventListener("pointerup", release); kbEl.addEventListener("pointercance
 const typed = new Map();
 addEventListener("keydown", (ev) => {
   if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.repeat) return;
-  if (ev.code === "KeyZ") { setBase(S.base - 12); return; }
-  if (ev.code === "KeyX") { setBase(S.base + 12); return; }
+  if (ev.code === "KeyZ") { setBase(base - 12); return; }
+  if (ev.code === "KeyX") { setBase(base + 12); return; }
   const i = KEYMAP.indexOf(ev.code); if (i < 0 || typed.has(ev.code)) return;
-  const n = S.base + i; typed.set(ev.code, n); noteOn(n); ensureAudio();
+  const n = base + i; typed.set(ev.code, n); noteOn(n); ensureAudio();
 });
 addEventListener("keyup", (ev) => { if (typed.has(ev.code)) { noteOff(typed.get(ev.code)); typed.delete(ev.code); } });
 addEventListener("blur", () => { typed.forEach((n) => noteOff(n)); typed.clear(); held.forEach((n) => noteOff(n)); held.clear(); });
 
-/* ---- MIDI in (optional) */
+/* ---- MIDI in (optional): notes, controllers and program changes go to the engine as the firmware gets them */
 async function initMidi() {
   if (!navigator.requestMIDIAccess) return;
   try {
@@ -349,10 +339,8 @@ async function initMidi() {
     const wire = () => acc.inputs.forEach((inp) => { inp.onmidimessage = (m) => {
       const [s, a, b] = m.data, c = s & 0xF0;
       if (c === 0x90 && b) { noteOn(a); ensureAudio(); } else if (c === 0x80 || c === 0x90) noteOff(a);
-      else if (c === 0xB0) {
-        if (a >= 70 && a <= 78) setDb(a - 70, (b * 9) >> 7);
-        else if (a === 11) { S.swl = b; $("swl").value = b; $("swlo").textContent = b; if (ex) ex.organ_swell(b); }
-      }
+      else if (c === 0xB0 && ex) { ex.organ_midi_cc(a, b); render(); }
+      else if (c === 0xC0 && ex) { ex.organ_midi_pc(a); render(); }
     }; });
     wire(); acc.onstatechange = wire;
   } catch (e) { /* MIDI refused: the on-screen and computer keys still work */ }
@@ -361,12 +349,10 @@ async function initMidi() {
 /* ---- audio */
 async function ensureAudio() {
   if (ctx) { if (ctx.state !== "running") await ctx.resume(); return; }
+  if (!ex) return;
   try {
-    const bin = Uint8Array.from(atob(WASM_B64), (c) => c.charCodeAt(0));
-    const { instance } = await WebAssembly.instantiate(bin, {});
-    ex = instance.exports; ex.organ_init(12345); push();
     ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100, latencyHint: "interactive" });
-    gainNode = ctx.createGain(); gainNode.gain.value = (S.vol / 100) * (S.vol / 100);
+    gainNode = ctx.createGain(); gainNode.gain.value = (vol / 100) * (vol / 100);
     analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
     const node = ctx.createScriptProcessor(512, 0, 2);
     node.onaudioprocess = (e) => {
@@ -379,14 +365,14 @@ async function ensureAudio() {
     };
     node.connect(gainNode); gainNode.connect(analyser); gainNode.connect(ctx.destination);
     if (ctx.state !== "running") await ctx.resume();
-    $("power").textContent = "Klang aus"; $("power").setAttribute("aria-pressed", "true");
+    $("power").textContent = "Klang aus"; pressed($("power"), true);
     initMidi();
   } catch (err) { $("stat").textContent = "Audio nicht verfügbar: " + (err && err.message ? err.message : err); }
 }
 $("power").onclick = async () => {
   if (!ctx) { await ensureAudio(); return; }
-  if (ctx.state === "running") { await ctx.suspend(); $("power").textContent = "Klang starten"; $("power").setAttribute("aria-pressed", "false"); }
-  else { await ctx.resume(); $("power").textContent = "Klang aus"; $("power").setAttribute("aria-pressed", "true"); }
+  if (ctx.state === "running") { await ctx.suspend(); $("power").textContent = "Klang starten"; pressed($("power"), false); }
+  else { await ctx.resume(); $("power").textContent = "Klang aus"; pressed($("power"), true); }
 };
 
 /* ---- scope and status */
@@ -405,7 +391,14 @@ function frame() {
   }
   requestAnimationFrame(frame);
 }
-setInterval(() => { if (ex && ctx) $("stat").textContent = ctx.state === "running" ? "Tonräder: " + ex.organ_wheels() + " von 91" : "Pause"; }, 200);
+setInterval(() => { if (!ex) return; render(); if (ctx) $("stat").textContent = ctx.state === "running" ? "Tonräder: " + ex.organ_wheels() + " von 91" : "Pause"; }, 100);
 
-buildBars(); buildSwitches(); buildKeys(); frame();
+(async function start() {
+  try {
+    const bin = Uint8Array.from(atob(WASM_B64), (c) => c.charCodeAt(0));
+    ex = (await WebAssembly.instantiate(bin, {})).instance.exports; ex.organ_init(12345);
+  } catch (err) { $("stat").textContent = "WebAssembly nicht verfügbar: " + (err && err.message ? err.message : err); return; }
+  buildBars(); buildSwitches(); buildKeys(); render(); frame();
+  initMidi();                                   /* some browsers ask for MIDI access at once, others only after a click */
+})();
 </script>

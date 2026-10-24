@@ -29,6 +29,11 @@ jobs:
           sudo apt-get install -y clang lld
       - name: Firmware engine on this computer (WAV and screen PNGs)
         run: tests/run_host.sh
+      - name: Programs and MIDI controllers (setBfree's defaults)
+        run: |
+          mkdir -p build
+          cc -O1 -Wall -Wno-unused-function -Wno-unused-variable -Ifirmware/src -o build/organ_test tests/organ_test.c
+          build/organ_test
       - name: TRS MIDI IN parser
         run: |
           mkdir -p build

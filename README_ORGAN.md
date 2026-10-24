@@ -12,10 +12,23 @@ tests/run_host.sh               # build/host/dinghy.wav + screen PNGs, no FM-1 n
 Before you release it, pick your own package identity in `tools/build.py` (`PRODUCT`; Dinghy itself is FM-1_99N).
 
 ## Controls
-keys (F3..G5, OCT-/OCT+) | SELECT drawbar, ALGORITHM level 0..8 | PRESETS registration | KNOB1 overdrive |
-KNOB2 vibrato/chorus V1-V3 C1-C3 | KNOB3 Leslie off/slow/fast | FX vibrato cycle | LFO Leslie cycle |
-ENV percussion | SEL 2nd/3rd | ARP fast/slow | SEQ soft/normal.
-MIDI over USB and over the 3.5 mm TRS MIDI IN jack (Felucca's `midi_uart.c`, untested on hardware): notes fold into C2..C7, CC 70..78 drawbars (as setBfree), CC 11 swell. `cc ... tests/midi_uart_test.c` checks the parser on a computer.
+keys (F3..G5, OCT-/OCT+) | SELECT drawbar, ALGORITHM level 0..8 | PRESETS steps through setBfree's registrations
+(default.pgm: 57 of them, e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith) |
+KNOB1 overdrive amount | KNOB2 vibrato V1 C1 V2 C2 V3 C3 | KNOB3 Leslie stop/slow/fast |
+FX vibrato on/off | LFO Leslie cycle | EDIT overdrive on/off | ENV percussion | SEL 2nd/3rd | ARP fast/slow | SEQ soft/normal.
+
+## MIDI (USB and the TRS jack, any channel)
+Notes fold into C2..C7. **Program change** n selects setBfree program n+1 (its `pgm.controller.offset` default), all 110
+programs of `default.pgm` are in; a program only changes what it names. Programs for the lower manual, pedals, key
+splits and reverb are kept but have no effect here (one manual, no reverb). **Controllers** as setBfree's defaults:
+1 rotary slow/stop/fast, 7 and 11 swell, 31 and 95 vibrato on (upper), 64 rotary toggle, 65 overdrive on,
+66 and 80 percussion on, 81 soft, 82 fast, 83 2nd harmonic (64 and up), 92 vibrato knob, 93 overdrive amount,
+70..78 drawbars **inverted as in setBfree** (127 = pushed in, 0 = fully out), 120 and 123 notes off.
+Not used: 30 vibrato lower, 91 reverb, 94 convolution. As in setBfree, a program that sets the vibrato knob does not
+switch vibrato on by itself (FX button, CC 31 or program 50 do).
+
+Regenerate the program table with `python3 tools/gen_programs.py` (reads `data/setbfree-default.pgm`).
+`tests/organ_test.c` checks programs and controllers against setBfree's source on a computer.
 
 ## Check this first on the device
 The top right of the screen shows `W <wheels sounding>  <peak render time> us`. A block must stay well under

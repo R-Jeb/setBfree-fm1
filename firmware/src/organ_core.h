@@ -3,6 +3,8 @@
  * (dinghy.c) and the browser emulator (web/organ_wasm.c). Needs <stdint.h> types, fm1_ticks() and
  * FM1_TICKS_PER_US from whoever includes it, and organ_tab.h before it. Integers only. */
 
+#include "organ_pgm.h"
+
 #define NW 91u                                  /* tonewheels */
 #define NB 9u                                   /* drawbars */
 #define NK 61u                                  /* keys C2..C7 */
@@ -14,12 +16,14 @@ static const int8_t FOOT[NB] = {-12, -5, 0, 12, 19, 24, 28, 31, 36};
 /* ---- the controls the audio ISR reads (single bytes, written by the main loop) */
 static volatile struct {
     uint8_t db[NB];                             /* drawbars 0..8 */
-    uint8_t vib;                                /* 0 off, 1..3 V1..V3, 4..6 C1..C3 */
+    uint8_t vtype;                              /* setBfree's vibrato knob: 0 V1, 1 C1, 2 V2, 3 C2, 4 V3, 5 C3 */
+    uint8_t vup;                                /* vibrato switched on (for the one manual) */
     uint8_t perc, perc3, fast, soft;            /* percussion: on, 3rd (else 2nd), fast decay, soft */
-    uint8_t les;                                /* Leslie-lite: 0 off, 1 slow, 2 fast */
-    uint8_t drv;                                /* overdrive 0..8 */
-    uint8_t swell;                              /* 0..127 (CC 11) */
-} P = {{8, 8, 8, 0, 0, 0, 0, 0, 0}, 0, 0, 1, 0, 0, 0, 0, 127};
+    uint8_t les;                                /* Leslie-lite: 0 stop, 1 slow, 2 fast */
+    uint8_t od, drv;                            /* overdrive on, and how hard 0..8 */
+    uint8_t swell;                              /* 0..127 (CC 7 / CC 11) */
+    uint8_t pgm;                                /* the program last selected (setBfree numbering), 0 none */
+} P = {{8, 8, 8, 0, 0, 0, 0, 0, 0}, 0, 0, 0, 1, 0, 0, 1, 0, 3, 127, 0};
 static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi;   /* keys held: the panel's, and MIDI's (bit k, k = 0..60) */
 static volatile uint32_t load_us, wheels_on;    /* the last block: render time, wheels sounding */
 
@@ -38,6 +42,8 @@ static int32_t vdl[256];                        /* scanner delay line */
 static uint32_t vwi, vph, lph, lrate = LES_SLOW;
 static int32_t perc_env = 32767;                /* Q15 */
 
+static const uint8_t VIBMODE[6] = {1, 4, 2, 5, 3, 6};   /* knob position -> mode: 1..3 V1..V3, 4..6 C1..C3 */
+
 static uint32_t wheel_of(uint32_t k, int32_t off)
 {
     int32_t n = (int32_t)k + 12 + off;          /* frequency number: 0 = C 32.7 Hz (16' of the lowest key) */
@@ -50,7 +56,7 @@ static void app_audio(int32_t *out, uint32_t n)
     static const int32_t DEPTH[3] = {6 << 8, 12 << 8, 18 << 8};   /* scanner delay swing, samples Q8 (by ear) */
     uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, k, d, w, i, nk = 0, act = 0, t0 = fm1_ticks();
     int32_t pa = 0;
-    uint32_t vm = P.vib, dm = P.drv, les = P.les;
+    uint32_t vm = P.vup ? VIBMODE[P.vtype % 6u] : 0u, dm = P.drv, od = P.od, les = P.les;
     int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
     if (n > 256u) n = 256u;
 
@@ -118,13 +124,16 @@ static void app_audio(int32_t *out, uint32_t n)
             vwi = (vwi + 1u) & 255u;
             x = vm >= 4u ? (x + v) >> 1 : v;
         }
-        u = (x * (int32_t)(16u + 12u * dm)) >> 4;   /* overdrive: gain, then a soft clip (3u - u^3) / 3 */
-        if (u > 32767) u = 32767;
-        if (u < -32767) u = -32767;
-        {
-            int32_t u3 = (((u * u) >> 15) * u) >> 15;
-            y = ((3 * u - u3) * 21845) >> 16;
-        }
+        if (od) {                               /* overdrive: gain, then a soft clip (3u - u^3) / 3 */
+            u = (x * (int32_t)(16u + 12u * dm)) >> 4;
+            if (u > 32767) u = 32767;
+            if (u < -32767) u = -32767;
+            {
+                int32_t u3 = (((u * u) >> 15) * u) >> 15;
+                y = ((3 * u - u3) * 21845) >> 16;
+            }
+        } else
+            y = x > 32767 ? 32767 : x < -32767 ? -32767 : x;
         l = r = y;
         if (les) {                              /* Leslie-lite: two amplitudes swinging against each other (no Doppler yet) */
             uint32_t tri;
@@ -160,13 +169,78 @@ static int quiet(void)                          /* nothing sounds, not even the 
     return 1;
 }
 
-/* ---- registrations to start from (the nine digits are the drawbars 16' .. 1') */
-static const struct { const char *name, *db; } PRESET[8] = {
-    {"FULL", "888888888"}, {"JAZZ", "888000000"}, {"BLUES", "888800000"}, {"FLUTE", "008000000"},
-    {"SOFT", "006800000"}, {"REED", "008642000"}, {"BRIGHT", "005888000"}, {"LOW", "880000000"}};
-static void load_preset(uint32_t p)
+/* ---- setBfree's programs (default.pgm) and MIDI controllers (midi.c, midiPrimeControllerMapping) */
+static uint32_t rnd_state = 2463534242u;
+static uint32_t rnd(void)                       /* xorshift, stirred with the clock */
 {
-    uint32_t i;
-    for (i = 0; i < NB; i++) P.db[i] = (uint8_t)(PRESET[p].db[i] - '0');
+    rnd_state ^= fm1_ticks();
+    rnd_state ^= rnd_state << 13;
+    rnd_state ^= rnd_state >> 17;
+    rnd_state ^= rnd_state << 5;
+    return rnd_state;
 }
 
+static int pgm_registration(uint32_t n)         /* a program that sets the drawbars: what the PRESETS knob steps through */
+{
+    return n < 128u && PGM[n].name && (PGM[n].set & (PGM_DB | PGM_RND));
+}
+static uint32_t pgm_step(uint32_t cur, int32_t dir)
+{
+    int32_t n = (int32_t)cur;
+    for (;;) {
+        n += dir;
+        if (n < 1 || n > 127) return cur;
+        if (pgm_registration((uint32_t)n)) return (uint32_t)n;
+    }
+}
+
+static void organ_program(uint32_t n)           /* only the properties a program names change, as in setBfree */
+{
+    const organ_pgm_t *g;
+    uint32_t i;
+    if (n < 1u || n > 127u || !PGM[n].name) return;
+    g = &PGM[n];
+    if (g->set & PGM_RND) for (i = 0; i < NB; i++) P.db[i] = (uint8_t)(rnd() % 9u);
+    if (g->set & PGM_DB) for (i = 0; i < NB; i++) P.db[i] = g->db[i];
+    if (g->set & PGM_PERC) P.perc = g->perc;
+    if (g->set & PGM_PVOL) P.soft = g->pvol;
+    if (g->set & PGM_PSPD) P.fast = g->pspd;
+    if (g->set & PGM_PHARM) P.perc3 = g->pharm;
+    if (g->set & PGM_VIB) P.vtype = g->vib;
+    if (g->set & PGM_VUP) P.vup = g->vup;
+    if (g->set & PGM_OD) P.od = g->od;
+    if (g->set & PGM_ROT) P.les = g->rot;
+    P.pgm = (uint8_t)n;
+}
+static void organ_pc(uint32_t uc)               /* MIDI program change: setBfree's pgm.controller.offset is 1 */
+{
+    organ_program(uc + 1u);
+}
+
+/* MIDI controllers, as setBfree's defaults (any channel: this organ has one manual). Not used here, no such part:
+ * 30 vibrato lower, 91 reverb, 94 convolution, and the lower / pedal drawbars. */
+static void organ_cc(uint32_t cc, uint32_t v)
+{
+    if (v > 127u) return;
+    if (cc >= 70u && cc <= 78u)                 /* drawbars: 127 is pushed in, 0 pulled out (setBfree: 127 - v) */
+        P.db[cc - 70u] = (uint8_t)((16u * (127u - v) + 127u) / 254u);
+    else switch (cc) {
+    case 7: case 11: P.swell = (uint8_t)v; break;                       /* swell pedal */
+    case 1: P.les = v / 43u == 0u ? 1u : v / 43u == 1u ? 0u : 2u; break;    /* rotary preset: slow, stop, fast */
+    case 64:                                                            /* rotary speed toggle (sustain pedal) */
+        if (v > 63u)
+            P.les = P.les == 1u ? 2u : 1u;
+        break;
+    case 65: P.od = v > 63u; break;                                     /* overdrive on */
+    case 93: P.drv = (uint8_t)((16u * v + 127u) / 254u); break;         /* overdrive character */
+    case 66: case 80: P.perc = v > 63u; break;                          /* percussion on */
+    case 81: P.soft = v > 63u; break;                                   /* percussion volume: soft at 64 and up */
+    case 82: P.fast = v > 63u; break;                                   /* percussion decay: fast at 64 and up */
+    case 83: P.perc3 = v < 64u; break;                                  /* percussion harmonic: 2nd at 64 and up */
+    case 92: P.vtype = (uint8_t)(v / 23u > 5u ? 5u : v / 23u); break;   /* vibrato knob: V1 C1 V2 C2 V3 C3 */
+    case 95: P.vup = v / 32u >= 2u; break;                              /* vibrato routing: upper from 64 */
+    case 31: P.vup = v > 63u; break;                                    /* vibrato upper */
+    case 120: case 123: mk_lo = mk_hi = 0; break;                       /* all sound / notes off */
+    default: break;
+    }
+}

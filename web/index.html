@@ -68,6 +68,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .chip[aria-pressed="true"], .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 
+.sel { font: inherit; color: var(--fg); background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; min-height: 40px; min-width: 0; max-width: 100%; }
 .bars { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; }
 .bar { display: grid; justify-items: center; gap: 6px; }
 .track {
@@ -126,24 +127,29 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
   <section class="panel" aria-label="Zugriegel">
     <div class="dbhead">
-      <span class="label">Zugriegel</span>
-      <div class="chips" id="presets" role="group" aria-label="Registrierungen"></div>
+      <label class="label" for="prog">Programm (setBfree)</label>
+      <select id="prog" class="sel" aria-label="Programm"></select>
     </div>
     <div class="bars" id="bars"></div>
   </section>
 
   <section class="panel ctl" aria-label="Effekte">
-    <div class="grp"><span class="label">Vibrato / Chorus</span><div class="seg" id="vib" role="group" aria-label="Vibrato"></div></div>
+    <div class="grp"><span class="label">Vibrato / Chorus</span>
+      <div class="seg" id="vib" role="group" aria-label="Vibrato"><button id="vup" aria-pressed="false">An</button></div>
+    </div>
     <div class="grp"><span class="label">Leslie</span><div class="seg" id="les" role="group" aria-label="Leslie"></div></div>
     <div class="grp"><span class="label">Percussion</span>
       <div class="seg" id="perc" role="group" aria-label="Percussion">
-        <button data-k="on" aria-pressed="false">An</button>
-        <button data-k="third" aria-pressed="true">3.</button>
-        <button data-k="fast" aria-pressed="false">Schnell</button>
-        <button data-k="soft" aria-pressed="false">Leise</button>
+        <button data-id="11" aria-pressed="false">An</button>
+        <button data-id="12" aria-pressed="false">3.</button>
+        <button data-id="13" aria-pressed="false">Schnell</button>
+        <button data-id="14" aria-pressed="false">Leise</button>
       </div>
     </div>
-    <div class="grp"><span class="label">Overdrive</span><div class="slider"><input type="range" id="drv" min="0" max="8" step="1" value="0" aria-label="Overdrive"><output id="drvo">0</output></div></div>
+    <div class="grp"><span class="label">Overdrive</span>
+      <div class="seg"><button id="odon" aria-pressed="false">An</button></div>
+      <div class="slider"><input type="range" id="drv" min="0" max="8" step="1" value="3" aria-label="Overdrive-Stärke"><output id="drvo">3</output></div>
+    </div>
     <div class="grp"><span class="label">Schweller</span><div class="slider"><input type="range" id="swl" min="0" max="127" step="1" value="127" aria-label="Schweller"><output id="swlo">127</output></div></div>
     <div class="grp"><span class="label">Lautstärke</span><div class="slider"><input type="range" id="vol" min="0" max="100" step="1" value="70" aria-label="Lautstärke"><output id="volo">70</output></div></div>
   </section>
@@ -157,7 +163,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
       </div>
     </div>
     <div class="kb" id="kb"></div>
-    <p class="hint">Computertastatur: die mittlere Tastenreihe spielt die weißen, die obere Reihe die schwarzen Tasten, beginnend mit A am linken C. Die Tasten links unten (Y und X auf deutscher Tastatur) wechseln die Oktave. USB-MIDI-Keyboards werden erkannt, wenn der Browser es erlaubt (Töne C2 bis C7, CC 70 bis 78 steuern die Zugriegel, CC 11 den Schweller).</p>
+    <p class="hint">Computertastatur: die mittlere Tastenreihe spielt die weißen, die obere Reihe die schwarzen Tasten, beginnend mit A am linken C. Die Tasten links unten (Y und X auf deutscher Tastatur) wechseln die Oktave. USB-MIDI-Keyboards werden erkannt, wenn der Browser es erlaubt. Es gelten die Standard-Controller von setBfree (CC 1, 7, 11, 31, 64 bis 66, 70 bis 78, 80 bis 83, 92, 93, 95) und Programmwechsel.</p>
   </section>
 
   <section class="panel" aria-label="Signal">
@@ -168,47 +174,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
 </div>
 
 <script>
-const WASM_B64 = "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IAshBAsgASAGbEEEdSIBQf//ASABQf//AUgbIgFBgYB+IAFBgYB+ShsiAUEDbCABIAFsQQ92IAFsQQ91a0HVqgFsQRB1IQECQAJAIA4NACABIQkMAQtBACADIBBqIgM2AvC5gIAAIAEgA0EQdiIJQf//A3MgCSADQQBIGyIKQa/zAGxBD3ZB0IwBamxBD3UhCSABQf//ASAKa0Gv8wBsQQ92QdCMAWpsQQ91IQELIAAgACgCACAJajYCACAAQQRqIgkgCSgCACABajYCACAAQQhqIQAgAkEEaiICDQALQQAgDzYC+KCAgABBACgC9LmAgAAaQYACC2wBA38CQCAAQTxLDQACQAJAIABBH0sNAEEAKALwoICAACICQQEgAHQiAHIhA0HwoICAACEEDAELQQAoAvSggIAAIgJBASAAQWBqdCIAciEDQfSggIAAIQQLIAQgAyACIABBf3NxIAEbNgIACwshAAJAIABBCEsNACABQQhLDQAgAEHQkICAAGogAToAAAsLtAEAAkAgAEEHSw0AQQAgAEEDdEGEiICAAGooAgAiAC0AAEFQajoA0JCAgABBACAALQABQVBqOgDRkICAAEEAIAAtAAJBUGo6ANKQgIAAQQAgAC0AA0FQajoA05CAgABBACAALQAEQVBqOgDUkICAAEEAIAAtAAVBUGo6ANWQgIAAQQAgAC0ABkFQajoA1pCAgABBACAALQAHQVBqOgDXkICAAEEAIAAtAAhBUGo6ANiQgIAACwsiAQF/QQAhAQJAIABBCEsNACAAQdCQgIAAai0AACEBCyABCxcAAkAgAEEGSw0AQQAgADoA2ZCAgAALCxcAAkAgAEECSw0AQQAgADoA3pCAgAALCxcAAkAgAEEISw0AQQAgADoA35CAgAALCzoAQQAgAEEBcToA2pCAgABBACABQQFxOgDbkICAAEEAIAJBAXE6ANyQgIAAQQAgA0EBcToA3ZCAgAALGAACQCAAQf8ASw0AQQAgADoA4JCAgAALCwsAQQAoAviggIAACxgAQQBBADYC9KCAgABBAEEANgLwoICAAAsUACAAQQdxQQN0QYCIgIAAaigCAAv0AQEBf0GgfSEBAkADQCABQeCjgIAAaiAAQY3M5QBsQd/mu+MDaiIANgIAIAFB5KOAgABqIABBjczlAGxB3+a74wNqIgA2AgAgAUHoo4CA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";
+const WASM_B64 = "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1O/RBc8hzEbJdMaqw+nAMr6Gu+S4TLbBs0Gxza5lrAuqvqd+pU2jKaEVnw+dGJsxmVqXk5XdkzeSopAej6yNS4z8ir+JlYh8h3eGhIWkhNeDHYN3guOBZIH3gJ+AWoAogAuAAYALgCiAWoCfgPeAZIHjgXeCHYPXg6SEhIV3hnyHlYi/ifyKS4ysjR6PopA3kt2Tk5ValzGZGJsPnRWfKaFNo36lvqcLqmWsza5BscGzTLbkuIa7Mr7pwKrDdMZGySHMBc/v0eHU2tfY2t3d5uD14wfnHuo47VXwdPOW9rj53PwAAFJvZCBBcmdlbnQATm8gc3BsaXQATG93ci9VcHIgU3BsaXQAUGRhbC9VcHIgU3BsaXQAUGQvTHcvVXAgU3BsaXQAVTpUcnVtcGV0AEw6Q2xhcmluZXQATDpGdWxsIEdyZWF0AEppbW15IFNtaXRoIFBsdXMAQnJhc3N5IHBlZGFscwBIb2xsb3cgcGVkYWxzAEN1dGUgcGVkYWxzAEJvb2tlciBUIEpvbmVzAEw6R3JlYXQgbm8gcmVlZHMAUGF1bCBTaGFmZmVyADgnIHNvbG8ATDpDZWxsbwBVOkZyZW5jaCBIb3JuAFU6T2JvZSBIb3JuAEw6T3BlbiBEaWFwb3NvbgBVOlN3ZWxsIERpYXBhc29uAFZpYiBsb3dlciBvbgBWaWIgdXBwZXIgb24AUHJvY3VsIEhhcnVtAFJhbmRvbQBVOkZ1bGwgU3dlbGwASmF6eiAxIGFsbABHb3NwZWwAVTpTYWxpY2lvbmFsAEw6U2FsaWNpb25hbABKaW1teSBTbWl0aABMOkZsdXRlICYgU3RyaW5nAFZpYiBsb3dlciBvZmYAVmliIHVwcGVyIG9mZgBVOlN0b3BwZWQgRmx1dGUAU3RhbmRhcmQgQiBtaWQgd2hpc3RsZQBTaWxlbmNlAFJlZ2dhZQBKZXNzZSBDcmF3Zm9yZABKb2huIExvcmQAQnJpYW4gQXVnZXIgM3JkAFAuSGFybW9uaWMgM3JkAEJyaWFuIEF1Z2VyIDJuZABQLkhhcm1vbmljIDJuZABMOlRpYmlhIENsYXVzYQBVOkR1bGNpYW5hAFJvdGFyeSBTTE9XAFBlcmN1c3Npb24gU0xPVwBSb3RhcnkgRkFTVABQZXJjdXNzaW9uIEZBU1QAUGVyY3Vzc2lvbiBTT0ZUAFJvdGFyeSBTVE9QAEFXU09QAFBlcmN1c3Npb24gT04AT3ZlcmRyaXZlIE9OAFBlcmN1c3Npb24gTk9STUFMAFBlcmN1c3Npb24gT0ZGAE92ZXJkcml2ZSBPRkYAU3RhbmRhcmQgQgBSZXZlcmIgMTYAUmV2ZXJiIDI1AFZpYnJhdG8gVjMAVmlicmF0byBDMwBSZXZlcmIgMzMARnJlZHJpa3MgdGZuIDMARXJyb2wgRy4gMwBWaWJyYXRvIFYyAFZpYnJhdG8gQzIAR3JlZW4gT25pb25zIDIAQmx1ZXMgMgBKb2V5IERlRnJhbmNvIDIARnJlZHJpa3MgdGZuIDIATGVubnkgRGVlIDIAU3RldmUgV2lud29vZCAyAEVycm9sIEcuIDIAVmlicmF0byBWMQBWaWJyYXRvIEMxAEdyZWVuIE9uaW9ucyAxAEJsdWVzIDEASm9leSBEZUZyYW5jbyAxAEZyZWRyaWtzIHRmbiAxAExlbm55IERlZSAxAFN0ZXZlIFdpbndvb2QgMQBFcnJvbCBHLiAxAFJldmVyYiA1MABSZXZlcmIgIDAAV2FhLXdhYSAoMm5kIGJhcikARUxQIChLZWl0aCBFbWVyc29uKQBUb20gQ29zdGVyIChTYW50YW5hKQBVOlRydW1wZXQgOCcAVTpDbGFyaW5ldCA4JwBMOlZpYnJhaGFycCA4JwBVOk5vdmVsIFNvbG8gOCcATDpDZWxsbyA4JwBVOkZyZW5jaCBIb3JuIDgnAFU6T2JvZSBIb3JuIDgnAEw6T3BlbiBEaWFwYXNvbiA4JwBMOkR1bGNpYW5hIDgnAEw6VGliaWEgOCcATDpTdHJpbmcgQWNjb21wLiA4JwBVOkZ1bGwgVGhlYXRyZSBCcmFzcyAxNicAVTpGdWxsIFRpYmlhcyAxNicAVTpUaGVhdHJlIFNvbG8gMTYnAEw6RnVsbCBHcmVhdCB3aXRoIDE2JwBMOkJvbWJhcmRlIDE2JwBMOkZ1bGwgQWNjb21wLiAxNicAVTpGbHV0ZXMgOCcmNCcAVTpUaWJpYXMgOCcmNCcATDpWb3ggOCcgJiBUaWJpYSA0JwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/wEICAgAAAAAAAABAQEBBQEBAQDhCAAAAQAHBQgHBQcCAAAAAAAAAAAAAACaCwAAAQAHBQgAAQYCAAAAAAAAAAAAAAAnCwAAAQAHAAMHAQMBBQMAAAAAAAAAAADQCgAAAQAICAgAAAAAAAAAAAAAAAAAAACRCgAAAQAICAgAAAAAAAQAAAAAAAAAAABWCQAAAQAICAgAAAAAAAgAAAAAAAAAAADsCAAAAQAICAgIAAAAAAAAAAAAAAAAAACCCwAAAQAICAUDAgQFCAgAAAAAAAAAAAAPCwAAAQAICAAAAAAAAAAAAAAAAAAAAACSBwAAMwAICAgBAQAAAAABAAABBQAAAACVCQAAAQAIAAAIAAAAAAAAAAAAAAAAAAB8CQAAAQAICAgEAAAACAAAAAAAAAAAAACKCwAAIQAIAwgAAAAAAAAAAAAABQAAAAAXCwAAEwAICAgGAwAAAAABAAAAAAAAAAAuCAAAAQAIAAgIAAAAAAgAAAAAAAAAAAAACwAAAQAIAAAIAAgAAAAAAAAAAAAAAADACAAADwAGCAAIAAgAAAABAQEAAAAAAABBCgAAAQAIBAgIBAgEBAgAAAAAAAAAAAC1CwAAAQAIAAgACAAIAAgAAAAAAAAAAACpCwAAAQAGBgcABwYGAAYAAAAAAAAAAAA2CwAAAQAAAAAAAAAAAAAAAAAAAAAAAABtCQAAAQAAAAgAAAAAAAAAAAAAAAAAAABbCAAAAQAIAAAAAAgICAgAAAAAAAAAAADFCwAAAQAIAAAAAAYGBgYAAAAAAAAAAABSCwAAAQAIAAAAAAQEBAQAAAAAAAAAAADfCgAAAAAAAAAAAAAAAAAAAAAAAAAAAADaCwAAAAAAAAAAAAAAAAAAAAAAAAAAAACcCgAAAAAAAAAAAAAAAAAAAAAAAAAAAACmCgAAAAAAAAAAAAAAAAAAAAAAAAAAAADGCgAAAAAAAAAAAAAAAAAAAAAAAAAAAADQCwAAAgAAAAAAAAAAAAAAAAAAAAAAAAB0CgAAAgAAAAAAAAAAAAABAAAAAAAAAABHCgAABAAAAAAAAAAAAAAAAQAAAAAAAAAlCgAABAAAAAAAAAAAAAAAAAAAAAAAAABiCgAACAAAAAAAAAAAAAAAAAEAAAAAAAAVCgAACAAAAAAAAAAAAAAAAAAAAAAAAAD5CQAAEAAAAAAAAAAAAAAAAAAAAAAAAADECQAAEAAAAAAAAAAAAAAAAAABAAAAAAClCQAAgAAAAAAAAAAAAAAAAAAAAAAAAACDCgAAgAAAAAAAAAAAAAAAAAAAAAABAABVCgAAIAAAAAAAAAAAAAAAAAAAAAAAAABdCwAAIAAAAAAAAAAAAAAAAAAAAgAAAADqCgAAIAAAAAAAAAAAAAAAAAAABAAAAACwCgAAIAAAAAAAAAAAAAAAAAAAAQAAAABoCwAAIAAAAAAAAAAAAAAAAAAAAwAAAAD1CgAAIAAAAAAAAAAAAAAAAAAABQAAAAC7CgAAAAAAAAAAAAAAAAAAAAAAAAAAAACmCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAqCQAAQAAAAAAAAAAAAAAAAAAAAAEAAACzCAAAQAAAAAAAAAAAAAAAAAAAAAAAAAA4CQAAAAEAAAAAAAAAAAAAAAAAAAAAAAA1CgAAAAEAAAAAAAAAAAAAAAAAAAAAAQDtCQAAAAEAAAAAAAAAAAAAAAAAAAAAAgAJCgAAAAIAAAAAAAAAAAAAAAAAAAAAAADNCAAAAAIAAAAAAAAAAAAAAAAAAAAAAADNCAAAAAAAAAAAAAAAAAAAAAAAAAAAAACmBwAAAAAAAAAAAAAAAAAAAAAAAAAAAADEBwAAAAAAAAAAAAAAAAAAAAAAAAAAAAC1BwAAAAAAAAAAAAAAAAAAAAAAAAAAAACdBwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAiCAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZCQAAAAAAAAAAAAAAAAAAAAAAAAAAAADdBwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACQAAAAAAAAAAAAAAAAAAAAAAAAAAAAA9CAAAAAAAAAAAAAAAAAAAAAAAAAAAAACFCAAAAAAAAAAAAAAAAAAAAAAAAAAAAADoBwAAAAAAAAAAAAAAAAAAAAAAAAAAAADTCQAAAAAAAAAAAAAAAAAAAAAAAAAAAAACDQAAAAAAAAAAAAAAAAAAAAAAAAAAAABZDAAAAAAAAAAAAAAAAAAAAAAAAAAAAACXDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6DAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYDQAAAAAAAAAAAAAAAAAAAAAAAAAAAACwDAAAAAAAAAAAAAAAAAAAAAAAAAAAAACEDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAnDQAAAAAAAAAAAAAAAAAAAAAAAAAAAAClDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYDQAAAQAAAAUDAgAAAAAAAAAAAAAAAABGCQAAAQAAAAQEAwIAAAAAAAAAAAAAAADiCQAAAQAAAAgHBAAAAAAAAAAAAAAAAABrCAAAAQAAAAQFBAQCAgIAAAAAAAAAAADzCAAAAQAAAAUEAAMAAAAAAAAAAAAAAAA6DQAAAQAAAAQGBwUDAAAAAAAAAAAAAAB5CAAAAQAAAAUGBAQDAgAAAAAAAAAAAACVCAAAAQAAAAYIBwYFBAAAAAAAAAAAAADTBwAAAQADAgcGBAUCAgIAAAAAAAAAAADUCAAAAQAAAAgHBAAAAAAAAAAAAAAAAABkDAAAAQAAAAgEAAgAAAQAAAAAAAAAAABJDQAAAQAAAAgACAAIBAAAAAAAAAAAAAAsDAAAAQAACAgIAAAICAAAAAAAAAAAAABJDAAAAQAGAAgACAgAAAAAAAAAAAAAAADvDAAAAQAAAAQGCAUDAAAAAAAAAAAAAAB1DAAAAQAGAAgIAAcAAAYAAAAAAAAAAADdDAAAAQAAAAYICAgGBQQAAAAAAAAAAAAfDAAAAQAHBggIBwgGBgcAAAAAAAAAAADEDAAAAQAICAgICAgICAgAAAAAAAAAAABCCwAAMwAICAgBAQAAAAABAAAABQAAAAC0CQAAAQAICAgIAAAAAAAAAAAAAAAAAABzCwAAAQAICAgIAAAAAAAAAAAAAAAAAAAKDAAAMwAICAgAAAAAAAABAAABBQAAAAANCQAAPwEICAgIAAAAAAABAQEBBQAAAQD1BwAAEwAICAgAAAAAAAABAAAAAAAAAACLCQAAAQAICAgAAAAAAAAAAAAAAAAAAAD2CwAAIQEICAgHCAgGBwgAAAAABQAAAgBOCAAAAQAIAAgAAAAAAAgAAAAAAAAAAAB1CQAAHQAICAgIAAAAAAAAAQEBAAAAAADkCwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAApRkAAKYZAACnGQAAqBkAAKkZAACqGQAAqxkAAKwZAACtGQAArhkAAK8ZAAAAQZwzCyAICAgAAAAAAAAAAAABAAABAAN/AP9/AAAiIQEAoozWkgDHAgRuYW1lAAsKb3JnYW4ud2FzbQGLAhAADG9yZ2FuX2J1ZmZlcgEMb3JnYW5fcmVuZGVyAgpvcmdhbl9pbml0Aw1vcmdhbl9wcm9ncmFtBAlvcmdhbl9rZXkFDW9yZ2FuX2FsbF9vZmYGDG9yZ2FuX3doZWVscwcNb3JnYW5fbWlkaV9jYwgNb3JnYW5fbWlkaV9wYwkUb3JnYW5fc2VsZWN0X3Byb2dyYW0KEm9yZ2FuX3Byb2dyYW1fc3RlcAsSb3JnYW5fcHJvZ3JhbV9uYW1lDBhvcmdhbl9wcm9ncmFtX2hhc19lZmZlY3QNHW9yZ2FuX3Byb2dyYW1faXNfcmVnaXN0cmF0aW9uDglvcmdhbl9nZXQPCW9yZ2FuX3NldAcSAQAPX19zdGFja19wb2ludGVyCRECAAcucm9kYXRhAQUuZGF0YQA4CXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQxVYnVudHUgY2xhbmcRMTguMS4zICgxdWJ1bnR1MSkALA90YXJnZXRfZmVhdHVyZXMCKw9tdXRhYmxlLWdsb2JhbHMrCHNpZ24tZXh0";
 
 const FOOT = ["16", "5⅓", "8", "4", "2⅔", "2", "1⅗", "1⅓", "1"];
 const CAP = ["brown", "brown", "white", "white", "black", "white", "black", "black", "white"];
-const PRESETS = [["Voll", "888888888"], ["Jazz", "888000000"], ["Blues", "888800000"], ["Flöte", "008000000"],
-                 ["Weich", "006800000"], ["Rohr", "008642000"], ["Hell", "005888000"], ["Tief", "880000000"]];
-const VIB = ["Aus", "V1", "V2", "V3", "C1", "C2", "C3"];
-const LES = ["Aus", "Langsam", "Schnell"];
+const VIB = ["V1", "C1", "V2", "C2", "V3", "C3"];                  /* setBfree's vibrato knob positions */
+const LES = ["Stop", "Langsam", "Schnell"];
 const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const BLACK = [1, 3, 6, 8, 10];
 const KEYMAP = ["KeyA","KeyW","KeyS","KeyE","KeyD","KeyF","KeyT","KeyG","KeyY","KeyH","KeyU","KeyJ","KeyK","KeyO","KeyL","KeyP","Semicolon","Quote"];
 
-const S = { db: [8, 8, 8, 0, 0, 0, 0, 0, 0], vib: 0, les: 0, drv: 0, swl: 127, vol: 70, base: 48,
-            perc: { on: 0, third: 1, fast: 0, soft: 0 }, preset: 1 };
-let ex = null, ctx = null, gainNode = null, analyser = null;
+let ex = null, ctx = null, gainNode = null, analyser = null, vol = 70, base = 48;
 const down = new Map();                         /* midi note -> count of sources holding it */
 const $ = (id) => document.getElementById(id);
-const tryStore = (fn) => { try { return fn(); } catch (e) { return null; } };
-
-function push() {
-  if (!ex) return;
-  S.db.forEach((v, i) => ex.organ_drawbar(i, v));
-  ex.organ_vib(S.vib); ex.organ_leslie(S.les); ex.organ_drive(S.drv); ex.organ_swell(S.swl);
-  ex.organ_perc(S.perc.on, S.perc.third, S.perc.fast, S.perc.soft);
-  down.forEach((c, n) => ex.organ_key(n - 36, 1));
-}
+const get = (id) => (ex ? ex.organ_get(id) : 0);
+const put = (id, v) => { if (ex) { ex.organ_set(id, v); render(); } };
+const cstr = (p) => { if (!p) return null; const b = new Uint8Array(ex.memory.buffer); let s = ""; while (b[p]) s += String.fromCharCode(b[p++]); return s; };
 
 /* ---- drawbars */
 const barEls = [];
-function drawBar(i) {
-  const e = barEls[i];
-  e.cap.style.top = (12 + (e.h - 24) * (1 - S.db[i] / 8)) + "px";
-  e.val.textContent = S.db[i];
-  e.track.setAttribute("aria-valuenow", S.db[i]);
-}
-function setDb(i, v) {
-  v = Math.max(0, Math.min(8, v));
-  if (S.db[i] === v) return;
-  S.db[i] = v; if (ex) ex.organ_drawbar(i, v);
-  drawBar(i); markPreset();
-}
+function setDb(i, v) { put(i, Math.max(0, Math.min(8, v))); }
 function buildBars() {
   const root = $("bars");
   FOOT.forEach((f, i) => {
@@ -221,7 +206,7 @@ function buildBars() {
     const ft = document.createElement("div"); ft.className = "ft"; ft.textContent = f + "′";
     const val = document.createElement("div"); val.className = "val";
     bar.append(track, ft, val); root.appendChild(bar);
-    const e = { track, cap, val, h: 170 }; barEls.push(e);
+    const e = { track, cap, val, h: 170, v: -1 }; barEls.push(e);
     const place = (ev) => {
       const r = track.getBoundingClientRect(); e.h = r.height;
       const t = Math.max(0, Math.min(1, (ev.clientY - r.top - 12) / (r.height - 24)));
@@ -231,46 +216,51 @@ function buildBars() {
     track.addEventListener("pointermove", (ev) => { if (track.hasPointerCapture(ev.pointerId)) place(ev); });
     track.addEventListener("keydown", (ev) => {
       const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[ev.key];
-      if (d) { setDb(i, S.db[i] + d); ev.preventDefault(); }
+      if (d) { setDb(i, get(i) + d); ev.preventDefault(); }
       if (ev.key === "Home") setDb(i, 0); if (ev.key === "End") setDb(i, 8);
     });
   });
-  const sync = () => { barEls.forEach((e, i) => { e.h = e.track.getBoundingClientRect().height || 170; drawBar(i); }); };
-  new ResizeObserver(sync).observe(root); sync();
+  new ResizeObserver(() => { barEls.forEach((e) => { e.v = -1; }); render(); }).observe(root);
 }
 
-/* ---- presets and switches */
-function markPreset() {
-  const cur = S.db.join("");
-  document.querySelectorAll("#presets .chip").forEach((b, i) => b.setAttribute("aria-pressed", PRESETS[i][1] === cur ? "true" : "false"));
-}
+/* ---- switches, program list */
+const pressed = (el, on) => el.setAttribute("aria-pressed", on ? "true" : "false");
 function buildSwitches() {
-  PRESETS.forEach(([name, db], i) => {
-    const b = document.createElement("button"); b.className = "chip"; b.textContent = name; b.setAttribute("aria-pressed", "false");
-    b.onclick = () => { db.split("").forEach((c, k) => setDb(k, +c)); };
-    $("presets").appendChild(b);
+  VIB.forEach((l, i) => { const b = document.createElement("button"); b.className = "vk"; b.textContent = l; b.onclick = () => put(9, i); $("vib").insertBefore(b, $("vup")); });
+  $("vup").onclick = () => put(10, get(10) ^ 1);
+  LES.forEach((l, i) => { const b = document.createElement("button"); b.textContent = l; b.onclick = () => put(15, i); $("les").appendChild(b); });
+  $("perc").querySelectorAll("button").forEach((b) => { b.onclick = () => put(+b.dataset.id, get(+b.dataset.id) ^ 1); });
+  $("odon").onclick = () => put(16, get(16) ^ 1);
+  $("drv").oninput = () => put(17, +$("drv").value);
+  $("swl").oninput = () => put(18, +$("swl").value);
+  $("vol").oninput = () => { vol = +$("vol").value; $("volo").textContent = vol; if (gainNode) gainNode.gain.value = (vol / 100) * (vol / 100); };
+  const sel = $("prog"), reg = document.createElement("optgroup"), sw = document.createElement("optgroup");
+  reg.label = "Registrierungen"; sw.label = "Schalter-Programme";
+  for (let n = 1; n < 128; n++) {
+    const name = cstr(ex.organ_program_name(n)); if (!name || !ex.organ_program_has_effect(n)) continue;
+    const o = document.createElement("option"); o.value = n; o.textContent = n + "  " + name;
+    (ex.organ_program_is_registration(n) ? reg : sw).appendChild(o);
+  }
+  sel.append(reg, sw);
+  sel.onchange = () => { ex.organ_select_program(+sel.value); render(); };
+}
+
+/* the page shows the engine's state: its own buttons, MIDI controllers and program changes all land here */
+function render() {
+  if (!ex) return;
+  barEls.forEach((e, i) => {
+    const v = get(i); if (v === e.v) return; e.v = v;
+    e.h = e.track.getBoundingClientRect().height || e.h;
+    e.cap.style.top = (12 + (e.h - 24) * (1 - v / 8)) + "px"; e.val.textContent = v; e.track.setAttribute("aria-valuenow", v);
   });
-  const seg = (id, labels, key, apply) => {
-    labels.forEach((l, i) => {
-      const b = document.createElement("button"); b.textContent = l; b.setAttribute("aria-pressed", S[key] === i ? "true" : "false");
-      b.onclick = () => { S[key] = i; apply(i); [...$(id).children].forEach((c, k) => c.setAttribute("aria-pressed", k === i ? "true" : "false")); };
-      $(id).appendChild(b);
-    });
-  };
-  seg("vib", VIB, "vib", (v) => ex && ex.organ_vib(v));
-  seg("les", LES, "les", (v) => ex && ex.organ_leslie(v));
-  $("perc").querySelectorAll("button").forEach((b) => {
-    b.onclick = () => {
-      const k = b.dataset.k; S.perc[k] ^= 1; b.setAttribute("aria-pressed", S.perc[k] ? "true" : "false");
-      if (ex) ex.organ_perc(S.perc.on, S.perc.third, S.perc.fast, S.perc.soft);
-    };
-    b.setAttribute("aria-pressed", S.perc[b.dataset.k] ? "true" : "false");
-  });
-  const rng = (id, key, apply) => { $(id).oninput = () => { S[key] = +$(id).value; $(id + "o").textContent = S[key]; apply(S[key]); }; };
-  rng("drv", "drv", (v) => ex && ex.organ_drive(v));
-  rng("swl", "swl", (v) => ex && ex.organ_swell(v));
-  rng("vol", "vol", (v) => { if (gainNode) gainNode.gain.value = (v / 100) * (v / 100); });
-  markPreset();
+  const vt = get(9), vu = get(10), ls = get(15), od = get(16), dr = get(17), sw = get(18), pg = get(19);
+  $("vib").querySelectorAll(".vk").forEach((b, i) => pressed(b, i === vt));
+  pressed($("vup"), vu); [...$("les").children].forEach((b, i) => pressed(b, i === ls));
+  $("perc").querySelectorAll("button").forEach((b) => pressed(b, get(+b.dataset.id)));
+  pressed($("odon"), od);
+  if (+$("drv").value !== dr) $("drv").value = dr; $("drvo").textContent = dr;
+  if (+$("swl").value !== sw) $("swl").value = sw; $("swlo").textContent = sw;
+  if ($("prog").value !== String(pg)) $("prog").value = String(pg);
 }
 
 /* ---- keyboard */
@@ -278,7 +268,7 @@ let keyEls = new Map();
 const noteName = (n) => NAMES[n % 12] + (Math.floor(n / 12) - 1);
 function buildKeys() {
   const kb = $("kb"); kb.textContent = ""; keyEls = new Map();
-  const notes = []; for (let n = S.base; n < S.base + 24; n++) notes.push(n);
+  const notes = []; for (let n = base; n < base + 24; n++) notes.push(n);
   const whites = notes.filter((n) => !BLACK.includes(n % 12));
   whites.forEach((n) => {
     const k = document.createElement("div"); k.className = "wk"; k.dataset.n = n;
@@ -292,7 +282,7 @@ function buildKeys() {
     k.style.left = ((wi + 1) * w - w * 0.3) + "%"; k.style.width = (w * 0.6) + "%";
     kb.appendChild(k); keyEls.set(n, k);
   });
-  $("range").textContent = noteName(S.base) + " bis " + noteName(S.base + 23);
+  $("range").textContent = noteName(base) + " bis " + noteName(base + 23);
   down.forEach((c, n) => paintKey(n));
 }
 function paintKey(n) { const k = keyEls.get(n); if (k) k.classList.toggle("on", down.has(n)); }
@@ -311,9 +301,9 @@ function noteOff(n) {
   if (c <= 0) { down.delete(n); if (ex) ex.organ_key(n - 36, 0); } else down.set(n, c);
   paintKey(n);
 }
-function setBase(b) { S.base = Math.max(36, Math.min(72, b)); buildKeys(); }
-$("octd").onclick = () => setBase(S.base - 12);
-$("octu").onclick = () => setBase(S.base + 12);
+function setBase(b) { base = Math.max(36, Math.min(72, b)); buildKeys(); }
+$("octd").onclick = () => setBase(base - 12);
+$("octu").onclick = () => setBase(base + 12);
 
 const held = new Map();                          /* pointerId -> note */
 const kbEl = $("kb");
@@ -333,15 +323,15 @@ kbEl.addEventListener("pointerup", release); kbEl.addEventListener("pointercance
 const typed = new Map();
 addEventListener("keydown", (ev) => {
   if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.repeat) return;
-  if (ev.code === "KeyZ") { setBase(S.base - 12); return; }
-  if (ev.code === "KeyX") { setBase(S.base + 12); return; }
+  if (ev.code === "KeyZ") { setBase(base - 12); return; }
+  if (ev.code === "KeyX") { setBase(base + 12); return; }
   const i = KEYMAP.indexOf(ev.code); if (i < 0 || typed.has(ev.code)) return;
-  const n = S.base + i; typed.set(ev.code, n); noteOn(n); ensureAudio();
+  const n = base + i; typed.set(ev.code, n); noteOn(n); ensureAudio();
 });
 addEventListener("keyup", (ev) => { if (typed.has(ev.code)) { noteOff(typed.get(ev.code)); typed.delete(ev.code); } });
 addEventListener("blur", () => { typed.forEach((n) => noteOff(n)); typed.clear(); held.forEach((n) => noteOff(n)); held.clear(); });
 
-/* ---- MIDI in (optional) */
+/* ---- MIDI in (optional): notes, controllers and program changes go to the engine as the firmware gets them */
 async function initMidi() {
   if (!navigator.requestMIDIAccess) return;
   try {
@@ -349,10 +339,8 @@ async function initMidi() {
     const wire = () => acc.inputs.forEach((inp) => { inp.onmidimessage = (m) => {
       const [s, a, b] = m.data, c = s & 0xF0;
       if (c === 0x90 && b) { noteOn(a); ensureAudio(); } else if (c === 0x80 || c === 0x90) noteOff(a);
-      else if (c === 0xB0) {
-        if (a >= 70 && a <= 78) setDb(a - 70, (b * 9) >> 7);
-        else if (a === 11) { S.swl = b; $("swl").value = b; $("swlo").textContent = b; if (ex) ex.organ_swell(b); }
-      }
+      else if (c === 0xB0 && ex) { ex.organ_midi_cc(a, b); render(); }
+      else if (c === 0xC0 && ex) { ex.organ_midi_pc(a); render(); }
     }; });
     wire(); acc.onstatechange = wire;
   } catch (e) { /* MIDI refused: the on-screen and computer keys still work */ }
@@ -361,12 +349,10 @@ async function initMidi() {
 /* ---- audio */
 async function ensureAudio() {
   if (ctx) { if (ctx.state !== "running") await ctx.resume(); return; }
+  if (!ex) return;
   try {
-    const bin = Uint8Array.from(atob(WASM_B64), (c) => c.charCodeAt(0));
-    const { instance } = await WebAssembly.instantiate(bin, {});
-    ex = instance.exports; ex.organ_init(12345); push();
     ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100, latencyHint: "interactive" });
-    gainNode = ctx.createGain(); gainNode.gain.value = (S.vol / 100) * (S.vol / 100);
+    gainNode = ctx.createGain(); gainNode.gain.value = (vol / 100) * (vol / 100);
     analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
     const node = ctx.createScriptProcessor(512, 0, 2);
     node.onaudioprocess = (e) => {
@@ -379,14 +365,14 @@ async function ensureAudio() {
     };
     node.connect(gainNode); gainNode.connect(analyser); gainNode.connect(ctx.destination);
     if (ctx.state !== "running") await ctx.resume();
-    $("power").textContent = "Klang aus"; $("power").setAttribute("aria-pressed", "true");
+    $("power").textContent = "Klang aus"; pressed($("power"), true);
     initMidi();
   } catch (err) { $("stat").textContent = "Audio nicht verfügbar: " + (err && err.message ? err.message : err); }
 }
 $("power").onclick = async () => {
   if (!ctx) { await ensureAudio(); return; }
-  if (ctx.state === "running") { await ctx.suspend(); $("power").textContent = "Klang starten"; $("power").setAttribute("aria-pressed", "false"); }
-  else { await ctx.resume(); $("power").textContent = "Klang aus"; $("power").setAttribute("aria-pressed", "true"); }
+  if (ctx.state === "running") { await ctx.suspend(); $("power").textContent = "Klang starten"; pressed($("power"), false); }
+  else { await ctx.resume(); $("power").textContent = "Klang aus"; pressed($("power"), true); }
 };
 
 /* ---- scope and status */
@@ -405,7 +391,14 @@ function frame() {
   }
   requestAnimationFrame(frame);
 }
-setInterval(() => { if (ex && ctx) $("stat").textContent = ctx.state === "running" ? "Tonräder: " + ex.organ_wheels() + " von 91" : "Pause"; }, 200);
+setInterval(() => { if (!ex) return; render(); if (ctx) $("stat").textContent = ctx.state === "running" ? "Tonräder: " + ex.organ_wheels() + " von 91" : "Pause"; }, 100);
 
-buildBars(); buildSwitches(); buildKeys(); frame();
+(async function start() {
+  try {
+    const bin = Uint8Array.from(atob(WASM_B64), (c) => c.charCodeAt(0));
+    ex = (await WebAssembly.instantiate(bin, {})).instance.exports; ex.organ_init(12345);
+  } catch (err) { $("stat").textContent = "WebAssembly nicht verfügbar: " + (err && err.message ? err.message : err); return; }
+  buildBars(); buildSwitches(); buildKeys(); render(); frame();
+  initMidi();                                   /* some browsers ask for MIDI access at once, others only after a click */
+})();
 </script>
