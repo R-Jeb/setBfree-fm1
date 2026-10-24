@@ -1,3 +1,7 @@
 build/
 __pycache__/
 .DS_Store
+
+# test output from running the host build with the wrong arguments
+*.ppm
+/*.wav
