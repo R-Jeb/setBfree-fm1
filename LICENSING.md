@@ -26,7 +26,9 @@ The organ model in `firmware/src/dinghy.c` (wheel gear ratios, drawbar footage m
 parameters, MIDI controller numbers) is derived from setBfree, <https://github.com/pantherb/setBfree>,
 Copyright (C) Fredrik Kilander, Will Panther, Robin Gareus, Ken Restivo and others, GPL-2.0-or-later. The code here
 is a fixed-point rewrite for the FM-1, not a copy of setBfree's source; the combined firmware is GPL-3.0-only.
-`tools/gen_organ.py` and the generated `firmware/src/organ_tab.h` carry the wheel tables.
+`tools/gen_organ.py` and the generated `firmware/src/organ_tab.h` carry the wheel tables. `data/setbfree-default.pgm` is a
+copy of setBfree's `pgm/default.pgm` (GPL-2.0-or-later); `tools/gen_programs.py` turns it into `firmware/src/organ_pgm.h`.
+The controller numbers and value ranges follow setBfree's `src/midi.c`.
 
 ## The logo
 
