@@ -31,3 +31,9 @@ setBfree's equalisation curve, crosstalk and key compression. Vibrato depth and 
 (`--target=wasm32`, needs `wasm-ld`; on Ubuntu `sudo apt install clang lld`) and writes the self-contained page
 `web/index.html`. Open it in a browser, or publish the `web/` folder with GitHub Pages (Settings, Pages, branch main,
 folder /web). It plays through the Web Audio API at 44.1 kHz; it cannot tell you the FM-1's CPU load.
+
+## Build on GitHub
+`.github/workflows/build.yml` runs on every push and pull request: the host tests and the web emulator build, and
+the real firmware package with JieLi's toolchain. Open the run in the Actions tab and download `firmware`
+(`dinghy.fwsc` and the disassembly `dinghy.dis`). A tag like `v0.2` also makes a release with the package attached.
+The toolchain download comes from JieLi's server and the SDK from Gitee; if that step fails, the log says which.
