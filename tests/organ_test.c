@@ -8,6 +8,8 @@
 static uint32_t fm1_ticks(void) { return 0; }
 #include "organ_tab.h"
 #include "organ_core.h"
+#include <math.h>
+#include "organ_ref.h"
 
 static int bad;
 #define CHECK(what, cond) do { int ok_ = !!(cond); if (!ok_) bad = 1; printf("%-58s %s\n", what, ok_ ? "ok" : "FAIL"); } while (0)
@@ -16,6 +18,55 @@ static int dbs(const char *want)
     uint32_t i;
     for (i = 0; i < NB; i++) if (P.db[i] != (uint8_t)(want[i] - '0')) return 0;
     return 1;
+}
+
+/* the level of each key and drawbar against setBfree's own tone generator (tapering and leakage included) */
+static double render_db(int key, int drawbar)
+{
+    static int32_t out[512];
+    uint32_t b, i, j;
+    double e = 0;
+    for (i = 0; i < NB; i++) P.db[i] = (uint8_t)(i == (uint32_t)drawbar ? 8 : 0);
+    P.perc = P.vup = P.od = 0; P.les = 0; P.swell = 127;
+    pk_lo = pk_hi = mk_lo = mk_hi = 0;
+    key_set(&mk_lo, &mk_hi, (uint32_t)key, 1);
+    for (b = 0; b < 400; b++) {
+        memset(out, 0, sizeof out);
+        app_audio(out, 256);
+        if (b >= 300) for (j = 0; j < 256; j++) e += (double)out[2 * j] * out[2 * j];
+    }
+    key_set(&mk_lo, &mk_hi, (uint32_t)key, 0);
+    for (b = 0; b < 400; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }   /* let it fade */
+    return 10.0 * log10(e / (100.0 * 256.0) / 1073741824.0 + 1e-20);
+}
+static void check_levels(void)
+{
+    uint32_t r, d, n = 0, within = 0;
+    double off = render_db(24, 2) - REF[3].db[2];       /* the engine's own gain: C4, 8' */
+    double worst = 0;
+    for (r = 0; r < sizeof REF / sizeof REF[0]; r++)
+        for (d = 0; d < 9u; d++) {
+            double diff = render_db(REF[r].key, (int)d) - off - REF[r].db[d];
+            if (fabs(diff) > worst) worst = fabs(diff);
+            n++;
+            if (fabs(diff) < 1.5) within++;
+        }
+    printf("levels vs setBfree: %u of %u within 1.5 dB, worst %.1f dB\n", within, n, worst);
+    CHECK("levels follow setBfree's tapering and leakage", within == n);
+}
+static void wheel_count(void)                           /* how many wheels sound: the render time is about linear in it */
+{
+    static int32_t out[512];
+    static const int chord[] = {0, 7, 12, 16, 19, 24, 28, 31, 36, 40};
+    uint32_t i, b, c;
+    for (i = 0; i < NB; i++) P.db[i] = 8;
+    P.perc = P.vup = P.od = 0; P.les = 0;
+    for (c = 1; c <= 10; c += 3 + (c > 7)) {
+        pk_lo = pk_hi = mk_lo = mk_hi = 0;
+        for (i = 0; i < c; i++) key_set(&mk_lo, &mk_hi, (uint32_t)chord[i], 1);
+        for (b = 0; b < 4; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }
+        printf("%2u keys, all drawbars at 8: %u wheels sound\n", c, (unsigned)wheels_on);
+    }
 }
 int main(void)
 {
@@ -85,5 +136,7 @@ int main(void)
     organ_cc(93, 0);   CHECK("CC 93 character 0 = 0", P.drv == 0);
     mk_lo = 5; organ_cc(123, 0); CHECK("CC 123 releases MIDI notes", mk_lo == 0);
     printf(bad ? "FAILED\n" : "all ok\n");
+    check_levels();
+    wheel_count();
     return bad;
 }

@@ -28,6 +28,7 @@ Copyright (C) Fredrik Kilander, Will Panther, Robin Gareus, Ken Restivo and othe
 is a fixed-point rewrite for the FM-1, not a copy of setBfree's source; the combined firmware is GPL-3.0-only.
 `tools/gen_organ.py` and the generated `firmware/src/organ_tab.h` carry the wheel tables. `data/setbfree-default.pgm` is a
 copy of setBfree's `pgm/default.pgm` (GPL-2.0-or-later); `tools/gen_programs.py` turns it into `firmware/src/organ_pgm.h`.
+`data/setbfree-contrib.txt` is setBfree's own key/drawbar/wheel gain matrix (dumped with `tools/dump_contrib.c`, GPL-2.0-or-later); `tools/gen_contrib.py` turns it into `firmware/src/organ_contrib.h`.
 The controller numbers and value ranges follow setBfree's `src/midi.c`.
 
 ## The logo

@@ -4,14 +4,12 @@
  * FM1_TICKS_PER_US from whoever includes it, and organ_tab.h before it. Integers only. */
 
 #include "organ_pgm.h"
+#include "organ_contrib.h"                    /* setBfree's tapering + leakage, per key and drawbar */
 
 #define NW 91u                                  /* tonewheels */
 #define NB 9u                                   /* drawbars */
 #define NK 61u                                  /* keys C2..C7 */
 #define NOTE0 36u                               /* MIDI note of key 0 (C2) */
-
-/* semitones from the 8' pitch: 16' 5 1/3' 8' 4' 2 2/3' 2' 1 3/5' 1 1/3' 1' */
-static const int8_t FOOT[NB] = {-12, 7, 0, 12, 19, 24, 28, 31, 36};
 
 /* ---- the controls the audio ISR reads (single bytes, written by the main loop) */
 static volatile struct {
@@ -28,7 +26,7 @@ static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi;   /* keys held: the panel's
 static volatile uint32_t load_us, wheels_on;    /* the last block: render time, wheels sounding */
 
 /* ---- the sound (runs in the audio ISR: keep it short, no flash, no screen) */
-#define PERC_Q8 384                             /* percussion level, 256 = a drawbar at 8 (by ear) */
+#define PERC_Q10 1536                           /* percussion level, 1024 = a drawbar at 8 (by ear) */
 #define DEC_FAST 31480                          /* per 256 frames, Q15: 0.001 ^ (256 / 44100) */
 #define DEC_SLOW 32441                          /* 0.001 ^ (256 / (4 * 44100)) */
 #define VIB_INC 706089u                         /* 7.25 Hz: f * 2^32 / 44100 */
@@ -36,20 +34,13 @@ static volatile uint32_t load_us, wheels_on;    /* the last block: render time, 
 #define LES_FAST 630123u                        /* 6.47 Hz */
 
 static uint32_t wph[NW];                        /* tonewheel phases: they turn all the time, as on the organ */
-static int32_t wcur[NW], wtgt[NW];              /* level of each wheel on the bus, Q8 (256 = one drawbar at 8) */
+static int32_t wcur[NW], wtgt[NW];              /* level of each wheel on the bus, Q10 (1024 = one drawbar at 8) */
 static int32_t acc[256];
 static int32_t vdl[256];                        /* scanner delay line */
 static uint32_t vwi, vph, lph, lrate = LES_SLOW;
 static int32_t perc_env = 32767;                /* Q15 */
 
 static const uint8_t VIBMODE[6] = {1, 4, 2, 5, 3, 6};   /* knob position -> mode: 1..3 V1..V3, 4..6 C1..C3 */
-
-static uint32_t wheel_of(uint32_t k, int32_t off)
-{
-    int32_t n = (int32_t)k + 12 + off;          /* frequency number: 0 = C 32.7 Hz (16' of the lowest key) */
-    while (n > 90) n -= 12;                     /* the highest harmonics fold back an octave */
-    return (uint32_t)n;
-}
 
 static void app_audio(int32_t *out, uint32_t n)
 {
@@ -64,16 +55,20 @@ static void app_audio(int32_t *out, uint32_t n)
     for (k = 0; k < NK; k++)
         nk += k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u;
     if (!nk) perc_env = P.soft ? 16424 : 32767; /* single trigger: the envelope restarts when every key is up */
-    else pa = (PERC_Q8 * perc_env) >> 15;
+    else pa = (PERC_Q10 * perc_env) >> 15;
     for (k = 0; k < NK; k++) {
         if (!(k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u)) continue;
         for (d = 0; d < NB; d++) {
             int32_t lvl = P.db[d];
+            uint32_t e;
             if (!lvl || (d == 8u && P.perc)) continue;   /* percussion takes the 1' drawbar's place */
-            wtgt[wheel_of(k, FOOT[d])] += lvl * 32;
+            for (e = CT_IDX[k * 9u + d]; e < CT_IDX[k * 9u + d + 1u]; e++)   /* the main wheel, tapered, and the leakage */
+                wtgt[CT_W[e]] += (lvl * 128 * (int32_t)CT_G[e]) >> 12;
         }
-        if (P.perc) wtgt[wheel_of(k, P.perc3 ? 19 : 12)] += pa;
+        if (P.perc) wtgt[CT_MAIN[k * 9u + (P.perc3 ? 4u : 3u)]] += pa;
     }
+    for (w = 0; w < NW; w++)
+        if (wtgt[w] < 3) wtgt[w] = 0;           /* below -50 dB: not worth a wheel */
     if (nk && P.perc) perc_env = (perc_env * (P.fast ? DEC_FAST : DEC_SLOW)) >> 15;
 
     for (i = 0; i < n; i++) acc[i] = 0;
@@ -93,7 +88,7 @@ static void app_audio(int32_t *out, uint32_t n)
                 s1 = SINE_TAB[idx + 1u];
                 s = s0 + (((s1 - s0) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
                 a += step;
-                acc[i] += (s >> 2) * (a >> 8);
+                acc[i] += (s >> 2) * (a >> 8);   /* a: Q18 */
             }
         }
         wph[w] = ph;
@@ -105,7 +100,7 @@ static void app_audio(int32_t *out, uint32_t n)
         lrate = (uint32_t)((int32_t)lrate + (((int32_t)target - (int32_t)lrate) >> 7));
     }
     for (i = 0; i < n; i++) {
-        int32_t x = acc[i] >> 8, y, u, l, r;
+        int32_t x = acc[i] >> 10, y, u, l, r;
         if (x > 262144) x = 262144;
         if (x < -262144) x = -262144;
         x = (x * gsw) >> 12;
