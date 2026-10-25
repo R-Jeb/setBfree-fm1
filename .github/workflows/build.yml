@@ -32,7 +32,7 @@ jobs:
       - name: Programs and MIDI controllers (setBfree's defaults)
         run: |
           mkdir -p build
-          cc -O1 -Wall -Wno-unused-function -Wno-unused-variable -Ifirmware/src -o build/organ_test tests/organ_test.c
+          cc -O1 -Wall -Wno-unused-function -Wno-unused-variable -Ifirmware/src -Itests -o build/organ_test tests/organ_test.c -lm
           build/organ_test
       - name: TRS MIDI IN parser
         run: |
