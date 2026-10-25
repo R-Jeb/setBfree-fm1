@@ -11,7 +11,7 @@
 #define NOTE0 36u                               /* MIDI note of key 0 (C2) */
 
 /* semitones from the 8' pitch: 16' 5 1/3' 8' 4' 2 2/3' 2' 1 3/5' 1 1/3' 1' */
-static const int8_t FOOT[NB] = {-12, -5, 0, 12, 19, 24, 28, 31, 36};
+static const int8_t FOOT[NB] = {-12, 7, 0, 12, 19, 24, 28, 31, 36};
 
 /* ---- the controls the audio ISR reads (single bytes, written by the main loop) */
 static volatile struct {
