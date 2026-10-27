@@ -1,6 +1,6 @@
 # Builds the FM-1 firmware package (.fwsc) with JieLi's toolchain and checks the host tests.
 # Push or pull request: both jobs run, the package is kept as a download (Actions tab, the run, "Artifacts").
-# Tag v0.2 (one digit each: X.Y): also a GitHub release with dinghy-0.2.fwsc attached.
+# Tag v0.2 (one digit each: X.Y): also a GitHub release with b3organ-0.2.fwsc attached.
 name: build
 
 on:

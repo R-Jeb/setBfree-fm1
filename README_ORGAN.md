@@ -7,9 +7,13 @@ A fixed-point tonewheel organ modelled on setBfree. State: **0.1, tested in host
 tools/get_toolchain.sh && git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git ~/fw-AC79_AIoT_SDK
 python3 tools/gen_organ.py      # only if you change the gears or tuning: rewrites firmware/src/organ_tab.h
 tests/run_host.sh               # build/host/dinghy.wav + screen PNGs, no FM-1 needed
-./build.sh                      # -> build/dinghy.fwsc ; python3 tools/fm1_install.py build/dinghy.fwsc
+./build.sh                      # -> build/b3organ.fwsc ; python3 tools/fm1_install.py build/b3organ.fwsc
 ```
-Before you release it, pick your own package identity in `tools/build.py` (`PRODUCT`; Dinghy itself is FM-1_99N).
+**Identity and version.** This firmware's package identity is `FM-1_95N` (`IDENT_PREFIX` in `tools/build.py`; Dinghy itself is
+`FM-1_99N`; the hub keeps no registry, so check its list before a public release, and change that one line if 95N is taken).
+N is the minor digit of the release. The version is on the screen, top left: `B3 ORGAN v0.1` for a release (`./build.sh --release 0.1`,
+or a tag `v0.1` on GitHub: Actions builds `b3organ-0.1.fwsc` and attaches it to the release), `B3 ORGAN vd8362` for any other build:
+`d` plus the first four hex digits of the commit it was built from (on GitHub: the commit of the run you downloaded it from).
 
 ## Controls
 keys (F3..G5, OCT-/OCT+) | SELECT drawbar, ALGORITHM level 0..8 | PRESETS steps through setBfree's registrations
@@ -50,5 +54,5 @@ folder /web). It plays through the Web Audio API at 44.1 kHz; it cannot tell you
 ## Build on GitHub
 `.github/workflows/build.yml` runs on every push and pull request: the host tests and the web emulator build, and
 the real firmware package with JieLi's toolchain. Open the run in the Actions tab and download `firmware`
-(`dinghy.fwsc` and the disassembly `dinghy.dis`). A tag like `v0.2` also makes a release with the package attached.
+(`b3organ.fwsc` and the disassembly `dinghy.dis`). A tag like `v0.2` also makes a release with the package attached.
 The toolchain download comes from JieLi's server and the SDK from Gitee; if that step fails, the log says which.
