@@ -68,6 +68,62 @@ static void wheel_count(void)                           /* how many wheels sound
         printf("%2u keys, all drawbars at 8: %u wheels sound\n", c, (unsigned)wheels_on);
     }
 }
+
+/* key compression and key click, against setBfree (the level relative to one key: 3.64, 6.37, 9.26 dB louder for 4, 7, 10 keys) */
+static double chord_db(int n)
+{
+    static int32_t out[512];
+    static const int ch[] = {24, 28, 31, 36, 40, 43, 48, 52, 55, 60};
+    uint32_t b, j, i;
+    double e = 0;
+    for (i = 0; i < NB; i++) P.db[i] = i == 2 ? 8 : 0;
+    P.perc = P.vup = P.od = 0; P.les = 0; P.swell = 127;
+    pk_lo = pk_hi = mk_lo = mk_hi = 0;
+    for (b = 0; b < 60; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }
+    for (i = 0; i < (uint32_t)n; i++) key_set(&mk_lo, &mk_hi, (uint32_t)ch[i], 1);
+    for (b = 0; b < 150; b++) {
+        memset(out, 0, sizeof out);
+        app_audio(out, 256);
+        if (b >= 100) for (j = 0; j < 256; j++) e += (double)out[2 * j] * out[2 * j];
+    }
+    for (i = 0; i < (uint32_t)n; i++) key_set(&mk_lo, &mk_hi, (uint32_t)ch[i], 0);
+    for (b = 0; b < 60; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }
+    return 10.0 * log10(e / 25600.0 / 1073741824.0);
+}
+static void check_compression(void)
+{
+    double one = chord_db(1), d4 = chord_db(4) - one, d7 = chord_db(7) - one, d10 = chord_db(10) - one;
+    printf("key compression: 4 keys %+.2f, 7 keys %+.2f, 10 keys %+.2f dB (setBfree 3.64, 6.37, 9.26)\n", d4, d7, d10);
+    CHECK("key compression follows setBfree", fabs(d4 - 3.64) < 0.4 && fabs(d7 - 6.37) < 0.4 && fabs(d10 - 9.26) < 0.4);
+}
+static void check_click(void)                           /* the attack has a burst of noise: a note-on is not a clean sine */
+{
+    static int32_t out[512];
+    static const int keys[] = {17, 24, 29, 33, 40};
+    uint32_t b, i, j, k;
+    double worst = 1e9;
+    for (k = 0; k < 5; k++) {
+        double on = 0, st = 0;
+        for (i = 0; i < NB; i++) P.db[i] = i == 2 ? 8 : 0;
+        P.perc = P.vup = P.od = 0; P.les = 0; P.swell = 127;
+        pk_lo = pk_hi = mk_lo = mk_hi = 0;
+        for (b = 0; b < 60; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }
+        key_set(&mk_lo, &mk_hi, (uint32_t)keys[k], 1);
+        for (b = 0; b < 12; b++) {
+            memset(out, 0, sizeof out);
+            app_audio(out, 256);
+            for (j = 2; j < 256; j++) {                 /* the second difference: a high-pass, a sine hardly shows */
+                double d = (double)out[2 * j] - 2.0 * out[2 * (j - 1)] + out[2 * (j - 2)];
+                if (b == 0) on += d * d; else if (b == 11) st += d * d;
+            }
+        }
+        key_set(&mk_lo, &mk_hi, (uint32_t)keys[k], 0);
+        for (b = 0; b < 60; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }
+        if (10.0 * log10(on / st) < worst) worst = 10.0 * log10(on / st);
+    }
+    printf("key click: the first block is %.1f dB above the steady one in the second difference (worst of 5 keys)\n", worst);
+    CHECK("a note-on has a click", worst > 6.0);
+}
 int main(void)
 {
     uint32_t n, cnt = 0, reg = 0, i, chg;
@@ -137,6 +193,8 @@ int main(void)
     mk_lo = 5; organ_cc(123, 0); CHECK("CC 123 releases MIDI notes", mk_lo == 0);
     printf(bad ? "FAILED\n" : "all ok\n");
     check_levels();
+    check_compression();
+    check_click();
     wheel_count();
     return bad;
 }

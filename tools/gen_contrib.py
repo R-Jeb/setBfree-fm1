@@ -5,11 +5,11 @@
 For every key (C2..C7) and drawbar bus the list of tonewheels that reach the bus with their gain: the main
 wheel (with setBfree's tapering, -10..+7 dB by key and drawbar) and the leakage / crosstalk of the neighbours
 (setBfree's default model: compartment, terminal strip and wiring, about -34..-46 dB). Entries weaker than
-THR (-46 dB) are left out: they cost a wheel each and cannot be heard. Gains are Q12 (4096 = 1.0).
+THR (-60 dB, a level of 1 in the engine) are left out. Gains are Q12 (4096 = 1.0).
 """
 import pathlib, collections
 
-THR = 0.005
+THR = 0.001
 rows = [l.split() for l in pathlib.Path("data/setbfree-contrib.txt").read_text().splitlines()[1:]]
 by = collections.defaultdict(list)
 for k, b, w, g in rows:

@@ -6,7 +6,7 @@ The wheel frequencies follow setBfree (src/tonegen.c, initOscillators, gearTunin
 frequency number n = 0..90, note = n % 12, octave = n / 12, teeth = 2^(octave+1) (192 from n = 84, with the
 gear row shifted by 5), f = 20 * teeth * gearA / gearB. Run it on the computer; the firmware has no float.
 """
-import math, pathlib
+import math, pathlib, random
 
 FS = 44100
 GEARS60 = [(85, 104), (71, 82), (67, 73), (35, 36), (69, 67), (12, 11),
@@ -33,6 +33,40 @@ out.append("static const uint32_t WHEEL_INC[91] = {")
 incs = [round(wheel_freq(n) * 2 ** 32 / FS) for n in range(91)]
 assert max(incs) < 2 ** 31
 out += ["    " + ", ".join(f"{v}u" for v in incs[i:i + 6]) + "," for i in range(0, 91, 6)]
+out.append("};")
+
+# setBfree's key click (tonegen.c initEnvelopes, attack model "click", the default): when a wheel's level changes,
+# its gain moves from the old to the new value along one of eight random envelopes: zero until a random start,
+# then a burst of 16..80 samples at 1 - 0.5 * random, then unity, the whole thing through a two-point average.
+# Q12, 128 samples (setBfree's block). A fixed random draw (seed 3): the same eight clicks every time.
+rng = random.Random(3)
+atk = []
+for b in range(8):
+    burst = 16 + rng.randrange(64)
+    start = rng.randrange(128 - burst)
+    e = [0.0] * start + [1.0 - 0.5 * rng.random() for _ in range(burst)]
+    e += [1.0] * (128 - len(e))
+    e[0] /= 2.0
+    for i in range(1, 128):
+        e[i] = (e[i - 1] + e[i]) / 2.0
+    atk.append([round(v * 4096) for v in e])
+out.append("")
+out.append("/* key click: eight attack envelopes of 128 samples, Q12 (see tools/gen_organ.py) */")
+out.append("static const uint16_t ATK_ENV[8][128] = {")
+for row in atk:
+    out.append("    {" + ", ".join(str(v) for v in row) + "},")
+out.append("};")
+
+# setBfree's key compression (initKeyCompTable): the gain falls with the number of keys held, Q12
+def kc(n):
+    t = {0: 0.0, 1: 0.0, 2: -1.1598, 3: -2.0291, 4: -2.4987, 5: -2.9952, 6: -3.5218, 7: -4.0823, 8: -4.6815, 9: -4.9975, 10: -4.9998}
+    db = t[n] if n <= 10 else -5.0 + (-9.0 + 5.0) * (n - 11) / 116.0
+    return round(4096 * 10 ** (db / 20))
+out.append("")
+out.append("/* key compression: gain by number of keys held 0..61, Q12 */")
+out.append("static const uint16_t KEY_COMP[62] = {")
+vals = [kc(n) for n in range(62)]
+out += ["    " + ", ".join(str(v) for v in vals[i:i + 14]) + "," for i in range(0, 62, 14)]
 out.append("};")
 pathlib.Path("firmware/src/organ_tab.h").write_text("\n".join(out) + "\n")
 print("wheel 0 %.2f Hz, wheel 12 %.2f Hz, wheel 90 %.1f Hz" % (wheel_freq(0), wheel_freq(12), wheel_freq(90)))

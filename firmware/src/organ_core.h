@@ -36,6 +36,7 @@ static volatile uint32_t load_us, wheels_on;    /* the last block: render time, 
 static uint32_t wph[NW];                        /* tonewheel phases: they turn all the time, as on the organ */
 static int32_t wcur[NW], wtgt[NW];              /* level of each wheel on the bus, Q10 (1024 = one drawbar at 8) */
 static int32_t acc[256];
+static int32_t kcl = 4096 << 4;                 /* key compression, now: Q16 */
 static int32_t vdl[256];                        /* scanner delay line */
 static uint32_t vwi, vph, lph, lrate = LES_SLOW;
 static int32_t perc_env = 32767;                /* Q15 */
@@ -46,7 +47,7 @@ static void app_audio(int32_t *out, uint32_t n)
 {
     static const int32_t DEPTH[3] = {6 << 8, 12 << 8, 18 << 8};   /* scanner delay swing, samples Q8 (by ear) */
     uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, k, d, w, i, nk = 0, act = 0, t0 = fm1_ticks();
-    int32_t pa = 0;
+    int32_t pa = 0, kd;
     uint32_t vm = P.vup ? VIBMODE[P.vtype % 6u] : 0u, dm = P.drv, od = P.od, les = P.les;
     int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
     if (n > 256u) n = 256u;
@@ -63,12 +64,10 @@ static void app_audio(int32_t *out, uint32_t n)
             uint32_t e;
             if (!lvl || (d == 8u && P.perc)) continue;   /* percussion takes the 1' drawbar's place */
             for (e = CT_IDX[k * 9u + d]; e < CT_IDX[k * 9u + d + 1u]; e++)   /* the main wheel, tapered, and the leakage */
-                wtgt[CT_W[e]] += (lvl * 128 * (int32_t)CT_G[e]) >> 12;
+                wtgt[CT_W[e]] += (lvl * 128 * (int32_t)CT_G[e] + 2048) >> 12;
         }
         if (P.perc) wtgt[CT_MAIN[k * 9u + (P.perc3 ? 4u : 3u)]] += pa;
     }
-    for (w = 0; w < NW; w++)
-        if (wtgt[w] < 3) wtgt[w] = 0;           /* below -50 dB: not worth a wheel */
     if (nk && P.perc) perc_env = (perc_env * (P.fast ? DEC_FAST : DEC_SLOW)) >> 15;
 
     for (i = 0; i < n; i++) acc[i] = 0;
@@ -77,18 +76,33 @@ static void app_audio(int32_t *out, uint32_t n)
         uint32_t ph = wph[w], inc = WHEEL_INC[w];
         if (!c && !t) { wph[w] = ph + inc * n; continue; }   /* silent: costs nothing, the wheel turns on */
         {
-            int32_t a = c << 8, step = ((t - c) * (int32_t)(65536u / n)) >> 8;   /* the level glides over the block: no clicks */
             act++;
-            for (i = 0; i < n; i++) {
-                uint32_t idx;
-                int32_t s0, s1, s;
-                ph += inc;
-                idx = ph >> 24;
-                s0 = SINE_TAB[idx];
-                s1 = SINE_TAB[idx + 1u];
-                s = s0 + (((s1 - s0) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
-                a += step;
-                acc[i] += (s >> 2) * (a >> 8);   /* a: Q18 */
+            if (c == t) {                       /* steady: no envelope */
+                for (i = 0; i < n; i++) {
+                    uint32_t idx;
+                    int32_t s0, s1, s;
+                    ph += inc;
+                    idx = ph >> 24;
+                    s0 = SINE_TAB[idx];
+                    s1 = SINE_TAB[idx + 1u];
+                    s = s0 + (((s1 - s0) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
+                    acc[i] += (s >> 2) * c;
+                }
+            } else {                            /* the level changes: setBfree's key click (an attack envelope; the release is a ramp) */
+                const uint16_t *env = ATK_ENV[w & 7u];
+                int32_t d = t - c;
+                for (i = 0; i < n; i++) {
+                    uint32_t idx;
+                    int32_t s0, s1, s, e, a;
+                    ph += inc;
+                    idx = ph >> 24;
+                    s0 = SINE_TAB[idx];
+                    s1 = SINE_TAB[idx + 1u];
+                    s = s0 + (((s1 - s0) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
+                    e = i >= 128u ? 4096 : t ? (int32_t)env[i] : (int32_t)i << 5;
+                    a = c + ((d * e) >> 12);
+                    acc[i] += (s >> 2) * a;
+                }
             }
         }
         wph[w] = ph;
@@ -98,6 +112,10 @@ static void app_audio(int32_t *out, uint32_t n)
     if (les) {                                  /* the rotor speeds up and slows down slowly */
         uint32_t target = les == 2u ? LES_FAST : LES_SLOW;
         lrate = (uint32_t)((int32_t)lrate + (((int32_t)target - (int32_t)lrate) >> 7));
+    }
+    {
+        int32_t kt = (int32_t)KEY_COMP[nk > 61u ? 61u : nk] << 4;       /* key compression glides over the block */
+        kd = ((kt - kcl) * (int32_t)(65536u / n)) >> 16;
     }
     for (i = 0; i < n; i++) {
         int32_t x = acc[i] >> 10, y, u, l, r;
@@ -119,6 +137,8 @@ static void app_audio(int32_t *out, uint32_t n)
             vwi = (vwi + 1u) & 255u;
             x = vm >= 4u ? (x + v) >> 1 : v;
         }
+        kcl += kd;
+        x = (x * (kcl >> 4)) >> 12;
         if (od) {                               /* overdrive: gain, then a soft clip (3u - u^3) / 3 */
             u = (x * (int32_t)(16u + 12u * dm)) >> 4;
             if (u > 32767) u = 32767;
