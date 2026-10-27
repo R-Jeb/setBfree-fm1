@@ -6,7 +6,7 @@
   tools/build.py [--release X.Y[-suffix]]
 
 Outputs in build/: dinghy.bin (app), loader/ota.bin (update loader),
-dinghy.fwsc (package). See README.md for the toolchain and the SDK.
+b3organ.fwsc (package). See README.md for the toolchain and the SDK.
 
 The JieLi toolchain is Linux x86-64 only. JIELI_TOOLCHAIN points at it; on
 macOS (or with JIELI_DOCKER=1) each tool runs in a linux/amd64 container.
@@ -47,8 +47,10 @@ SDK_SHA256 = {
     "cfg/eq_cfg_hw.bin": "41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
 }
 
-PRODUCT = "FM-1_990"                # Dinghy: 99N (OUR_LOADER in the installer wants FM-1_9NN). Your fork: pick your own
-VERSION = None                      # APP_VER for release builds
+IDENT_PREFIX = "FM-1_95"            # B3 organ: 95N (the installer's OUR_LOADER wants FM-1_9NN); Dinghy itself is 99N
+PACKAGE = "b3organ"                 # the package file: build/b3organ.fwsc, build/b3organ-0.1.fwsc
+PRODUCT = IDENT_PREFIX + "0"        # the identity: IDENT_PREFIX + the minor version digit
+VERSION = None                      # APP_VER: the release's X.Y, else "d" + the commit (see git_version)
 
 
 def toolchain():
@@ -267,20 +269,33 @@ def mmio_check():
     return errors
 
 
+def git_version():
+    """the version string of a build that is not a release: 'd' + 4 hex digits of the commit (what the screen can show)"""
+    sha = os.environ.get("GITHUB_SHA", "")
+    if not sha:
+        try:
+            sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True, cwd=SRC).stdout
+        except Exception:
+            sha = ""
+    sha = sha.strip()
+    return "d" + sha[:4] if re.fullmatch(r"[0-9a-f]{4,}", sha) else "d0000"
+
+
 def main():
     global PRODUCT, VERSION
     ap = argparse.ArgumentParser()
-    ap.add_argument("--release", metavar="X.Y", help="release build: identity FM-1_9XY, version string X.Y")
+    ap.add_argument("--release", metavar="X.Y", help="release build: identity FM-1_95Y, version string X.Y")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     a = ap.parse_args()
-    name = "dinghy.fwsc"
+    name = PACKAGE + ".fwsc"
+    VERSION = git_version()
     if a.release:                   # one digit each: the identity has room for two (X.Y; a .Z only in the text)
         m = re.fullmatch(r"(\d)\.(\d)(\.\d)?(-[A-Za-z0-9]+)?", a.release)
         if not m:
             raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z or X.Y-suffix, one digit each")
-        PRODUCT = "FM-1_99" + m[2]
+        PRODUCT = IDENT_PREFIX + m[2]
         VERSION = m[1] + "." + m[2] + (m[3] or "")
-        name = f"dinghy-{a.release}.fwsc"
+        name = f"{PACKAGE}-{a.release}.fwsc"
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:
