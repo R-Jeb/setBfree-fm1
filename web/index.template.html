@@ -150,6 +150,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
       <div class="seg"><button id="odon" aria-pressed="false">An</button></div>
       <div class="slider"><input type="range" id="drv" min="0" max="8" step="1" value="3" aria-label="Overdrive-Stärke"><output id="drvo">3</output></div>
     </div>
+    <div class="grp"><span class="label">Hall</span><div class="slider"><input type="range" id="rev" min="0" max="127" step="1" value="12" aria-label="Hall (Reverb)"><output id="revo">12</output></div></div>
     <div class="grp"><span class="label">Schweller</span><div class="slider"><input type="range" id="swl" min="0" max="127" step="1" value="127" aria-label="Schweller"><output id="swlo">127</output></div></div>
     <div class="grp"><span class="label">Lautstärke</span><div class="slider"><input type="range" id="vol" min="0" max="100" step="1" value="70" aria-label="Lautstärke"><output id="volo">70</output></div></div>
   </section>
@@ -233,6 +234,7 @@ function buildSwitches() {
   $("odon").onclick = () => put(16, get(16) ^ 1);
   $("drv").oninput = () => put(17, +$("drv").value);
   $("swl").oninput = () => put(18, +$("swl").value);
+  $("rev").oninput = () => put(20, +$("rev").value);
   $("vol").oninput = () => { vol = +$("vol").value; $("volo").textContent = vol; if (gainNode) gainNode.gain.value = (vol / 100) * (vol / 100); };
   const sel = $("prog"), reg = document.createElement("optgroup"), sw = document.createElement("optgroup");
   reg.label = "Registrierungen"; sw.label = "Schalter-Programme";
@@ -259,6 +261,7 @@ function render() {
   $("perc").querySelectorAll("button").forEach((b) => pressed(b, get(+b.dataset.id)));
   pressed($("odon"), od);
   if (+$("drv").value !== dr) $("drv").value = dr; $("drvo").textContent = dr;
+  const rv = get(20); if (+$("rev").value !== rv) $("rev").value = rv; $("revo").textContent = rv;
   if (+$("swl").value !== sw) $("swl").value = sw; $("swlo").textContent = sw;
   if ($("prog").value !== String(pg)) $("prog").value = String(pg);
 }

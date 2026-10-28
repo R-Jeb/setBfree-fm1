@@ -17,28 +17,30 @@ static volatile struct {
     uint8_t vtype;                              /* setBfree's vibrato knob: 0 V1, 1 C1, 2 V2, 3 C2, 4 V3, 5 C3 */
     uint8_t vup;                                /* vibrato switched on (for the one manual) */
     uint8_t perc, perc3, fast, soft;            /* percussion: on, 3rd (else 2nd), fast decay, soft */
-    uint8_t les;                                /* Leslie-lite: 0 stop, 1 slow, 2 fast */
+    uint8_t les;                                /* Leslie: 0 stop, 1 slow, 2 fast */
+    uint8_t rev;                                /* reverb mix 0..127 (CC 91) */
     uint8_t od, drv;                            /* overdrive on, and how hard 0..8 */
     uint8_t swell;                              /* 0..127 (CC 7 / CC 11) */
     uint8_t pgm;                                /* the program last selected (setBfree numbering), 0 none */
-} P = {{8, 8, 8, 0, 0, 0, 0, 0, 0}, 0, 0, 0, 1, 0, 0, 1, 0, 3, 127, 0};
+} P = {{8, 8, 8, 0, 0, 0, 0, 0, 0}, 0, 0, 0, 1, 0, 0, 0, 12, 0, 3, 127, 0};
 static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi;   /* keys held: the panel's, and MIDI's (bit k, k = 0..60) */
-static volatile uint32_t load_us, wheels_on;    /* the last block: render time, wheels sounding */
+static volatile uint32_t load_us, wheels_on;
+static volatile uint8_t fx_bypass;              /* tests: skip the reverb and the Leslie (the tone generator alone, in mono) */    /* the last block: render time, wheels sounding */
 
 /* ---- the sound (runs in the audio ISR: keep it short, no flash, no screen) */
 #define PERC_Q10 1536                           /* percussion level, 1024 = a drawbar at 8 (by ear) */
 #define DEC_FAST 31480                          /* per 256 frames, Q15: 0.001 ^ (256 / 44100) */
 #define DEC_SLOW 32441                          /* 0.001 ^ (256 / (4 * 44100)) */
 #define VIB_INC 706089u                         /* 7.25 Hz: f * 2^32 / 44100 */
-#define LES_SLOW 74018u                         /* 0.76 Hz */
-#define LES_FAST 630123u                        /* 6.47 Hz */
 
 static uint32_t wph[NW];                        /* tonewheel phases: they turn all the time, as on the organ */
 static int32_t wcur[NW], wtgt[NW];              /* level of each wheel on the bus, Q10 (1024 = one drawbar at 8) */
 static int32_t acc[256];
 static int32_t kcl = 4096 << 4;                 /* key compression, now: Q16 */
 static int32_t vdl[256];                        /* scanner delay line */
-static uint32_t vwi, vph, lph, lrate = LES_SLOW;
+static uint32_t vwi, vph;
+static int32_t mono[256], lbuf[256], rbuf[256]; /* after the overdrive: mono, then through the reverb, then the Leslie makes the pair */
+#include "organ_fx.h"
 static int32_t perc_env = 32767;                /* Q15 */
 
 static const uint8_t VIBMODE[6] = {1, 4, 2, 5, 3, 6};   /* knob position -> mode: 1..3 V1..V3, 4..6 C1..C3 */
@@ -109,16 +111,12 @@ static void app_audio(int32_t *out, uint32_t n)
         wcur[w] = t;
     }
 
-    if (les) {                                  /* the rotor speeds up and slows down slowly */
-        uint32_t target = les == 2u ? LES_FAST : LES_SLOW;
-        lrate = (uint32_t)((int32_t)lrate + (((int32_t)target - (int32_t)lrate) >> 7));
-    }
     {
         int32_t kt = (int32_t)KEY_COMP[nk > 61u ? 61u : nk] << 4;       /* key compression glides over the block */
         kd = ((kt - kcl) * (int32_t)(65536u / n)) >> 16;
     }
     for (i = 0; i < n; i++) {
-        int32_t x = acc[i] >> 10, y, u, l, r;
+        int32_t x = acc[i] >> 10, y, u;
         if (x > 262144) x = 262144;
         if (x < -262144) x = -262144;
         x = (x * gsw) >> 12;
@@ -149,17 +147,18 @@ static void app_audio(int32_t *out, uint32_t n)
             }
         } else
             y = x > 32767 ? 32767 : x < -32767 ? -32767 : x;
-        l = r = y;
-        if (les) {                              /* Leslie-lite: two amplitudes swinging against each other (no Doppler yet) */
-            uint32_t tri;
-            lph += lrate;
-            tri = lph >> 16;
-            if (tri >= 32768u) tri = 65535u - tri;
-            l = (y * (18000 + (((int32_t)tri * 14767) >> 15))) >> 15;
-            r = (y * (18000 + (((32767 - (int32_t)tri) * 14767) >> 15))) >> 15;
-        }
-        out[2u * i] += l;
-        out[2u * i + 1u] += r;
+        mono[i] = y;
+    }
+    if (fx_bypass) {
+        for (i = 0; i < n; i++) lbuf[i] = rbuf[i] = mono[i];
+    } else {
+        reverb_run(mono, n, P.rev);             /* setBfree's order: overdrive, reverb, Leslie */
+        leslie_run(mono, lbuf, rbuf, n, les);
+    }
+    for (i = 0; i < n; i++) {
+        int32_t l = lbuf[i], r = rbuf[i];
+        out[2u * i] += l > 32767 ? 32767 : l < -32767 ? -32767 : l;
+        out[2u * i + 1u] += r > 32767 ? 32767 : r < -32767 ? -32767 : r;
     }
     wheels_on = act;
     {
@@ -241,6 +240,7 @@ static void organ_cc(uint32_t cc, uint32_t v)
         P.db[cc - 70u] = (uint8_t)((16u * (127u - v) + 127u) / 254u);
     else switch (cc) {
     case 7: case 11: P.swell = (uint8_t)v; break;                       /* swell pedal */
+    case 91: P.rev = (uint8_t)v; break;                                 /* reverb mix (setBfree: reverb.mix) */
     case 1: P.les = v / 43u == 0u ? 1u : v / 43u == 1u ? 0u : 2u; break;    /* rotary preset: slow, stop, fast */
     case 64:                                                            /* rotary speed toggle (sustain pedal) */
         if (v > 63u)

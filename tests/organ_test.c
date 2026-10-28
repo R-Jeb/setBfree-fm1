@@ -10,6 +10,7 @@ static uint32_t fm1_ticks(void) { return 0; }
 #include "organ_core.h"
 #include <math.h>
 #include "organ_ref.h"
+#include "fx_ref.h"
 
 static int bad;
 #define CHECK(what, cond) do { int ok_ = !!(cond); if (!ok_) bad = 1; printf("%-58s %s\n", what, ok_ ? "ok" : "FAIL"); } while (0)
@@ -126,6 +127,7 @@ static void check_click(void)                           /* the attack has a burs
 }
 int main(void)
 {
+    fx_bypass = 1;                                                  /* the tone generator alone; the reverb and the Leslie are checked below */
     uint32_t n, cnt = 0, reg = 0, i, chg;
 
     organ_pc(0);                                                    /* program change 0 = program 1 (offset 1) */
@@ -196,5 +198,27 @@ int main(void)
     check_compression();
     check_click();
     wheel_count();
+    {   /* the reverb and the stopped Leslie against setBfree's own, sample by sample */
+        static int32_t x[256], l[256], r[256];
+        double er = 0, sr = 0, el = 0, sl = 0, ee = 0, se = 0;
+        uint32_t b, i, s = 12345u;
+        for (b = 0; b < 32u; b++) {
+            for (i = 0; i < 256u; i++) x[i] = (b | i) ? 0 : 16384;
+            reverb_run(x, 256, 64);
+            for (i = 0; i < 256u; i++) { double d = x[i] - FXR_RV[b * 256u + i]; er += d * d; sr += (double)FXR_RV[b * 256u + i] * FXR_RV[b * 256u + i]; }
+        }
+        for (b = 0; b < 32u; b++) {
+            for (i = 0; i < 256u; i++) { s = s * 1664525u + 1013904223u; x[i] = (int32_t)((s >> 16) & 0x7FFF) - 16384; }
+            leslie_run(x, l, r, 256, 0);
+            for (i = 0; i < 256u; i++) {
+                double d = l[i] - FXR_WL[b * 256u + i], f = r[i] - FXR_WR[b * 256u + i];
+                el += d * d; sl += (double)FXR_WL[b * 256u + i] * FXR_WL[b * 256u + i];
+                ee += f * f; se += (double)FXR_WR[b * 256u + i] * FXR_WR[b * 256u + i];
+            }
+        }
+        printf("reverb error %.1f dB, Leslie (stop) error L %.1f dB R %.1f dB\n", 10 * log10(er / sr), 10 * log10(el / sl), 10 * log10(ee / se));
+        CHECK("reverb impulse response = setBfree (error < -30 dB)", er < sr * 0.001);
+        CHECK("Leslie (stop) = setBfree (error < -30 dB)", el < sl * 0.001 && ee < se * 0.001);
+    }
     return bad;
 }

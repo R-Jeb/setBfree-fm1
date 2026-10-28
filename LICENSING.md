@@ -29,6 +29,7 @@ is a fixed-point rewrite for the FM-1, not a copy of setBfree's source; the comb
 `tools/gen_organ.py` and the generated `firmware/src/organ_tab.h` carry the wheel tables. `data/setbfree-default.pgm` is a
 copy of setBfree's `pgm/default.pgm` (GPL-2.0-or-later); `tools/gen_programs.py` turns it into `firmware/src/organ_pgm.h`.
 `data/setbfree-contrib.txt` is setBfree's own key/drawbar/wheel gain matrix (dumped with `tools/dump_contrib.c`, GPL-2.0-or-later); `tools/gen_contrib.py` turns it into `firmware/src/organ_contrib.h`.
+`data/setbfree-whirl.txt` is setBfree's whirl (Leslie) table dump (`tools/dump_whirl.c`, GPL-2.0-or-later); `tools/gen_leslie.py` turns it into `firmware/src/organ_leslie.h`. The reverb in `organ_fx.h` follows `b_reverb/reverb.c`.
 The controller numbers and value ranges follow setBfree's `src/midi.c`.
 
 ## The logo

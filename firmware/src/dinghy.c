@@ -27,6 +27,7 @@ static uint32_t fm1_ticks(void) { return 0; }
 #define FM1_TICKS_PER_US 24u
 #endif
 
+#define ORGAN_POOL __attribute__((section(".pool")))   /* the reverb and Leslie delay lines: zeroed at boot */
 #include "organ_core.h"
 
 /* ---- the screen */
@@ -74,7 +75,8 @@ static void draw_status(void)
     p = s;
     if (P.perc) { p = sp(p, "PERC "); p = sp(p, P.perc3 ? "3RD " : "2ND "); p = sp(p, P.fast ? "FAST " : "SLOW "); p = sp(p, P.soft ? "SOFT" : "NORM"); }
     else p = sp(p, "PERC OFF");
-    p = sp(p, "  OD "); if (P.od) p = su(p, P.drv); else p = sp(p, "OFF"); *p = 0;
+    p = sp(p, "  OD "); if (P.od) p = su(p, P.drv); else p = sp(p, "OFF");
+    p = sp(p, "  REV "); p = su(p, P.rev); *p = 0;
     draw_text_box(0, 202, 240, &FONT_S, s, C_BAR, 1);
     p = s;
     if (P.pgm && PGM[P.pgm].name) { p = su(p, P.pgm); p = sp(p, " "); p = sp(p, PGM[P.pgm].name); }
@@ -92,7 +94,7 @@ static void draw_load(uint32_t us, uint32_t w)
 static uint32_t state_key(int32_t oct, uint32_t *status)   /* what is worth saving; *status: what the lower screen shows */
 {
     uint32_t i, dbk = 0, k = P.vtype | P.vup << 3 | P.les << 4 | P.perc << 6 | P.perc3 << 7 | P.fast << 8 | P.soft << 9 |
-                             P.od << 10 | P.drv << 11 | P.pgm << 15;
+                             P.od << 10 | P.drv << 11 | P.pgm << 15 | (uint32_t)P.rev << 22;
     for (i = 0; i < NB; i++) dbk = dbk * 9u + P.db[i];
     *status = k;
     return (k ^ dbk * 2654435761u) + (uint32_t)(oct + 2);
@@ -100,7 +102,7 @@ static uint32_t state_key(int32_t oct, uint32_t *status)   /* what is worth savi
 
 static void app_main(void)
 {
-    struct { uint8_t magic, db[NB], vtype, vup, perc, perc3, fast, soft, les, od, drv, pgm; int8_t oct; } set;
+    struct { uint8_t magic, db[NB], vtype, vup, perc, perc3, fast, soft, les, od, drv, pgm, rev; int8_t oct; } set;
     uint32_t prev = 0, k, i, sel = 2, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
     uint32_t drawn_db[NB], drawn_sel = 99, status_key = ~0u;
     uint8_t held[27];
@@ -109,12 +111,12 @@ static void app_main(void)
     for (i = 0; i < NW; i++) { seed = seed * 1664525u + 1013904223u; wph[i] = seed; }   /* the wheels start anywhere */
     for (i = 0; i < 27u; i++) held[i] = 255;
     for (i = 0; i < NB; i++) drawn_db[i] = 99;
-    if (settings_load(&set, sizeof set) == 0 && set.magic == 0xB4 && set.oct >= -2 && set.oct <= 2 && set.vtype < 6u &&
-        set.les < 3u && set.drv < 9u && set.pgm < 128u) {
+    if (settings_load(&set, sizeof set) == 0 && set.magic == 0xB5 && set.oct >= -2 && set.oct <= 2 && set.vtype < 6u &&
+        set.les < 3u && set.drv < 9u && set.pgm < 128u && set.rev < 128u) {
         for (i = 0; i < NB; i++) P.db[i] = set.db[i] > 8u ? 8u : set.db[i];
         P.vtype = set.vtype; P.vup = set.vup & 1u; P.perc = set.perc & 1u; P.perc3 = set.perc3 & 1u;
         P.fast = set.fast & 1u; P.soft = set.soft & 1u; P.les = set.les; P.od = set.od & 1u; P.drv = set.drv;
-        P.pgm = set.pgm; oct = set.oct;
+        P.pgm = set.pgm; P.rev = set.rev; oct = set.oct;
     } else
         organ_program(5u);                      /* Standard B, 88 8000 000 */
     last_key = saved_key = state_key(oct, &i);
@@ -165,6 +167,7 @@ static void app_main(void)
         if ((e = fm1_enc_take(ENC_KNOB1)) != 0) { int32_t v = (int32_t)P.drv + e; P.drv = (uint8_t)(v < 0 ? 0 : v > 8 ? 8 : v); }
         if ((e = fm1_enc_take(ENC_KNOB2)) != 0) { int32_t v = (int32_t)P.vtype + e; P.vtype = (uint8_t)(v < 0 ? 0 : v > 5 ? 5 : v); }
         if ((e = fm1_enc_take(ENC_KNOB3)) != 0) { int32_t v = (int32_t)P.les + e; P.les = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v); }
+        if ((e = fm1_enc_take(ENC_KNOB4)) != 0) { int32_t v = (int32_t)P.rev + e * 4; P.rev = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v); }   /* reverb mix, like CC 91 */
 
         while (midi_get(&st, &d1, &d2)) {       /* USB-MIDI in, any channel */
             uint32_t cmd = st & 0xF0u;
@@ -204,10 +207,10 @@ static void app_main(void)
         }
 
         if (dirty && quiet() && fm1_ms - t_change > 2000u) {   /* an erase stalls the sound: save when silent */
-            set.magic = 0xB4;
+            set.magic = 0xB5;
             for (i = 0; i < NB; i++) set.db[i] = P.db[i];
             set.vtype = P.vtype; set.vup = P.vup; set.perc = P.perc; set.perc3 = P.perc3; set.fast = P.fast;
-            set.soft = P.soft; set.les = P.les; set.od = P.od; set.drv = P.drv; set.pgm = P.pgm; set.oct = (int8_t)oct;
+            set.soft = P.soft; set.les = P.les; set.od = P.od; set.drv = P.drv; set.pgm = P.pgm; set.rev = P.rev; set.oct = (int8_t)oct;
             settings_save(&set, sizeof set);
             saved_key = last_key;
             dirty = 0;
