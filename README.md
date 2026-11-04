@@ -1,128 +1,111 @@
-<p align="center"><img src="assets/logo.svg" width="96" alt="Dinghy"></p>
+# B3 ORGAN for the M-VAVE FM-1
 
-# Dinghy
+**A Hammond B3 tonewheel organ for the M-VAVE FM-1, modelled on [setBfree](https://github.com/pantherb/setBfree).**
+91 tonewheels, nine drawbars, key click, vibrato and chorus, percussion, overdrive, reverb and a Leslie with
+horn and drum, all in integer arithmetic on the FM-1's JieLi AC791N (no FPU, no 64-bit division).
 
-**The smallest firmware for the M-VAVE FM-1 to build your own on.**
+<p align="center"><img src="docs/screen.png" width="240" alt="The screen: nine drawbars, vibrato, Leslie, percussion, overdrive, reverb, the program"></p>
 
-Dinghy plays a sine wave on the keys, and that is all it does. Under it is everything an FM-1 firmware needs
-before it can be any fun: the update path, the USB rescue, USB-MIDI, USB audio, the keys, knobs and LEDs, the
-screen and a place to keep settings. It all works, so you start with the part you actually want to write.
+The organ follows setBfree wherever that is practical: its tonewheel gear ratios, the tapering and the crosstalk
+between wheels from its compiled play matrix, key click and key compression, the vibrato scanner, the reverb, the
+Leslie, its factory programs (`default.pgm`) and its MIDI controller numbers. Where a number could be measured against
+the real thing (setBfree on a computer, or a recording of its LV2 plug-in), it was; the host tests check them on every
+build.
 
-```
-firmware/src/dinghy.c     <- your firmware: ~200 lines, a 4-voice sine. Start here.
-firmware/src/platform.c   <- the plumbing (boot, USB, updates, audio ISR, settings). Done; read it, don't fight it.
-firmware/src/*.c, hal/    <- Felucca's platform, as SLOOP carries it, unchanged
-```
-
-Dinghy is based on [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (Hügelton Instruments), with its
-platform as [SLOOP](https://github.com/isod89/sloop-fm1) (isod89) carries it: it keeps that platform and throws away the
-rest. The smallest boat of the family, after the felucca and the sloop.
-
-<p align="center"><img src="docs/screen.png" width="240" alt="Dinghy's screen: the name, the note played, a keyboard with the keys that sound"></p>
-
-> **Status: 0.3, runs on the FM-1.** Tested on the device: the install, MIDI in (pitch exact, 4 voices), USB audio
-> at 44.1 / 48 kHz, the keys, the screen, the octave kept in flash, and back to another firmware through the hub.
+> **Status:** 0.1, tested on an FM-1 by one person. Please report what sounds different from setBfree.
 
 ## What you get
 
 | | |
 | --- | --- |
-| **Updates that always work** | `tools/fm1_install.py`, the web installers and the [FM-1 Firmware Hub](https://fm1.designburgapps.com) reach your firmware over USB, so you (and your users) can always install the next build, or go back to the official firmware. |
-| **USB rescue** | Hold **OCT-** while switching on: no sound, only the updater. If your firmware crashes twice at boot, the FM-1 goes there by itself. |
-| **USB-MIDI** | In and out, class compliant: `midi_get()`, `midi_send()`. |
-| **USB audio** | The FM-1 shows up as a 16-bit stereo audio input (44.1 or 48 kHz): record it into any DAW or phone. Nothing to do. |
-| **Panel** | 27 keys, 14 buttons, 7 encoders, the MASTER knob, the LEDs, by name (`BTN_PLAY`, `ENC_KNOB1`, ...). |
-| **Screen** | 240 x 240, text in two sizes, rectangles, lines, pixels. |
-| **Settings** | `settings_load()` / `settings_save()`: up to 256 bytes with a CRC in their own flash sector. |
-| **A crash screen** | A fault shows where it happened (the PC), then the FM-1 restarts. |
-| **Host mode** | The same `dinghy.c` on your computer: the screen as an image, the sound as a WAV. No FM-1 needed to try an idea. |
-| **Checks** | The build fails on what bricks or breaks an FM-1 firmware: a 64-bit division, a call into the chip ROM, too much RAM, a register touched outside `hal/`. |
+| **Tonewheels** | 91 wheels with setBfree's 60 Hz gear ratios, nine drawbars, setBfree's tapering (-10 to +7 dB per key and drawbar) and wheel-to-wheel leakage down to -60 dB. Only the wheels that sound are computed (about 27 µs each). |
+| **Key click, key compression** | setBfree's attack click (eight random envelopes) and the gain drop when many keys are held (1.2 dB for 2 keys, to 9 dB for 61). |
+| **Vibrato and chorus** | V1 to V3 and C1 to C3 as setBfree's scanner (a sine-swinging delay at 7.25 Hz); matches a setBfree recording to within a dB of ripple and half a cent of pitch swing. |
+| **Percussion** | 2nd or 3rd harmonic, slow or fast decay, soft or normal. |
+| **Overdrive** | Gain and soft clip, nine drive settings. |
+| **Reverb** | setBfree's reverb (combs and all-passes), amount on KNOB 4 or CC 91; impulse response within -45 dB of setBfree's. |
+| **Leslie** | setBfree's rotary model: horn and drum with Doppler, horn directivity, reflections, stop / slow / fast with acceleration and braking; the stopped state matches setBfree's to about -40 dB. |
+| **Programs** | All 110 programs of setBfree's `default.pgm` (registrations and switch settings), by the PRESETS knob or MIDI program change. |
+| **MIDI** | USB and the TRS jack, any channel, setBfree's default controller numbers (drawbars 70 to 78, swell 7 / 11, Leslie 1 / 64, vibrato 31 / 92, percussion 66 / 80 to 83, overdrive 65 / 93, reverb 91). |
+| **USB audio, updates, rescue** | The platform underneath (Felucca, SLOOP, Dinghy): updates over USB through the [FM-1 Firmware Hub](https://fm1.designburgapps.com), a USB rescue (hold **OCT-** while switching on), a crash screen, and the FM-1 as a stereo USB audio input for recording. |
 
-## Build your own
+## Controls
 
-From nothing to your own firmware on the FM-1, step by step. Each step works before you go to the next.
+| Control | What it does |
+| --- | --- |
+| Keys F3 to G5, **OCT-** / **OCT+** | Play; shift the octave |
+| **SELECT** knob / **ALGORITHM** knob | Choose a drawbar / set its level 0 to 8 |
+| **PRESETS** knob | Step through setBfree's registrations (e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith) |
+| **KNOB 1** | Overdrive amount |
+| **KNOB 2** | Vibrato / chorus type V1, C1, V2, C2, V3, C3 |
+| **KNOB 3** | Leslie stop / slow / fast |
+| **KNOB 4** | Reverb amount (0 to 127) |
+| **FX** | Vibrato on / off |
+| **LFO** | Leslie: stop, slow, fast |
+| **EDIT** | Overdrive on / off |
+| **ENV**, **SEL**, **ARP**, **SEQ** | Percussion on / off, 2nd / 3rd, fast / slow, soft / normal |
 
-### 1. Copy it
+The top right of the screen shows `W <wheels sounding>  <peak µs>`: the load of the audio block. It must stay under
+5800 µs; with everything on it is around 4000 µs on an FM-1. The whole list of MIDI controllers, programs and the details
+of each part are in **[README_ORGAN.md](README_ORGAN.md)**.
 
-On GitHub: **Use this template** (top right on this page) or fork it, then clone your copy. Rename nothing yet:
-first make sure the unchanged Dinghy builds on your machine.
+## Install
 
-### 2. Set up once
+1. Get `b3organ-<version>.fwsc` from the **Releases** page (or, for a development build, from the Actions tab: the
+   run, **Artifacts**, `firmware`).
+2. Install it over USB with `python3 tools/fm1_install.py b3organ-<version>.fwsc`, or with the
+   [FM-1 Firmware Hub](https://fm1.designburgapps.com) in Chrome or Edge. Back to the official firmware or to another
+   one from the hub at any time.
+3. The version shows top left (`B3 ORGAN v0.1`; builds that are not releases show `d` and four digits of the commit).
 
-You need Linux on x86-64 (or macOS / Windows with Docker or WSL), Python 3 with Pillow, the JieLi toolchain
-and three files of the JieLi AC79 SDK:
+Installing firmware is at your own risk. If something goes wrong, hold **OCT-** while switching on: the USB rescue.
+
+## Try it without an FM-1
+
+- **Web emulator:** [web/index.html](web/index.html) is the same organ engine compiled to WebAssembly: open it in a
+  browser (Chrome, Edge, Firefox) and play with the keyboard or a MIDI keyboard. Drawbars, Leslie, reverb and the rest are on the page.
+- **Host mode:** `tests/run_host.sh` runs the firmware on your computer and writes a WAV and screenshots.
+- **Tests:** `cc -O1 -Ifirmware/src -Itests -o build/organ_test tests/organ_test.c -lm && build/organ_test` compares
+  the levels of every key and drawbar, key click, key compression, reverb and Leslie with setBfree.
+
+## Build it yourself
+
+You need Linux on x86-64 (or macOS / Windows with Docker or WSL), Python 3 with Pillow, the JieLi toolchain and three
+files of the JieLi AC79 SDK:
 
 ```sh
 pip3 install Pillow mido python-rtmidi
 tools/get_toolchain.sh                      # JieLi's clang for the chip, to ~/.jieli/toolchain
 git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
     https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git ~/fw-AC79_AIoT_SDK
+./build.sh                                  # -> build/b3organ.fwsc (fails on what would brick the FM-1)
+python3 tools/fm1_install.py build/b3organ.fwsc
 ```
 
-On macOS the build runs the toolchain in a `linux/amd64` Docker container by itself (have Docker running).
-`JIELI_TOOLCHAIN` and `AC79_SDK` point elsewhere if your copies live somewhere else.
+A push to GitHub also builds it (Actions); a tag `vX.Y` makes a release with the package attached.
 
-### 3. Hear it without an FM-1
+## How it is built
 
-```sh
-tests/run_host.sh                           # -> build/host/dinghy.wav and screen PNGs
+```
+firmware/src/organ_core.h     the engine: wheels, key click, vibrato, overdrive, programs, MIDI controllers
+firmware/src/organ_fx.h       reverb and Leslie
+firmware/src/dinghy.c         the screen, the panel, the settings
+firmware/src/organ_*.h        tables generated from setBfree's data (tools/gen_*.py, data/)
+firmware/src/platform.c, hal/ the plumbing (boot, USB, updates, audio): Felucca's platform, as SLOOP carries it
+tests/                        host tests against setBfree's own numbers
+web/                          the engine as WebAssembly, with a page to play it
 ```
 
-Host mode runs the same `dinghy.c` on your computer: the sound as a WAV, the screen as images. Most ideas can be
-tried here first, in seconds.
+The numbers come from setBfree itself: `tools/dump_contrib.c` and `tools/dump_whirl.c` dump its play matrix and its
+Leslie tables from its source, the Python scripts turn them into the headers. [docs/](docs/) has the platform's notes
+(the chip's rules, the API, how to make a release).
 
-### 4. Your first change
+## Credits and license
 
-Open [firmware/src/dinghy.c](firmware/src/dinghy.c) (~200 lines). The sound is `app_audio()`: it gets an empty
-buffer of stereo frames and adds to it. Make the sine a square:
+GPL-3.0-only. The organ's behaviour, tables and programs are derived from **[setBfree](https://github.com/pantherb/setBfree)**
+(Fredrik Kilander, Will Panther, Robin Gareus and contributors, GPL-2.0-or-later). The platform is **[Felucca](https://github.com/hugelton/Felucca)**
+by Leo Kuroshita (Hügelton Instruments) with the changes of **[SLOOP](https://github.com/isod89/sloop-fm1)** (isod89),
+brought into this project through **[Dinghy](https://github.com/zvenson/dinghy)** by zvenson, the smallest firmware to start from.
+Details and third-party parts in [LICENSING.md](LICENSING.md).
 
-```c
-s = ((int32_t)ph < 0 ? 8000 : -8000) * amp >> 15;     /* instead of s = (sine(ph) * amp) >> 15; */
-```
-
-Run `tests/run_host.sh` again and listen to `build/host/dinghy.wav`. The screen is drawn in `app_main()`, the keys
-are read there too: change the text, add a knob ([docs/API.md](docs/API.md) has every call).
-
-### 5. Onto the FM-1
-
-```sh
-./build.sh                                       # -> build/dinghy.fwsc (fails on what would brick the FM-1)
-python3 tools/fm1_install.py build/dinghy.fwsc   # over USB; asks before it writes, restarts into your build
-python3 tools/fm1_install.py --info              # what runs on the connected FM-1
-```
-
-That is the whole loop: change, hear it on the host, build, install. Back to another firmware, or to the official
-one, with the [FM-1 Firmware Hub](https://fm1.designburgapps.com) in Chrome or Edge: Dinghy (and every copy of it)
-answers the hub's updater like every firmware there. Installing firmware is at your own risk.
-
-### 6. When it goes wrong
-
-- **It crashes:** the screen shows where (the PC), then the FM-1 restarts. Twice at boot and it goes to the
-  USB rescue by itself.
-- **It won't start at all:** hold **OCT-** while switching on: the USB rescue, no sound, only the updater. Install
-  a working build (or another firmware from the hub) from there.
-- **The build refuses:** it checks for a 64-bit division, a call into the chip ROM, too much RAM, a register touched
-  outside `hal/`. [docs/RULES.md](docs/RULES.md) says why each one matters; read it before your first crash.
-
-### 7. Make it yours, release it, get into the hub
-
-Your name and logo, your own package identity (so the FM-1 and the installers tell your firmware from Dinghy),
-a GitHub release with the `.fwsc`, and how to get listed next to the others in the
-[FM-1 Firmware Hub](https://fm1.designburgapps.com): **[docs/MAKE-IT-YOURS.md](docs/MAKE-IT-YOURS.md)**.
-
-## Where to go next
-
-- **[docs/API.md](docs/API.md)**: everything `platform.c` gives you, with the panel's ids, the screen calls, the
-  audio contract, MIDI, settings, the flash map, timing.
-- **[docs/MAKE-IT-YOURS.md](docs/MAKE-IT-YOURS.md)**: turn Dinghy into your firmware: the name, the package
-  identity, releases, getting into the FM-1 Firmware Hub.
-- **[docs/RULES.md](docs/RULES.md)**: the chip's rules (no FPU, no libgcc, the audio ISR's budget) and what the build
-  checks for you. Read it before your first crash, not after.
-
-## License
-
-GPL-3.0-only, as Felucca and SLOOP: you may change and share it, and whoever gets your firmware gets its source.
-Details, credits and third-party parts in [LICENSING.md](LICENSING.md).
-
-The platform is Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments, with SLOOP's changes (isod89).
-Dinghy (the app, the host mode, the docs) by zvenson.
+M-VAVE and FM-1 are trademarks of their owners; this project is not affiliated with them.
