@@ -41,6 +41,12 @@ The top right of the screen shows `W <wheels sounding>  <peak render time> us`. 
 5800 us (RULES.md asks for under 2900). Hold a big chord with many drawbars out and watch it. If it gets close,
 lower the wheel count (fewer simultaneous keys, drawbars) or move work out of the per-frame loop.
 
+## Vibrato and chorus
+As setBfree's scanner (`vibrato.c`): a delay of 1 + A + A sin(phase) samples, A = 3, 6, 9 for V1/C1 .. V3/C3, at 7.25 Hz; the chorus
+mixes the dry and the delayed sound with 1/sqrt(2), the vibrato plays the delayed sound only. Measured against a Raspberry Pi
+recording of setBfree (chorus C3, F4 / C5 / F5): amplitude ripple 0.9 / 2.1 / 4.0 dB (setBfree 0.9 / 2.4 / 3.9) and a pitch swing
+of 15.2 cents peak-to-peak (setBfree 14.8).
+
 ## Reverb and Leslie
 Chain as in setBfree: tone generator, overdrive, **reverb**, **Leslie**. The reverb is setBfree's (four combs, three all-passes,
 low-pass, feedback); its impulse response matches setBfree's to -45 dB. The Leslie is setBfree's whirl model: horn and drum

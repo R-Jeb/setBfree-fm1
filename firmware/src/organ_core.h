@@ -47,7 +47,7 @@ static const uint8_t VIBMODE[6] = {1, 4, 2, 5, 3, 6};   /* knob position -> mode
 
 static void app_audio(int32_t *out, uint32_t n)
 {
-    static const int32_t DEPTH[3] = {6 << 8, 12 << 8, 18 << 8};   /* scanner delay swing, samples Q8 (by ear) */
+    static const int32_t VIBA[3] = {3, 6, 9};   /* setBfree scanner.modulation.v1..v3: the delay is 1 + A + A sin(phase) samples */
     uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, k, d, w, i, nk = 0, act = 0, t0 = fm1_ticks();
     int32_t pa = 0, kd;
     uint32_t vm = P.vup ? VIBMODE[P.vtype % 6u] : 0u, dm = P.drv, od = P.od, les = P.les;
@@ -120,20 +120,22 @@ static void app_audio(int32_t *out, uint32_t n)
         if (x > 262144) x = 262144;
         if (x < -262144) x = -262144;
         x = (x * gsw) >> 12;
-        if (vm) {                               /* scanner vibrato / chorus: a delay swinging 7.25 times a second */
-            uint32_t tri, pos, i0;
-            int32_t v0, v1, v;
+        if (vm) {                               /* scanner vibrato / chorus (setBfree vibrato.c): a delay swinging as a sine, 7.25 times a second */
+            uint32_t pos, i0, ix;
+            int32_t v0, v1, v, s0, s1, sn, a = VIBA[(vm - 1u) % 3u], dl;
             vph += VIB_INC;
-            tri = vph >> 16;
-            if (tri >= 32768u) tri = 65535u - tri;
-            pos = (vwi << 8) - (uint32_t)(1024 + ((DEPTH[(vm - 1u) % 3u] * (int32_t)tri) >> 15));
+            ix = vph >> 24;
+            s0 = SINE_TAB[ix]; s1 = SINE_TAB[ix + 1u];
+            sn = s0 + (((s1 - s0) * (int32_t)((vph >> 8) & 0xFFFFu)) >> 16);   /* sin, Q15 */
+            dl = ((1 + a) << 8) + ((a * sn) >> 7);                              /* the delay in samples, Q8 */
+            pos = (vwi << 8) - (uint32_t)dl;
             i0 = (pos >> 8) & 255u;
             v0 = vdl[i0];
             v1 = vdl[(i0 + 1u) & 255u];
             v = v0 + (((v1 - v0) * (int32_t)(pos & 255u)) >> 8);
             vdl[vwi] = x;
             vwi = (vwi + 1u) & 255u;
-            x = vm >= 4u ? (x + v) >> 1 : v;
+            x = vm >= 4u ? ((x + v) * 181) >> 8 : v;   /* the chorus mixes with 1/sqrt(2) as setBfree does (not 1/2) */
         }
         kcl += kd;
         x = (x * (kcl >> 4)) >> 12;
