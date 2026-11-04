@@ -43,9 +43,18 @@ lower the wheel count (fewer simultaneous keys, drawbars) or move work out of th
 
 ## Vibrato and chorus
 As setBfree's scanner (`vibrato.c`): a delay of 1 + A + A sin(phase) samples, A = 3, 6, 9 for V1/C1 .. V3/C3, at 7.25 Hz; the chorus
-mixes the dry and the delayed sound with 1/sqrt(2), the vibrato plays the delayed sound only. Measured against a Raspberry Pi
-recording of setBfree (chorus C3, F4 / C5 / F5): amplitude ripple 0.9 / 2.1 / 4.0 dB (setBfree 0.9 / 2.4 / 3.9) and a pitch swing
-of 15.2 cents peak-to-peak (setBfree 14.8).
+mixes the dry and the delayed sound with 1/sqrt(2), the vibrato plays the delayed sound only. setBfree counts these delays in
+samples, so they depend on the sample rate; the reference recordings came from a Pi running setBfree at 48 kHz, and the firmware
+(44.1 kHz) uses the same delays in seconds. Measured against such a recording (chorus C3, F4 / C5 / F5): pitch swing 14.8 cents
+peak-to-peak (setBfree 14.8), amplitude ripple 0.85 / 2.0 / 3.8 dB (setBfree 0.9 / 2.4 / 3.85).
+
+## Percussion
+As setBfree's tone generator: the 2nd or 3rd harmonic bus (the 4' or 2 2/3' drawbar's tapering and leakage) times 11 (soft: 0.5012),
+through setBfree's high-pass (a first difference: the higher the note, the louder the percussion), an exponential decay, and with
+"normal" volume the whole sound 4.4 dB quieter (setBfree's `percDrawbarNormalGain`). The decay is what the plug-in really does: a
+factor of 0.9999 (slow) or 0.9995 (fast) per sample, at 48 kHz: -41.7 dB per second slow, about -208 dB per second fast (not the "4 s" and "1 s" of
+its documentation, which its plug-in never applies). The 1' drawbar is off while percussion is on, and the envelope restarts when
+all keys are up. Level and decay match setBfree's tone generator (`tests/organ_test.c`, 12 combinations of key, harmonic and volume, within 0.4 dB).
 
 ## Reverb and Leslie
 Chain as in setBfree: tone generator, overdrive, **reverb**, **Leslie**. The reverb is setBfree's (four combs, three all-passes,
@@ -59,5 +68,5 @@ turned into `organ_leslie.h` by `tools/gen_leslie.py`) holds setBfree's whirl ta
 Leslie slow, this firmware starts with it stopped.
 
 ## Not in it (yet)
-Lower manual and pedals, tonewheel waveform colouring, setBfree's equalisation curve, vibrato scanner details.
-Vibrato depth and percussion level are set by ear.
+Lower manual and pedals, tonewheel waveform colouring, setBfree's equalisation curve.
+

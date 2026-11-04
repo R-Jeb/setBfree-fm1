@@ -35,6 +35,17 @@ assert max(incs) < 2 ** 31
 out += ["    " + ", ".join(f"{v}u" for v in incs[i:i + 6]) + "," for i in range(0, 91, 6)]
 out.append("};")
 
+# setBfree's percussion signal goes through a first difference (HIPASS_PERCUSSION, tonegen.c): y[n] = x[n-1] - x[n], a gain of
+# 2 sin(pi f / fs) per wheel (the higher the wheel, the louder), Q15, at fs = 48 kHz (see PERC_FS)
+PERC_FS = 48000     # the sample rate setBfree's percussion was measured at (a Pi at 48 kHz): its high-pass counts samples
+hp = [round(2 * math.sin(math.pi * wheel_freq(n) / PERC_FS) * 32768) for n in range(91)]
+assert max(hp) < 65536
+out.append("")
+out.append("/* percussion's high-pass: 2 sin(pi f / 48000) of each wheel, Q15 */")
+out.append("static const uint16_t PERC_HP[91] = {")
+out += ["    " + ", ".join(str(v) for v in hp[i:i + 12]) + "," for i in range(0, 91, 12)]
+out.append("};")
+
 # setBfree's key click (tonegen.c initEnvelopes, attack model "click", the default): when a wheel's level changes,
 # its gain moves from the old to the new value along one of eight random envelopes: zero until a random start,
 # then a burst of 16..80 samples at 1 - 0.5 * random, then unity, the whole thing through a two-point average.
