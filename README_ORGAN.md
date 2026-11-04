@@ -9,9 +9,10 @@ python3 tools/gen_organ.py      # only if you change the gears or tuning: rewrit
 tests/run_host.sh               # build/host/dinghy.wav + screen PNGs, no FM-1 needed
 ./build.sh                      # -> build/b3organ.fwsc ; python3 tools/fm1_install.py build/b3organ.fwsc
 ```
-**Identity and version.** This firmware's package identity is `FM-1_95N` (`IDENT_PREFIX` in `tools/build.py`; Dinghy itself is
-`FM-1_99N`; the hub keeps no registry, so check its list before a public release, and change that one line if 95N is taken).
-N is the minor digit of the release. The version is on the screen, top left: `B3 ORGAN v0.1` for a release (`./build.sh --release 0.1`,
+**Identity and version.** This firmware's package identity is `FM-1_953` (`IDENT` in `tools/build.py`), the same for every version: the
+FM-1 Firmware Hub takes the name and the version from this repository and its releases and only needs an identity no other firmware uses
+(Dinghy itself is `FM-1_99N`; the 95N family is used by other firmwares too, 951, 952 and 958: check the hub's list before you change it).
+The version is on the screen, top left: `B3 ORGAN v0.1` for a release (`./build.sh --release 0.1`,
 or a tag `v0.1` on GitHub: Actions builds `b3organ-0.1.fwsc` and attaches it to the release), `B3 ORGAN vd8362` for any other build:
 `d` plus the first four hex digits of the commit it was built from (on GitHub: the commit of the run you downloaded it from).
 
