@@ -20,8 +20,8 @@ build.
 | --- | --- |
 | **Tonewheels** | 91 wheels with setBfree's 60 Hz gear ratios, nine drawbars, setBfree's tapering (-10 to +7 dB per key and drawbar) and wheel-to-wheel leakage down to -60 dB. Only the wheels that sound are computed (about 27 µs each). |
 | **Key click, key compression** | setBfree's attack click (eight random envelopes) and the gain drop when many keys are held (1.2 dB for 2 keys, to 9 dB for 61). |
-| **Vibrato and chorus** | V1 to V3 and C1 to C3 as setBfree's scanner (a sine-swinging delay at 7.25 Hz); matches a setBfree recording to within a dB of ripple and half a cent of pitch swing. |
-| **Percussion** | 2nd or 3rd harmonic, slow or fast decay, soft or normal. |
+| **Vibrato and chorus** | V1 to V3 and C1 to C3 as setBfree's scanner (a sine-swinging delay at 7.25 Hz); matches a setBfree recording in pitch swing (14.8 cents) and to within half a dB in ripple. |
+| **Percussion** | 2nd or 3rd harmonic, slow or fast decay, soft or normal, level and decay as setBfree's tone generator (within 0.4 dB). |
 | **Overdrive** | Gain and soft clip, nine drive settings. |
 | **Reverb** | setBfree's reverb (combs and all-passes), amount on KNOB 4 or CC 91; impulse response within -45 dB of setBfree's. |
 | **Leslie** | setBfree's rotary model: horn and drum with Doppler, horn directivity, reflections, stop / slow / fast with acceleration and braking; the stopped state matches setBfree's to about -40 dB. |
