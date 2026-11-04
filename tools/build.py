@@ -47,9 +47,10 @@ SDK_SHA256 = {
     "cfg/eq_cfg_hw.bin": "41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
 }
 
-IDENT_PREFIX = "FM-1_95"            # B3 organ: 95N (the installer's OUR_LOADER wants FM-1_9NN); Dinghy itself is 99N
+IDENT = "FM-1_953"                  # B3 organ: one identity for every version (the installer's OUR_LOADER wants FM-1_9NN; the hub takes the
+                                    # name and the version from the repository and its releases, and it must be one no other firmware uses)
 PACKAGE = "b3organ"                 # the package file: build/b3organ.fwsc, build/b3organ-0.1.fwsc
-PRODUCT = IDENT_PREFIX + "0"        # the identity: IDENT_PREFIX + the minor version digit
+PRODUCT = IDENT                     # the identity the package and the running firmware report
 VERSION = None                      # APP_VER: the release's X.Y, else "d" + the commit (see git_version)
 
 
@@ -284,16 +285,15 @@ def git_version():
 def main():
     global PRODUCT, VERSION
     ap = argparse.ArgumentParser()
-    ap.add_argument("--release", metavar="X.Y", help="release build: identity FM-1_95Y, version string X.Y")
+    ap.add_argument("--release", metavar="X.Y", help="release build: version string X.Y (the identity stays the same)")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     a = ap.parse_args()
     name = PACKAGE + ".fwsc"
     VERSION = git_version()
-    if a.release:                   # one digit each: the identity has room for two (X.Y; a .Z only in the text)
-        m = re.fullmatch(r"(\d)\.(\d)(\.\d)?(-[A-Za-z0-9]+)?", a.release)
+    if a.release:                   # X.Y, X.Y.Z or X.Y-suffix
+        m = re.fullmatch(r"(\d+)\.(\d+)(\.\d+)?(-[A-Za-z0-9]+)?", a.release)
         if not m:
-            raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z or X.Y-suffix, one digit each")
-        PRODUCT = IDENT_PREFIX + m[2]
+            raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z or X.Y-suffix")
         VERSION = m[1] + "." + m[2] + (m[3] or "")
         name = f"{PACKAGE}-{a.release}.fwsc"
     fm1pkg_make.SDK = a.sdk
