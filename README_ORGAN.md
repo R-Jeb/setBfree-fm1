@@ -70,6 +70,22 @@ audio block); `LES_REFL2 0` in `organ_fx.h` drops the second reflections for abo
 turned into `organ_leslie.h` by `tools/gen_leslie.py`) holds setBfree's whirl tables. Note: setBfree's LV2 plugin starts with the
 Leslie slow, this firmware starts with it stopped.
 
+## What was tuned against the Raspberry Pi
+Recordings of the FM-1 and of setBfree on a Raspberry Pi (48 kHz), same notes, one drawbar at 8, Leslie stopped, one effect at a time:
+- **Chorus and vibrato:** the delay swings as a sine (it was a triangle) and the chorus mixes at 1/sqrt(2) (it was 1/2, 3 dB too quiet); the swing
+  is now 14.8 cents on F4, C5 and F5 (13.1 before), the ripple 0.9 / 2.3 / 3.8 dB against 0.9 / 2.5 / 3.8 dB.
+- **Percussion:** level (11 times the bus, soft 0.5012, normal 0.605 on the whole sound), the first-difference high-pass per wheel, the decay per
+  sample of the plug-in (0.9999 / 0.9995 at 48 kHz, scaled to 44.1 kHz: -41 dB per second slow, the Pi -42), and the click: the high-pass is
+  taken of the envelope too, so the bouncing attack of the wheels (the key click) becomes a click at 2 to 8 kHz. Before, it was 6 dB above the
+  tone after it, the Pi 15 dB, now 16 dB (F4, 3rd, nothing else sounding).
+- **Reverb:** setBfree's combs and all-passes at the sample rate, mix = CC 91 / 127; the tails of a held F4 at mix 7, 15, 31, 63 agree within
+  1 dB. A held F4 gets quieter at the release's first 0.2 s than at the start: setBfree's own comb cancellation at 349 Hz, the Pi does the same (+6 dB at 48 kHz).
+- **Leslie:** stop, slow and fast with the acceleration of setBfree; the Raspberry Pi and the FM-1 reach 0.5 to 0.9 Hz (slow) and 5.4 to 5.5 Hz (fast)
+  after the same 10 s, with 18 to 22 dB of level ripple at the horn.
+- Differences that remain and are not errors: the stopped Leslie's angle is random after every stop (single notes differ by 10 dB or more between
+  recordings, and 2nd against 3rd percussion level by up to 20 dB), and the Raspberry Pi's note has more above 2 kHz (its 12th harmonic at
+  4190 Hz is 8 dB louder; not understood yet).
+
 ## Not in it (yet)
 Lower manual and pedals, tonewheel waveform colouring, setBfree's equalisation curve.
 
