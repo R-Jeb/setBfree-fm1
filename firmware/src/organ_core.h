@@ -108,12 +108,16 @@ static void app_audio(int32_t *out, uint32_t n)
                 }
             } else {                            /* the level changes: setBfree's key click (an attack envelope; the release is a ramp) */
                 const uint16_t *env = ATK_ENV[w & 7u];
-                int32_t d = t - c, pd = wpt[w] - wpc[w], sp = 0, ep = 0;
-                if (pd) {                       /* setBfree differentiates the percussion bus, envelope and all: d(e s) = e ds + s de, and de is the click */
+                int32_t d = t - c, pd = wpt[w] - wpc[w], pm = wpt[w] > wpc[w] ? wpt[w] : wpc[w], sp = 0, ep = 0;
+                uint32_t n1 = n < 129u ? n : 129u;      /* the envelope is over after 128 samples (and steps to 1 at the 129th) */
+                /* setBfree differentiates the percussion bus, envelope and all: d(e s) = e ds + s de, and de is the click. Only for a key
+                 * going on or off, not for the decay's small step every block (it would cost every held note's wheels the whole block) */
+                if ((pd < 0 ? -pd : pd) <= (pm >> 2)) pd = 0;
+                if (pd) {
                     uint32_t i0 = ph >> 24;
                     sp = SINE_TAB[i0] + (((SINE_TAB[i0 + 1u] - SINE_TAB[i0]) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
                 }
-                for (i = 0; i < n; i++) {
+                for (i = 0; i < n1; i++) {
                     uint32_t idx;
                     int32_t s0, s1, s, e, a;
                     ph += inc;
@@ -129,6 +133,16 @@ static void app_audio(int32_t *out, uint32_t n)
                         sp = s;
                         ep = e;
                     }
+                }
+                for (; i < n; i++) {                    /* after the envelope: the new level, steady */
+                    uint32_t idx;
+                    int32_t s0, s1, s;
+                    ph += inc;
+                    idx = ph >> 24;
+                    s0 = SINE_TAB[idx];
+                    s1 = SINE_TAB[idx + 1u];
+                    s = s0 + (((s1 - s0) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
+                    acc[i] += (s >> 2) * t;
                 }
             }
         }
