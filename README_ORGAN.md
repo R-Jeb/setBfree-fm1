@@ -55,6 +55,9 @@ through setBfree's high-pass (a first difference: the higher the note, the loude
 factor of 0.9999 (slow) or 0.9995 (fast) per sample, at 48 kHz: -41.7 dB per second slow, about -208 dB per second fast (not the "4 s" and "1 s" of
 its documentation, which its plug-in never applies). The 1' drawbar is off while percussion is on, and the envelope restarts when
 all keys are up. Level and decay match setBfree's tone generator (`tests/organ_test.c`, 12 combinations of key, harmonic and volume, within 0.4 dB).
+The percussion's click is setBfree's too: the first difference also takes the key's attack envelope (a bouncing one, see the key click), so the
+wheels' attack comes out as a high-frequency click; the engine adds that term while a wheel's percussion level changes (the first 128 samples
+of a key). Measured against the Raspberry Pi (F4, percussion alone, 3rd): the click was 8 dB too weak before, now it is within about 1 dB.
 
 ## Reverb and Leslie
 Chain as in setBfree: tone generator, overdrive, **reverb**, **Leslie**. The reverb is setBfree's (four combs, three all-passes,
@@ -66,6 +69,22 @@ audio block); `LES_REFL2 0` in `organ_fx.h` drops the second reflections for abo
 `tests/organ_test.c` checks both against the data in `tests/fx_ref.h`, `data/setbfree-whirl.txt` (dumped with `tools/dump_whirl.c`,
 turned into `organ_leslie.h` by `tools/gen_leslie.py`) holds setBfree's whirl tables. Note: setBfree's LV2 plugin starts with the
 Leslie slow, this firmware starts with it stopped.
+
+## What was tuned against the Raspberry Pi
+Recordings of the FM-1 and of setBfree on a Raspberry Pi (48 kHz), same notes, one drawbar at 8, Leslie stopped, one effect at a time:
+- **Chorus and vibrato:** the delay swings as a sine (it was a triangle) and the chorus mixes at 1/sqrt(2) (it was 1/2, 3 dB too quiet); the swing
+  is now 14.8 cents on F4, C5 and F5 (13.1 before), the ripple 0.9 / 2.3 / 3.8 dB against 0.9 / 2.5 / 3.8 dB.
+- **Percussion:** level (11 times the bus, soft 0.5012, normal 0.605 on the whole sound), the first-difference high-pass per wheel, the decay per
+  sample of the plug-in (0.9999 / 0.9995 at 48 kHz, scaled to 44.1 kHz: -41 dB per second slow, the Pi -42), and the click: the high-pass is
+  taken of the envelope too, so the bouncing attack of the wheels (the key click) becomes a click at 2 to 8 kHz. Before, it was 6 dB above the
+  tone after it, the Pi 15 dB, now 16 dB (F4, 3rd, nothing else sounding).
+- **Reverb:** setBfree's combs and all-passes at the sample rate, mix = CC 91 / 127; the tails of a held F4 at mix 7, 15, 31, 63 agree within
+  1 dB. A held F4 gets quieter at the release's first 0.2 s than at the start: setBfree's own comb cancellation at 349 Hz, the Pi does the same (+6 dB at 48 kHz).
+- **Leslie:** stop, slow and fast with the acceleration of setBfree; the Raspberry Pi and the FM-1 reach 0.5 to 0.9 Hz (slow) and 5.4 to 5.5 Hz (fast)
+  after the same 10 s, with 18 to 22 dB of level ripple at the horn.
+- Differences that remain and are not errors: the stopped Leslie's angle is random after every stop (single notes differ by 10 dB or more between
+  recordings, and 2nd against 3rd percussion level by up to 20 dB), and the Raspberry Pi's note has more above 2 kHz (its 12th harmonic at
+  4190 Hz is 8 dB louder; not understood yet).
 
 ## Not in it (yet)
 Lower manual and pedals, tonewheel waveform colouring, setBfree's equalisation curve.

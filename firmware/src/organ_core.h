@@ -38,6 +38,7 @@ static volatile uint8_t fx_bypass;              /* tests: skip the reverb and th
 
 static uint32_t wph[NW];                        /* tonewheel phases: they turn all the time, as on the organ */
 static int32_t wcur[NW], wtgt[NW];              /* level of each wheel on the bus, Q10 (1024 = one drawbar at 8) */
+static int32_t wpc[NW], wpt[NW];                /* the percussion's share of it before the high-pass (Q10), now and next: its attack is differentiated too */
 static int32_t acc[256];
 static int32_t kcl = 4096 << 4;                 /* key compression, now: Q16 */
 static int32_t vdl[256];                        /* scanner delay line */
@@ -61,7 +62,7 @@ static void app_audio(int32_t *out, uint32_t n)
     if (P.perc && !P.soft) gsw = (gsw * PERC_NORMAL_Q15) >> 15;
     if (n > 256u) n = 256u;
 
-    for (w = 0; w < NW; w++) wtgt[w] = 0;
+    for (w = 0; w < NW; w++) wtgt[w] = wpt[w] = 0;
     for (k = 0; k < NK; k++)
         nk += k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u;
     if (!nk) perc_env = P.soft ? 16424 : 32767; /* single trigger: the envelope restarts when every key is up */
@@ -78,7 +79,11 @@ static void app_audio(int32_t *out, uint32_t n)
         if (P.perc) {                           /* percussion: the 2nd or 3rd harmonic bus (as the 4' or 2 2/3' drawbar's: tapering, leakage), through setBfree's high-pass */
             uint32_t pd = P.perc3 ? 4u : 3u;
             for (e = CT_IDX[k * 9u + pd]; e < CT_IDX[k * 9u + pd + 1u]; e++)
-                wtgt[CT_W[e]] += (((pa * (int32_t)CT_G[e]) >> 12) * (int32_t)PERC_HP[CT_W[e]]) >> 15;
+            {
+                int32_t pl = (pa * (int32_t)CT_G[e]) >> 12;
+                wpt[CT_W[e]] += pl;
+                wtgt[CT_W[e]] += (pl * (int32_t)PERC_HP[CT_W[e]]) >> 15;
+            }
         }
     }
     if (nk && P.perc) perc_env = (perc_env * (P.fast ? DEC_FAST : DEC_SLOW)) >> 15;
@@ -87,7 +92,7 @@ static void app_audio(int32_t *out, uint32_t n)
     for (w = 0; w < NW; w++) {
         int32_t c = wcur[w], t = wtgt[w];
         uint32_t ph = wph[w], inc = WHEEL_INC[w];
-        if (!c && !t) { wph[w] = ph + inc * n; continue; }   /* silent: costs nothing, the wheel turns on */
+        if (!c && !t) { wph[w] = ph + inc * n; wpc[w] = wpt[w]; continue; }   /* silent: costs nothing, the wheel turns on */
         {
             act++;
             if (c == t) {                       /* steady: no envelope */
@@ -103,7 +108,11 @@ static void app_audio(int32_t *out, uint32_t n)
                 }
             } else {                            /* the level changes: setBfree's key click (an attack envelope; the release is a ramp) */
                 const uint16_t *env = ATK_ENV[w & 7u];
-                int32_t d = t - c;
+                int32_t d = t - c, pd = wpt[w] - wpc[w], sp = 0, ep = 0;
+                if (pd) {                       /* setBfree differentiates the percussion bus, envelope and all: d(e s) = e ds + s de, and de is the click */
+                    uint32_t i0 = ph >> 24;
+                    sp = SINE_TAB[i0] + (((SINE_TAB[i0 + 1u] - SINE_TAB[i0]) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
+                }
                 for (i = 0; i < n; i++) {
                     uint32_t idx;
                     int32_t s0, s1, s, e, a;
@@ -115,11 +124,17 @@ static void app_audio(int32_t *out, uint32_t n)
                     e = i >= 128u ? 4096 : t ? (int32_t)env[i] : (int32_t)i << 5;
                     a = c + ((d * e) >> 12);
                     acc[i] += (s >> 2) * a;
+                    if (pd) {
+                        acc[i] -= (sp >> 2) * ((pd * (e - ep)) >> 12);
+                        sp = s;
+                        ep = e;
+                    }
                 }
             }
         }
         wph[w] = ph;
         wcur[w] = t;
+        wpc[w] = wpt[w];
     }
 
     {

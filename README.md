@@ -21,13 +21,32 @@ build.
 | **Tonewheels** | 91 wheels with setBfree's 60 Hz gear ratios, nine drawbars, setBfree's tapering (-10 to +7 dB per key and drawbar) and wheel-to-wheel leakage down to -60 dB. Only the wheels that sound are computed (about 27 µs each). |
 | **Key click, key compression** | setBfree's attack click (eight random envelopes) and the gain drop when many keys are held (1.2 dB for 2 keys, to 9 dB for 61). |
 | **Vibrato and chorus** | V1 to V3 and C1 to C3 as setBfree's scanner (a sine-swinging delay at 7.25 Hz); matches a setBfree recording in pitch swing (14.8 cents) and to within half a dB in ripple. |
-| **Percussion** | 2nd or 3rd harmonic, slow or fast decay, soft or normal, level and decay as setBfree's tone generator (within 0.4 dB). |
+| **Percussion** | 2nd or 3rd harmonic, slow or fast decay, soft or normal, level and decay as setBfree's tone generator (within 0.4 dB), and its key click: setBfree differentiates the percussion bus with the key's attack envelope, so the bouncing attack comes out as a click. |
 | **Overdrive** | Gain and soft clip, nine drive settings. |
 | **Reverb** | setBfree's reverb (combs and all-passes), amount on KNOB 4 or CC 91; impulse response within -45 dB of setBfree's. |
 | **Leslie** | setBfree's rotary model: horn and drum with Doppler, horn directivity, reflections, stop / slow / fast with acceleration and braking; the stopped state matches setBfree's to about -40 dB. |
 | **Programs** | All 110 programs of setBfree's `default.pgm` (registrations and switch settings), by the PRESETS knob or MIDI program change. |
 | **MIDI** | USB and the TRS jack, any channel, setBfree's default controller numbers (drawbars 70 to 78, swell 7 / 11, Leslie 1 / 64, vibrato 31 / 92, percussion 66 / 80 to 83, overdrive 65 / 93, reverb 91). |
 | **USB audio, updates, rescue** | The platform underneath (Felucca, SLOOP, Dinghy): updates over USB through the [FM-1 Firmware Hub](https://fm1.designburgapps.com), a USB rescue (hold **OCT-** while switching on), a crash screen, and the FM-1 as a stereo USB audio input for recording. |
+
+## Measured against a Raspberry Pi running setBfree
+
+The sound was compared with recordings of the same notes on a Raspberry Pi (setBfree LV2, 48 kHz): one drawbar at 8, Leslie stopped, the
+rest off, and every effect on its own. Where the two differed the engine was changed until they agreed:
+
+| | Raspberry Pi | This firmware |
+| --- | --- | --- |
+| Chorus C3, pitch swing (F4, C5, F5) | 14.8 cents | 14.8 cents (13.1 before: the delay is a sine and the mix 1/sqrt(2), as setBfree's) |
+| Chorus C3, level ripple (F4, C5, F5) | 0.9 / 2.5 / 3.8 dB | 0.9 / 2.3 / 3.8 dB |
+| Percussion decay (3rd, slow) | -42 dB per second | -41 dB per second (the plug-in's 0.9999 per sample, at 44.1 kHz: it is scaled) |
+| Percussion level, 3rd and 2nd, soft and normal | | within 0.4 dB of setBfree's tone generator |
+| Percussion click (2 to 8 kHz, first 10 ms, 3rd) | 15 dB above the tone after it | 16 dB (6 dB before: the key's attack was not differentiated) |
+| Reverb tails, mix 7 / 15 / 31 / 63 | | within 1 dB; the dip and the jump when a held F4 is released are setBfree's own (comb cancellation) |
+| Leslie, stop to slow to stop to fast | slow 0.5 to 0.9 Hz, fast 5.5 Hz after 10 s | slow 0.5 to 0.8 Hz, fast 5.4 Hz after 10 s, the same acceleration |
+
+What stays different: the stopped Leslie has a random angle after each stop (as setBfree's), so levels of single notes differ from
+recording to recording by up to 10 dB or more, and the Raspberry Pi has more energy above 2 kHz in a held note (the 12th harmonic at
+4190 Hz is 8 dB louder there). The details and the scripts' results are in [README_ORGAN.md](README_ORGAN.md).
 
 ## Controls
 
