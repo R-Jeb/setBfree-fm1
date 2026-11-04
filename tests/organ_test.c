@@ -268,5 +268,36 @@ int main(void)
         CHECK("percussion level = setBfree (3rd, 2nd, soft, normal; < 0.6 dB)", worst < 0.6);
         CHECK("percussion slow decay = setBfree's plug-in (-8.3 dB per 200 ms)", fabs(decay + 8.3) < 0.5);
     }
+    {   /* the percussion's click: setBfree high-passes the percussion bus as a first difference, envelope and all, so the key's attack
+         * (a bouncing envelope) comes out as a click. rms of the first difference 0 .. 10 ms after the key against 50 .. 100 ms, dB,
+         * the percussion alone (no drawbars) on F4, setBfree's tone generator: 3rd 10.8, 2nd 18.0 */
+        static const struct { int third; double want; } CK[2] = {{1, 10.8}, {0, 18.0}};
+        static int32_t out[512];
+        double worst = 0;
+        uint32_t c, b, i, j;
+        fx_bypass = 1;
+        for (c = 0; c < 2u; c++) {
+            static float y[8820];
+            double r0 = 0, r1 = 0, got;
+            for (i = 0; i < NB; i++) P.db[i] = 0;
+            P.perc = 1; P.perc3 = (uint8_t)CK[c].third; P.soft = 1; P.fast = 0; P.vup = P.od = 0; P.les = 0; P.swell = 127;
+            pk_lo = pk_hi = mk_lo = mk_hi = 0;
+            for (b = 0; b < 60; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }
+            key_set(&mk_lo, &mk_hi, 29, 1);
+            for (b = 0; b < 34; b++) {
+                memset(out, 0, sizeof out);
+                app_audio(out, 256);
+                for (j = 0; j < 256u; j++) y[b * 256u + j] = (float)out[2u * j] / 32768.0f;
+            }
+            key_set(&mk_lo, &mk_hi, 29, 0);
+            for (j = 1; j < 441u; j++) r0 += (double)(y[j] - y[j - 1]) * (double)(y[j] - y[j - 1]);
+            for (j = 2206; j < 4410u; j++) r1 += (double)(y[j] - y[j - 1]) * (double)(y[j] - y[j - 1]);
+            got = 10 * log10((r0 / 440.0) / (r1 / 2204.0));
+            if (fabs(got - CK[c].want) > worst) worst = fabs(got - CK[c].want);
+        }
+        fx_bypass = 0;
+        printf("percussion click: worst error %.1f dB against setBfree's tone generator\n", worst);
+        CHECK("percussion click = setBfree (F4, 3rd and 2nd; < 3 dB)", worst < 3.0);
+    }
     return bad;
 }

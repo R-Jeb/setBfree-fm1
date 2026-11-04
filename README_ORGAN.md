@@ -55,6 +55,9 @@ through setBfree's high-pass (a first difference: the higher the note, the loude
 factor of 0.9999 (slow) or 0.9995 (fast) per sample, at 48 kHz: -41.7 dB per second slow, about -208 dB per second fast (not the "4 s" and "1 s" of
 its documentation, which its plug-in never applies). The 1' drawbar is off while percussion is on, and the envelope restarts when
 all keys are up. Level and decay match setBfree's tone generator (`tests/organ_test.c`, 12 combinations of key, harmonic and volume, within 0.4 dB).
+The percussion's click is setBfree's too: the first difference also takes the key's attack envelope (a bouncing one, see the key click), so the
+wheels' attack comes out as a high-frequency click; the engine adds that term while a wheel's percussion level changes (the first 128 samples
+of a key). Measured against the Raspberry Pi (F4, percussion alone, 3rd): the click was 8 dB too weak before, now it is within about 1 dB.
 
 ## Reverb and Leslie
 Chain as in setBfree: tone generator, overdrive, **reverb**, **Leslie**. The reverb is setBfree's (four combs, three all-passes,
