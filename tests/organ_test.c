@@ -9,6 +9,7 @@ static uint32_t fm1_ticks(void) { return 0; }
 #include "organ_tab.h"
 #include "organ_core.h"
 #include <math.h>
+#include <stdlib.h>
 #include "organ_ref.h"
 #include "fx_ref.h"
 
@@ -219,6 +220,53 @@ int main(void)
         printf("reverb error %.1f dB, Leslie (stop) error L %.1f dB R %.1f dB\n", 10 * log10(er / sr), 10 * log10(el / sl), 10 * log10(ee / se));
         CHECK("reverb impulse response = setBfree (error < -30 dB)", er < sr * 0.001);
         CHECK("Leslie (stop) = setBfree (error < -30 dB)", el < sl * 0.001 && ee < se * 0.001);
+    }
+    {   /* percussion against setBfree's tone generator (3rd and 2nd harmonic, soft and normal, slow; level at 85 ms after the key
+         * relative to the 8' fundamental; the decay: setBfree's plug-in multiplies by 0.9999 per sample at 48 kHz, 41.7 dB/s) */
+        static const struct { int key, third, soft; double f, want; } PC[] = {
+            {29, 1, 1, 349.23, -6.0}, {36, 1, 1, 523.25, -2.5}, {41, 1, 1, 698.46, -7.0},
+            {29, 1, 0, 349.23, 0.0},  {36, 1, 0, 523.25, 3.5},  {41, 1, 0, 698.46, -1.0},
+            {29, 0, 1, 349.23, -9.5}, {36, 0, 1, 523.25, -6.0}, {41, 0, 1, 698.46, -10.5},
+            {29, 0, 0, 349.23, -3.5}, {36, 0, 0, 523.25, 0.0},  {41, 0, 0, 698.46, -4.5}};   /* keys F4, C5, F5; setBfree at 48 kHz */
+        static float y[44100];
+        static int32_t out[512];
+        uint32_t c, b, i, j;
+        double worst = 0, decay = 0;
+        for (c = 0; c < sizeof PC / sizeof PC[0]; c++) {
+            double h = PC[c].third ? 3.0 : 2.0, a[3];
+            struct { double f; uint32_t n0, n1; } W[3];
+            for (i = 0; i < NB; i++) P.db[i] = (uint8_t)(i == 2u ? 8 : 0);
+            P.perc = 1; P.perc3 = (uint8_t)PC[c].third; P.soft = (uint8_t)PC[c].soft; P.fast = 0; P.vup = P.od = 0; P.les = 0; P.swell = 127;
+            pk_lo = pk_hi = mk_lo = mk_hi = 0;
+            for (b = 0; b < 60; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }
+            key_set(&mk_lo, &mk_hi, (uint32_t)PC[c].key, 1);
+            for (b = 0; b < 160; b++) {
+                memset(out, 0, sizeof out);
+                app_audio(out, 256);
+                for (j = 0; j < 256u; j++) y[b * 256u + j] = (float)out[2u * j] / 32768.0f;
+            }
+            key_set(&mk_lo, &mk_hi, (uint32_t)PC[c].key, 0);
+            W[0].f = PC[c].f;     W[0].n0 = 26460; W[0].n1 = 35280;   /* the fundamental, 0.6 .. 0.8 s */
+            W[1].f = h * PC[c].f; W[1].n0 = 1764;  W[1].n1 = 5733;    /* the percussion around 85 ms (40 .. 130 ms) */
+            W[2].f = h * PC[c].f; W[2].n0 = 10584; W[2].n1 = 14553;   /* and 200 ms later */
+            for (i = 0; i < 3u; i++) {
+                double re = 0, im = 0, wsum = 0;
+                for (j = W[i].n0; j < W[i].n1; j++) {
+                    double w = 0.5 - 0.5 * cos(2 * M_PI * (j - W[i].n0) / (W[i].n1 - W[i].n0)), ph = 2 * M_PI * W[i].f * j / 44100.0;
+                    re += w * y[j] * cos(ph); im += w * y[j] * sin(ph); wsum += w;
+                }
+                a[i] = 2.0 * sqrt(re * re + im * im) / wsum;
+            }
+            {
+                double got = 20 * log10(a[1] / a[0]), d = got - PC[c].want;
+                if (fabs(d) > worst) worst = fabs(d);
+                decay += 20 * log10(a[2] / a[1]);
+            }
+        }
+        decay /= (double)(sizeof PC / sizeof PC[0]);
+        printf("percussion: worst level error %.2f dB, decay %.1f dB per 200 ms (setBfree 48 kHz: -8.3)\n", worst, decay);
+        CHECK("percussion level = setBfree (3rd, 2nd, soft, normal; < 0.6 dB)", worst < 0.6);
+        CHECK("percussion slow decay = setBfree's plug-in (-8.3 dB per 200 ms)", fabs(decay + 8.3) < 0.5);
     }
     return bad;
 }

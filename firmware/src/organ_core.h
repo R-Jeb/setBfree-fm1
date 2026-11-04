@@ -28,9 +28,12 @@ static volatile uint32_t load_us, wheels_on;
 static volatile uint8_t fx_bypass;              /* tests: skip the reverb and the Leslie (the tone generator alone, in mono) */    /* the last block: render time, wheels sounding */
 
 /* ---- the sound (runs in the audio ISR: keep it short, no flash, no screen) */
-#define PERC_Q10 1536                           /* percussion level, 1024 = a drawbar at 8 (by ear) */
-#define DEC_FAST 31480                          /* per 256 frames, Q15: 0.001 ^ (256 / 44100) */
-#define DEC_SLOW 32441                          /* 0.001 ^ (256 / (4 * 44100)) */
+#define PERC_Q10 11264                          /* percussion level, setBfree's percEnvScaling 11 (1024 = a drawbar at 8); soft is in perc_env (0.5012) */
+#define PERC_NORMAL_Q15 19828                   /* setBfree's percDrawbarNormalGain 0.60512: with percussion on and not soft, the whole sound is this much quieter */
+/* the envelope's decay per 256 frames, Q15: setBfree's plug-in multiplies by 0.9999 (slow) or 0.9995 (fast) every sample (its
+ * computePercResets, the "4 s" and "1 s", is not called), at 48 kHz as on the Pi it was measured on: 0.9999 ^ (256 * 48000 / 44100) */
+#define DEC_FAST 28506
+#define DEC_SLOW 31868
 #define VIB_INC 706089u                         /* 7.25 Hz: f * 2^32 / 44100 */
 
 static uint32_t wph[NW];                        /* tonewheel phases: they turn all the time, as on the organ */
@@ -47,18 +50,22 @@ static const uint8_t VIBMODE[6] = {1, 4, 2, 5, 3, 6};   /* knob position -> mode
 
 static void app_audio(int32_t *out, uint32_t n)
 {
-    static const int32_t VIBA[3] = {3, 6, 9};   /* setBfree scanner.modulation.v1..v3: the delay is 1 + A + A sin(phase) samples */
-    uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, k, d, w, i, nk = 0, act = 0, t0 = fm1_ticks();
+    /* setBfree scanner.modulation.v1..v3: the delay is 1 + A + A sin(phase) samples, A = 3, 6, 9, at 48 kHz (the Pi it was measured on);
+     * here in samples of 44.1 kHz (x 44100 / 48000), Q8 */
+    static const int32_t VIBA[3] = {706, 1411, 2117};
+    static const int32_t VIBO = 235;            /* the "1 +": one sample of 48 kHz */
+    uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, k, d, w, e, i, nk = 0, act = 0, t0 = fm1_ticks();
     int32_t pa = 0, kd;
     uint32_t vm = P.vup ? VIBMODE[P.vtype % 6u] : 0u, dm = P.drv, od = P.od, les = P.les;
     int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
+    if (P.perc && !P.soft) gsw = (gsw * PERC_NORMAL_Q15) >> 15;
     if (n > 256u) n = 256u;
 
     for (w = 0; w < NW; w++) wtgt[w] = 0;
     for (k = 0; k < NK; k++)
         nk += k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u;
     if (!nk) perc_env = P.soft ? 16424 : 32767; /* single trigger: the envelope restarts when every key is up */
-    else pa = (PERC_Q10 * perc_env) >> 15;
+    else pa = (PERC_Q10 * perc_env) >> 15;     /* percussion level now (setBfree: 11 * 0.5012 when soft, decaying) */
     for (k = 0; k < NK; k++) {
         if (!(k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u)) continue;
         for (d = 0; d < NB; d++) {
@@ -68,7 +75,11 @@ static void app_audio(int32_t *out, uint32_t n)
             for (e = CT_IDX[k * 9u + d]; e < CT_IDX[k * 9u + d + 1u]; e++)   /* the main wheel, tapered, and the leakage */
                 wtgt[CT_W[e]] += (lvl * 128 * (int32_t)CT_G[e] + 2048) >> 12;
         }
-        if (P.perc) wtgt[CT_MAIN[k * 9u + (P.perc3 ? 4u : 3u)]] += pa;
+        if (P.perc) {                           /* percussion: the 2nd or 3rd harmonic bus (as the 4' or 2 2/3' drawbar's: tapering, leakage), through setBfree's high-pass */
+            uint32_t pd = P.perc3 ? 4u : 3u;
+            for (e = CT_IDX[k * 9u + pd]; e < CT_IDX[k * 9u + pd + 1u]; e++)
+                wtgt[CT_W[e]] += (((pa * (int32_t)CT_G[e]) >> 12) * (int32_t)PERC_HP[CT_W[e]]) >> 15;
+        }
     }
     if (nk && P.perc) perc_env = (perc_env * (P.fast ? DEC_FAST : DEC_SLOW)) >> 15;
 
@@ -127,7 +138,7 @@ static void app_audio(int32_t *out, uint32_t n)
             ix = vph >> 24;
             s0 = SINE_TAB[ix]; s1 = SINE_TAB[ix + 1u];
             sn = s0 + (((s1 - s0) * (int32_t)((vph >> 8) & 0xFFFFu)) >> 16);   /* sin, Q15 */
-            dl = ((1 + a) << 8) + ((a * sn) >> 7);                              /* the delay in samples, Q8 */
+            dl = VIBO + a + ((a * sn) >> 15);                                   /* the delay in samples, Q8 */
             pos = (vwi << 8) - (uint32_t)dl;
             i0 = (pos >> 8) & 255u;
             v0 = vdl[i0];
