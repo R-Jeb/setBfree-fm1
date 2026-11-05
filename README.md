@@ -22,7 +22,7 @@ build.
 | **Key click, key compression** | setBfree's attack click (eight random envelopes) and the gain drop when many keys are held (1.2 dB for 2 keys, to 9 dB for 61). |
 | **Vibrato and chorus** | V1 to V3 and C1 to C3 as setBfree's scanner (a sine-swinging delay at 7.25 Hz); matches a setBfree recording in pitch swing (14.8 cents) and to within half a dB in ripple. |
 | **Percussion** | 2nd or 3rd harmonic, slow or fast decay, soft or normal, level and decay as setBfree's tone generator (within 0.4 dB), and its key click: setBfree differentiates the percussion bus with the key's attack envelope, so the bouncing attack comes out as a click. |
-| **Overdrive** | Gain and soft clip, nine drive settings. |
+| **Overdrive** | setBfree's own preamp model: biased transfer curve between two bass filters, feedback, sag; nine character settings (setBfree's `overdrive.character` 0, 16 … 127). |
 | **Reverb** | setBfree's reverb (combs and all-passes), amount on KNOB 4 or CC 91; impulse response within -45 dB of setBfree's. |
 | **Leslie** | setBfree's rotary model: horn and drum with Doppler, horn directivity, reflections, stop / slow / fast with acceleration and braking; the stopped state matches setBfree's to about -40 dB. |
 | **Programs** | All 110 programs of setBfree's `default.pgm` (registrations and switch settings), by the PRESETS knob or MIDI program change. |

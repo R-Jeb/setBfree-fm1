@@ -45,6 +45,7 @@ static int32_t vdl[256];                        /* scanner delay line */
 static uint32_t vwi, vph;
 static int32_t mono[256], lbuf[256], rbuf[256]; /* after the overdrive: mono, then through the reverb, then the Leslie makes the pair */
 #include "organ_fx.h"
+#include "organ_od.h"                         /* setBfree's preamp */
 static int32_t perc_env = 32767;                /* Q15 */
 
 static const uint8_t VIBMODE[6] = {1, 4, 2, 5, 3, 6};   /* knob position -> mode: 1..3 V1..V3, 4..6 C1..C3 */
@@ -165,18 +166,11 @@ static void app_audio(int32_t *out, uint32_t n)
         }
         kcl += kd;
         x = (x * (kcl >> 4)) >> 12;
-        if (od) {                               /* overdrive: gain, then a soft clip (3u - u^3) / 3 */
-            u = (x * (int32_t)(16u + 12u * dm)) >> 4;
-            if (u > 32767) u = 32767;
-            if (u < -32767) u = -32767;
-            {
-                int32_t u3 = (((u * u) >> 15) * u) >> 15;
-                y = ((3 * u - u3) * 21845) >> 16;
-            }
-        } else
-            y = x > 32767 ? 32767 : x < -32767 ? -32767 : x;
+        y = x > 60000 ? 60000 : x < -60000 ? -60000 : x;   /* the preamp below takes it unclipped */
         mono[i] = y;
     }
+    if (od) od_run(mono, n, (dm * 127u + 4u) >> 3);   /* setBfree's preamp; character 0..8 -> 0..127 */
+    else for (i = 0; i < n; i++) mono[i] = mono[i] > 32767 ? 32767 : mono[i] < -32767 ? -32767 : mono[i];
     if (fx_bypass) {
         for (i = 0; i < n; i++) lbuf[i] = rbuf[i] = mono[i];
     } else {

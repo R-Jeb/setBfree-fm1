@@ -79,5 +79,11 @@ out.append("static const uint16_t KEY_COMP[62] = {")
 vals = [kc(n) for n in range(62)]
 out += ["    " + ", ".join(str(v) for v in vals[i:i + 14]) + "," for i in range(0, 62, 14)]
 out.append("};")
+out.append("")
+out.append("/* overdrive: 32768 / (1 + x^2) for x = 0 .. 16 in steps of 1/64 */")
+out.append("static const uint16_t OD_T[1025] = {")
+odt = [round(32768 / (1 + (i / 64) ** 2)) for i in range(1025)]
+out += ["    " + ", ".join(str(v) for v in odt[i:i + 16]) + "," for i in range(0, 1025, 16)]
+out.append("};")
 pathlib.Path("firmware/src/organ_tab.h").write_text("\n".join(out) + "\n")
 print("wheel 0 %.2f Hz, wheel 12 %.2f Hz, wheel 90 %.1f Hz" % (wheel_freq(0), wheel_freq(12), wheel_freq(90)))

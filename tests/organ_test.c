@@ -299,5 +299,47 @@ int main(void)
         printf("percussion click: worst error %.1f dB against setBfree's tone generator\n", worst);
         CHECK("percussion click = setBfree (F4, 3rd and 2nd; < 3 dB)", worst < 3.0);
     }
+    {   /* the overdrive is setBfree's preamp (b_overdrive/overdrive.c): the same model in double precision, a three-tone signal, three characters */
+        static const double CF[8] = {0.00127616566, 0.00497944288, 0.0142455412, 0.14084346, 0.464444974, 0.0142455412, 0.00497944288, 0.00127616566};
+        static const double AF[8] = {0.204190232, -0.0633467727, 0.0327789369, -0.0185333957, 0.0103064728, -0.00532702988, 0.00249628401, -0.00122011836};
+        static const uint32_t CH[3] = {0, 64, 127};
+        static int32_t q[4096];
+        double worst = 1e9, xh[8], yh[33];
+        uint32_t c, i, k;
+        for (c = 0; c < 3u; c++) {
+            double fb, fb2, sag = 0, z = 0, z1 = 0, gf = 0, se = 0, sr = 0;
+            uint32_t ch = CH[c];
+            if (ch < 32u) { fb = 0.5821; fb2 = 0.999 + (0.5821 - 0.999) * (ch / 31.0); }
+            else if (ch < 64u) { fb = 0.5821 + (0.999 - 0.5821) * ((ch - 32u) / 31.0); fb2 = 0.5821; }
+            else { fb = 0.999; fb2 = 0.5821 + (0.999 - 0.5821) * ((ch - 64u) / 63.0); }
+            memset(xh, 0, sizeof xh); memset(yh, 0, sizeof yh);
+            od_xi = od_yi = 0; od_sag = od_z = od_z1 = od_gf = 0; memset(od_xh, 0, sizeof od_xh); memset(od_yh, 0, sizeof od_yh);
+            for (i = 0; i < 4096u; i++)
+                q[i] = (int32_t)lrint(32768.0 * 0.045 * (sin(0.0592 * i) + 0.5 * sin(0.1488 * i) + 0.35 * sin(0.2961 * i)) / 1.85 * 1.6);
+            od_run(q, 4096, ch);
+            for (i = 0; i < 4096u; i++) {
+                double xin, bias, norm, u, v, t, in = 32768.0 * 0.045 * (sin(0.0592 * i) + 0.5 * sin(0.1488 * i) + 0.35 * sin(0.2961 * i)) / 1.85 * 1.6;
+                in = floor(in + 0.5) / 32768.0;
+                xin = 3.5675 * in; sag = 0.991 * sag + fabs(xin); bias = 0.5347 - 0.0094 * sag; norm = 1 - 1 / (1 + bias * bias);
+                for (k = 7; k > 0; k--) xh[k] = xh[k - 1];
+                xh[0] = xin;
+                u = 0;
+                for (k = 0; k < 8u; k++) u += CF[k] * xh[k];
+                u += 0.6214 * gf;
+                t = u - z; z = u + z * fb; u = t;
+                if (u < 0) { v = 1 / (1 + (u - bias) * (u - bias)) - 1 + norm; } else { v = 1 - norm - 1 / (1 + (u + bias) * (u + bias)); }
+                t = v + fb2 * z1; v = t - z1; z1 = t; gf = v;
+                for (k = 32; k > 0; k--) yh[k] = yh[k - 1];
+                yh[0] = v;
+                t = 0.323601515 * yh[16];
+                for (k = 0; k < 8u; k++) t += AF[k] * (yh[15 - 2 * k] + yh[17 + 2 * k]);
+                t *= 0.8795;
+                if (i >= 256u) { se += (q[i] / 32768.0 - t) * (q[i] / 32768.0 - t); sr += t * t; }
+            }
+            if (10 * log10(sr / (se + 1e-30)) < worst) worst = 10 * log10(sr / (se + 1e-30));
+        }
+        printf("overdrive vs setBfree's preamp model: worst SNR %.1f dB (characters 0, 64, 127)\n", worst);
+        CHECK("overdrive = setBfree's preamp (SNR > 35 dB)", worst > 35.0);
+    }
     return bad;
 }
