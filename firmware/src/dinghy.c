@@ -81,7 +81,32 @@ static void draw_status(void)
     p = s;
     if (P.pgm && PGM[P.pgm].name) { p = su(p, P.pgm); p = sp(p, " "); p = sp(p, PGM[P.pgm].name); }
     *p = 0;
-    draw_text_box(0, 220, 240, &FONT_S, s, C_ACC, 1);
+    while (p > s && text_w(&FONT_S, s) > 206) *--p = 0;     /* the corner is the battery's */
+    draw_text_box(0, 220, 208, &FONT_S, s, C_ACC, 1);
+}
+
+#define C_RED RGB(230, 70, 60)
+#define C_GRN RGB(120, 220, 140)
+static void draw_battery(uint32_t st)           /* st: bars 0 .. 4, bit 3 = a USB host has it (a bolt instead) */
+{
+    static const char *const BOLT[7] = {"...XX.", "..XX..", ".XX...", "XXXXXX", "...XX.", "..XX..", ".XX..."};
+    const uint32_t x = 212, y = 222, bars = st & 7u;
+    uint32_t r, c, k;
+    uint16_t line = bars ? C_BAR : C_RED;
+    lcd_fill(x, y, 28, 16, C_BLACK);
+    if (st & 8u) {
+        for (r = 0; r < 7u; r++)
+            for (c = 0; c < 6u; c++)
+                if (BOLT[r][c] == 'X') lcd_fill(x + 8u + c * 2u, y + 1u + r * 2u, 2, 2, C_GRN);
+        return;
+    }
+    lcd_fill(x + 1u, y + 2u, 24, 1, line);      /* the cell: outline, the nub, then a bar for each step */
+    lcd_fill(x + 1u, y + 13u, 24, 1, line);
+    lcd_fill(x + 1u, y + 2u, 1, 12, line);
+    lcd_fill(x + 24u, y + 2u, 1, 12, line);
+    lcd_fill(x + 25u, y + 5u, 2, 6, line);
+    for (k = 0; k < bars; k++)
+        lcd_fill(x + 3u + k * 5u, y + 4u, 4, 8, bars <= 1u ? C_RED : C_ACC);
 }
 
 static void draw_load(uint32_t us, uint32_t w)
@@ -104,7 +129,7 @@ static void app_main(void)
 {
     struct { uint8_t magic, db[NB], vtype, vup, perc, perc3, fast, soft, les, od, drv, pgm, rev; int8_t oct; } set;
     uint32_t prev = 0, k, i, sel = 2, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
-    uint32_t drawn_db[NB], drawn_sel = 99, status_key = ~0u;
+    uint32_t drawn_db[NB], drawn_sel = 99, status_key = ~0u, drawn_batt = ~0u;
     uint8_t held[27];
     int32_t oct = 0;
 
@@ -199,6 +224,10 @@ static void app_main(void)
             uint32_t sk, key = state_key(oct, &sk);
             if (key != last_key) { last_key = key; dirty = key != saved_key; t_change = fm1_ms; }
             if (sk != status_key) { status_key = sk; draw_status(); }   /* anything a knob, a button or MIDI changed */
+        }
+        {
+            uint32_t bs = battery_state();
+            if (bs != drawn_batt) { drawn_batt = bs; draw_battery(bs); }
         }
         if (fm1_ms - t_load > 500u) {           /* how close to the 5800 us a block has: the number to watch */
             t_load = fm1_ms;
