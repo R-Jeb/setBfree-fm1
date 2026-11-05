@@ -1,6 +1,6 @@
 # B3 ORGAN for the M-VAVE FM-1 (on zvenson/dinghy)
 
-A fixed-point tonewheel organ modelled on setBfree. State: **0.1, tested in host mode only (not on an FM-1).**
+A fixed-point tonewheel organ modelled on setBfree. State: **0.2, tested on an FM-1 by one person and against a Raspberry Pi running setBfree (see README.md); the host tests run on every build.**
 
 ## Build
 ```
@@ -12,8 +12,8 @@ tests/run_host.sh               # build/host/dinghy.wav + screen PNGs, no FM-1 n
 **Identity and version.** This firmware's package identity is `FM-1_953` (`IDENT` in `tools/build.py`), the same for every version: the
 FM-1 Firmware Hub takes the name and the version from this repository and its releases and only needs an identity no other firmware uses
 (Dinghy itself is `FM-1_99N`; the 95N family is used by other firmwares too, 951, 952 and 958: check the hub's list before you change it).
-The version is on the screen, top left: `B3 ORGAN v0.1` for a release (`./build.sh --release 0.1`,
-or a tag `v0.1` on GitHub: Actions builds `b3organ-0.1.fwsc` and attaches it to the release), `B3 ORGAN vd8362` for any other build:
+The version is on the screen, top left: `B3 ORGAN v0.2` for a release (`./build.sh --release 0.2`,
+or a tag `v0.2` on GitHub: Actions builds `b3organ-0.2.fwsc` and attaches it to the release), `B3 ORGAN vd8362` for any other build:
 `d` plus the first four hex digits of the commit it was built from (on GitHub: the commit of the run you downloaded it from).
 
 ## Controls
@@ -59,6 +59,18 @@ all keys are up. Level and decay match setBfree's tone generator (`tests/organ_t
 The percussion's click is setBfree's too: the first difference also takes the key's attack envelope (a bouncing one, see the key click), so the
 wheels' attack comes out as a high-frequency click; the engine adds that term while a wheel's percussion level changes (the first 128 samples
 of a key). Measured against the Raspberry Pi (F4, percussion alone, 3rd): the click was 8 dB too weak before, now it is within about 1 dB.
+
+## Overdrive
+setBfree's preamp (`b_overdrive/overdrive.c`) in integers (`firmware/src/organ_od.h`): input gain 3.57, a sag that lowers the bias with the level,
+an 8-tap interpolation filter, the transfer curve 1 / (1 + x^2) (a 1025-entry table, `OD_T` in `organ_tab.h`) around a bias between a bass
+filter before and one after it, global negative feedback, and the 33-tap decimation filter, output gain 0.88. About 20 multiplications per
+sample, no division. KNOB 1 / CC 93 select setBfree's `overdrive.character` in nine steps (0, 16, 32, 48, 64, 79, 95, 111, 127); the
+character sets the two bass filters, so the level is not monotonic: it falls from step 0 to step 2 and rises after. Overdrive off bypasses
+the model. A soft clip with a gain stood here until 0.1; it was uniform in level and did not match the Raspberry Pi.
+Measured against the Pi (F4 and the chord F4 A4 C5, each step against "off"): within 0.6 dB on a note and 1.4 dB on the chord.
+`tests/organ_test.c` compares the integer code with the same model in double precision (41 dB signal to error). The input and output gain
+(setBfree's `overdrive.inputgain` and `outputgain`) are fixed at its defaults. What is not compared: the harmonics of a single note at
+steps 4 to 6 (the stopped Leslie's random angle hides them).
 
 ## Reverb and Leslie
 Chain as in setBfree: tone generator, overdrive, **reverb**, **Leslie**. The reverb is setBfree's (four combs, three all-passes,
