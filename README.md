@@ -64,6 +64,11 @@ recording to recording by up to 10 dB or more, and the Raspberry Pi has more ene
 | **EDIT** | Overdrive on / off |
 | **ENV**, **SEL**, **ARP**, **SEQ** | Percussion on / off, 2nd / 3rd, fast / slow, soft / normal |
 
+**Battery:** the cell at the bottom right of the screen has four bars (the factory firmware's three steps, 531 / 561 / 591 on the 10-bit
+reading of the battery divider, and a fourth at 621; about 3.4 / 3.6 / 3.8 / 4.0 V). One bar is red, an empty cell has a red outline. A bolt in its
+place means a USB host has the FM-1 (a charger alone cannot be told from the battery: the FM-1 has no charger line). It is read every 2 s
+and smoothed over about 8 s; a bar comes back only 3 counts above its step.
+
 The top right of the screen shows `W <wheels sounding>  <peak µs>`: the load of the audio block. It must stay under
 5800 µs; with everything on it is around 4000 µs on an FM-1. The whole list of MIDI controllers, programs and the details
 of each part are in **[README_ORGAN.md](README_ORGAN.md)**.

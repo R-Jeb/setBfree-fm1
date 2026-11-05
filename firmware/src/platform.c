@@ -262,11 +262,50 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
 }
 extern void isr_alnk0(void);
 
-/* ---- the main loop's duties: watchdog, USB, the installer's update request, the MASTER knob */
+/* ---- the battery: SARADC channel 3 on PB1 behind a 1:2 divider (the full scale is 3.3 V: raw x 6.45 mV is the cell, a full one reads about
+ * 650), every 2 s from the main loop (four conversions, the first dropped), smoothed over about 8 s. Bars as the factory firmware has them:
+ * under 531 empty, 531 / 561 / 591 one, two, three (about 3.4 / 3.6 / 3.8 V), 621 a fourth (about 4.0 V, mine). The FM-1 has no charger line:
+ * "on USB" is a host that has configured it and is not asleep, a charger alone looks like the battery. */
+#define BATT_BARS 4u
+static const uint16_t BATT_TH[BATT_BARS] = {531, 561, 591, 621};
+static uint8_t batt_bars_now = BATT_BARS;       /* 0 .. BATT_BARS until the first reading */
+static uint16_t batt_raw_now;                   /* smoothed raw reading, 0 until the first */
+static void battery_poll(uint32_t ms)
+{
+    static uint32_t t_next;
+    static int32_t avg16;                       /* raw x 16 */
+    int32_t a, sum = 0, n = 0, i;
+    uint32_t bars = batt_bars_now, k;
+    if ((int32_t)(ms - t_next) < 0)
+        return;
+    t_next = ms + 2000u;
+    (void)fm1_adc_read(FM1_ADC_BATT);           /* the first one after a channel change is not to be trusted */
+    for (i = 0; i < 4; i++)
+        if ((a = fm1_adc_read(FM1_ADC_BATT)) >= 0) { sum += a; n++; }
+    if (!n)
+        return;
+    a = sum / n;
+    avg16 = avg16 ? avg16 + (a * 16 - avg16) / 4 : a * 16;
+    batt_raw_now = (uint16_t)(avg16 / 16);
+    for (k = 0; k < BATT_BARS; k++) {           /* up only 3 counts above the step: a note's sag and recovery do not flicker it */
+        if (batt_raw_now >= BATT_TH[k] + (bars > k ? 0u : 3u))
+            continue;
+        break;
+    }
+    bars = k;
+    batt_bars_now = (uint8_t)bars;
+}
+static uint32_t battery_state(void)             /* bars 0 .. 4, plus 8 when a USB host has the FM-1 */
+{
+    return batt_bars_now | ((usb.config && !usb.suspended) ? 8u : 0u);
+}
+
+/* ---- the main loop's duties: watchdog, USB, the installer's update request, the MASTER knob, the battery */
 static void platform_poll(void)
 {
     static int32_t knob_avg = 512 * 16;
     int32_t a;
+    battery_poll(fm1_ms);
     fm1_wdt_feed();
     usb_retry(fm1_ms);
     ota_service();

@@ -165,6 +165,10 @@ static void write_wav(void)
     printf("sound  -> %s (%u frames)\n", name, wav_n);
 }
 
+#ifndef HOST_BATT
+#define HOST_BATT 4u                           /* the fake battery: bars 0 .. 4, + 8 for a USB host (cc -DHOST_BATT=11) */
+#endif
+static uint32_t battery_state(void) { return HOST_BATT; }
 static void platform_poll(void)                 /* one call = one millisecond */
 {
     static uint32_t step, shot, owed, frame;
