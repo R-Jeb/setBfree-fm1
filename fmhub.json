@@ -4,6 +4,7 @@
   "kinds": [
     "synth"
   ],
+  "play": "https://r-jeb.github.io/setBfree-fm1/play/",
   "cheat": "https://github.com/R-Jeb/setBfree-fm1#controls",
   "image": "docs/screen.png"
 }
