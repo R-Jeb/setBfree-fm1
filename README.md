@@ -12,6 +12,8 @@ Leslie, its factory programs (`default.pgm`) and its MIDI controller numbers. Wh
 the real thing (setBfree on a computer, or a recording of its LV2 plug-in), it was; the host tests check them on every
 build.
 
+**Try it in the browser:** [r-jeb.github.io/setBfree-fm1/play](https://r-jeb.github.io/setBfree-fm1/play/), the same engine as WebAssembly (`web/`, rebuilt with `web/build.sh`; `docs/play/index.html` is a copy of `web/index.html`).
+
 > **Status:** 0.2, tested on an FM-1 by one person. Please report what sounds different from setBfree.
 
 ## What you get
