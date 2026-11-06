@@ -1,4 +1,4 @@
-<title>B3 Orgel Emulator</title>
+<title>B3 Organ Emulator</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500&family=DM+Mono:wght@400;500&display=swap">
 <style>
@@ -116,62 +116,62 @@ button { font: inherit; color: inherit; cursor: pointer; }
 <div class="wrap">
   <div class="top">
     <div>
-      <h1>B3 Orgel</h1>
-      <p class="sub">Tonewheel-Orgel für den M-VAVE FM-1, hier im Browser.</p>
+      <h1>B3 Organ</h1>
+      <p class="sub">Tonewheel organ for the M-VAVE FM-1, here in the browser.</p>
     </div>
     <div class="power">
-      <button class="btn-main" id="power" aria-pressed="false">Klang starten</button>
-      <span class="stat" id="stat">Audio aus</span>
+      <button class="btn-main" id="power" aria-pressed="false">Start sound</button>
+      <span class="stat" id="stat">Audio off</span>
     </div>
   </div>
 
-  <section class="panel" aria-label="Zugriegel">
+  <section class="panel" aria-label="Drawbars">
     <div class="dbhead">
-      <label class="label" for="prog">Programm (setBfree)</label>
-      <select id="prog" class="sel" aria-label="Programm"></select>
+      <label class="label" for="prog">Program (setBfree)</label>
+      <select id="prog" class="sel" aria-label="Program"></select>
     </div>
     <div class="bars" id="bars"></div>
   </section>
 
-  <section class="panel ctl" aria-label="Effekte">
+  <section class="panel ctl" aria-label="Effects">
     <div class="grp"><span class="label">Vibrato / Chorus</span>
-      <div class="seg" id="vib" role="group" aria-label="Vibrato"><button id="vup" aria-pressed="false">An</button></div>
+      <div class="seg" id="vib" role="group" aria-label="Vibrato"><button id="vup" aria-pressed="false">On</button></div>
     </div>
     <div class="grp"><span class="label">Leslie</span><div class="seg" id="les" role="group" aria-label="Leslie"></div></div>
     <div class="grp"><span class="label">Percussion</span>
       <div class="seg" id="perc" role="group" aria-label="Percussion">
-        <button data-id="11" aria-pressed="false">An</button>
+        <button data-id="11" aria-pressed="false">On</button>
         <button data-id="12" aria-pressed="false">3.</button>
-        <button data-id="13" aria-pressed="false">Schnell</button>
-        <button data-id="14" aria-pressed="false">Leise</button>
+        <button data-id="13" aria-pressed="false">Fast</button>
+        <button data-id="14" aria-pressed="false">Soft</button>
       </div>
     </div>
     <div class="grp"><span class="label">Overdrive</span>
-      <div class="seg"><button id="odon" aria-pressed="false">An</button></div>
-      <div class="slider"><input type="range" id="drv" min="0" max="8" step="1" value="3" aria-label="Overdrive-Stärke"><output id="drvo">3</output></div>
+      <div class="seg"><button id="odon" aria-pressed="false">On</button></div>
+      <div class="slider"><input type="range" id="drv" min="0" max="8" step="1" value="3" aria-label="Overdrive amount"><output id="drvo">3</output></div>
     </div>
-    <div class="grp"><span class="label">Hall</span><div class="slider"><input type="range" id="rev" min="0" max="127" step="1" value="12" aria-label="Hall (Reverb)"><output id="revo">12</output></div></div>
-    <div class="grp"><span class="label">Schweller</span><div class="slider"><input type="range" id="swl" min="0" max="127" step="1" value="127" aria-label="Schweller"><output id="swlo">127</output></div></div>
-    <div class="grp"><span class="label">Lautstärke</span><div class="slider"><input type="range" id="vol" min="0" max="100" step="1" value="70" aria-label="Lautstärke"><output id="volo">70</output></div></div>
+    <div class="grp"><span class="label">Reverb</span><div class="slider"><input type="range" id="rev" min="0" max="127" step="1" value="12" aria-label="Reverb"><output id="revo">12</output></div></div>
+    <div class="grp"><span class="label">Swell</span><div class="slider"><input type="range" id="swl" min="0" max="127" step="1" value="127" aria-label="Swell"><output id="swlo">127</output></div></div>
+    <div class="grp"><span class="label">Volume</span><div class="slider"><input type="range" id="vol" min="0" max="100" step="1" value="70" aria-label="Volume"><output id="volo">70</output></div></div>
   </section>
 
-  <section class="panel" aria-label="Klaviatur">
+  <section class="panel" aria-label="Keyboard">
     <div class="kbbar">
-      <span class="label">Klaviatur <span id="range" class="stat"></span></span>
-      <div class="seg" role="group" aria-label="Oktave">
-        <button id="octd" aria-label="Oktave tiefer">Okt −</button>
-        <button id="octu" aria-label="Oktave höher">Okt +</button>
+      <span class="label">Keyboard <span id="range" class="stat"></span></span>
+      <div class="seg" role="group" aria-label="Octave">
+        <button id="octd" aria-label="Octave down">Oct −</button>
+        <button id="octu" aria-label="Octave up">Oct +</button>
       </div>
     </div>
     <div class="kb" id="kb"></div>
-    <p class="hint">Computertastatur: die mittlere Tastenreihe spielt die weißen, die obere Reihe die schwarzen Tasten, beginnend mit A am linken C. Die Tasten links unten (Y und X auf deutscher Tastatur) wechseln die Oktave. USB-MIDI-Keyboards werden erkannt, wenn der Browser es erlaubt. Es gelten die Standard-Controller von setBfree (CC 1, 7, 11, 31, 64 bis 66, 70 bis 78, 80 bis 83, 92, 93, 95) und Programmwechsel.</p>
+    <p class="hint">Computer keyboard: the middle row plays the white keys, the row above the black keys, starting with A at the left C. Z and X (the bottom left keys: Y and X on a German keyboard) change the octave. USB MIDI keyboards are picked up if the browser allows it. setBfree's default controllers apply (CC 1, 7, 11, 31, 64 to 66, 70 to 78, 80 to 83, 92, 93, 95) and program change.</p>
   </section>
 
   <section class="panel" aria-label="Signal">
-    <canvas class="scope" id="scope" width="800" height="108" aria-label="Signalverlauf"></canvas>
+    <canvas class="scope" id="scope" width="800" height="108" aria-label="Waveform"></canvas>
   </section>
 
-  <p class="note">Diese Seite führt dieselbe Rechenroutine aus wie die FM-1-Firmware (<code>organ_core.h</code>, als WebAssembly gebaut). Der Klang entspricht damit dem der Firmware, abgesehen von Lautsprecher und Ausgangsstufe des FM-1. Ob der FM-1-Prozessor die Rechenlast schafft, zeigt nur das Gerät selbst.</p>
+  <p class="note">This page runs the same code as the FM-1 firmware (<code>organ_core.h</code>, built as WebAssembly), so it sounds like the firmware, apart from the FM-1's speaker and output stage. Whether the FM-1's processor can carry the load only the device itself shows.</p>
 </div>
 
 <script>
@@ -180,7 +180,7 @@ const WASM_B64 = "/*WASM_B64*/";
 const FOOT = ["16", "5⅓", "8", "4", "2⅔", "2", "1⅗", "1⅓", "1"];
 const CAP = ["brown", "brown", "white", "white", "black", "white", "black", "black", "white"];
 const VIB = ["V1", "C1", "V2", "C2", "V3", "C3"];                  /* setBfree's vibrato knob positions */
-const LES = ["Stop", "Langsam", "Schnell"];
+const LES = ["Stop", "Slow", "Fast"];
 const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const BLACK = [1, 3, 6, 8, 10];
 const KEYMAP = ["KeyA","KeyW","KeyS","KeyE","KeyD","KeyF","KeyT","KeyG","KeyY","KeyH","KeyU","KeyJ","KeyK","KeyO","KeyL","KeyP","Semicolon","Quote"];
@@ -201,7 +201,7 @@ function buildBars() {
     const bar = document.createElement("div"); bar.className = "bar";
     const track = document.createElement("div"); track.className = "track";
     track.tabIndex = 0; track.setAttribute("role", "slider");
-    track.setAttribute("aria-label", "Zugriegel " + f + " Fuß"); track.setAttribute("aria-valuemin", 0); track.setAttribute("aria-valuemax", 8);
+    track.setAttribute("aria-label", "Drawbar " + f + " foot"); track.setAttribute("aria-valuemin", 0); track.setAttribute("aria-valuemax", 8);
     for (let n = 0; n <= 8; n++) { const nt = document.createElement("div"); nt.className = "notch"; track.appendChild(nt); }
     const cap = document.createElement("div"); cap.className = "cap " + CAP[i]; track.appendChild(cap);
     const ft = document.createElement("div"); ft.className = "ft"; ft.textContent = f + "′";
@@ -237,7 +237,7 @@ function buildSwitches() {
   $("rev").oninput = () => put(20, +$("rev").value);
   $("vol").oninput = () => { vol = +$("vol").value; $("volo").textContent = vol; if (gainNode) gainNode.gain.value = (vol / 100) * (vol / 100); };
   const sel = $("prog"), reg = document.createElement("optgroup"), sw = document.createElement("optgroup");
-  reg.label = "Registrierungen"; sw.label = "Schalter-Programme";
+  reg.label = "Registrations"; sw.label = "Switch programs";
   for (let n = 1; n < 128; n++) {
     const name = cstr(ex.organ_program_name(n)); if (!name || !ex.organ_program_has_effect(n)) continue;
     const o = document.createElement("option"); o.value = n; o.textContent = n + "  " + name;
@@ -285,7 +285,7 @@ function buildKeys() {
     k.style.left = ((wi + 1) * w - w * 0.3) + "%"; k.style.width = (w * 0.6) + "%";
     kb.appendChild(k); keyEls.set(n, k);
   });
-  $("range").textContent = noteName(base) + " bis " + noteName(base + 23);
+  $("range").textContent = noteName(base) + " to " + noteName(base + 23);
   down.forEach((c, n) => paintKey(n));
 }
 function paintKey(n) { const k = keyEls.get(n); if (k) k.classList.toggle("on", down.has(n)); }
@@ -368,14 +368,14 @@ async function ensureAudio() {
     };
     node.connect(gainNode); gainNode.connect(analyser); gainNode.connect(ctx.destination);
     if (ctx.state !== "running") await ctx.resume();
-    $("power").textContent = "Klang aus"; pressed($("power"), true);
+    $("power").textContent = "Sound off"; pressed($("power"), true);
     initMidi();
-  } catch (err) { $("stat").textContent = "Audio nicht verfügbar: " + (err && err.message ? err.message : err); }
+  } catch (err) { $("stat").textContent = "Audio not available: " + (err && err.message ? err.message : err); }
 }
 $("power").onclick = async () => {
   if (!ctx) { await ensureAudio(); return; }
-  if (ctx.state === "running") { await ctx.suspend(); $("power").textContent = "Klang starten"; pressed($("power"), false); }
-  else { await ctx.resume(); $("power").textContent = "Klang aus"; pressed($("power"), true); }
+  if (ctx.state === "running") { await ctx.suspend(); $("power").textContent = "Start sound"; pressed($("power"), false); }
+  else { await ctx.resume(); $("power").textContent = "Sound off"; pressed($("power"), true); }
 };
 
 /* ---- scope and status */
@@ -394,13 +394,13 @@ function frame() {
   }
   requestAnimationFrame(frame);
 }
-setInterval(() => { if (!ex) return; render(); if (ctx) $("stat").textContent = ctx.state === "running" ? "Tonräder: " + ex.organ_wheels() + " von 91" : "Pause"; }, 100);
+setInterval(() => { if (!ex) return; render(); if (ctx) $("stat").textContent = ctx.state === "running" ? "Wheels: " + ex.organ_wheels() + " of 91" : "Paused"; }, 100);
 
 (async function start() {
   try {
     const bin = Uint8Array.from(atob(WASM_B64), (c) => c.charCodeAt(0));
     ex = (await WebAssembly.instantiate(bin, {})).instance.exports; ex.organ_init(12345);
-  } catch (err) { $("stat").textContent = "WebAssembly nicht verfügbar: " + (err && err.message ? err.message : err); return; }
+  } catch (err) { $("stat").textContent = "WebAssembly not available: " + (err && err.message ? err.message : err); return; }
   buildBars(); buildSwitches(); buildKeys(); render(); frame();
   initMidi();                                   /* some browsers ask for MIDI access at once, others only after a click */
 })();
