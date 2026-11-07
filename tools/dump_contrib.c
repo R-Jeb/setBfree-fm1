@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Dumps setBfree's compiled key contribution matrix (tonewheel taper + crosstalk/leakage, default model),
- * upper manual: one line "key bus wheel gain" (wheel 1-based). Output: data/setbfree-contrib.txt.
+ * upper manual (argument 0), lower (1) or pedals (2): one line "key bus wheel gain" (wheel 1-based). Output: data/setbfree-contrib.txt.
  * Build against a setBfree checkout (tonegen.c is linked in, everything else it needs is stubbed here):
  *   S=<setBfree>/src; gcc -O1 -I$S -I<setBfree> -I<setBfree>/b_overdrive -I<setBfree>/b_reverb -I<setBfree>/b_whirl \
  *       -DHAVE_CONFIG_H tools/dump_contrib.c $S/tonegen.c -lm -o dump_contrib && ./dump_contrib > data/setbfree-contrib.txt */
@@ -37,7 +37,14 @@ void setConfigDouble(double*v,ConfigContext*c){}
 #include "global_inst.h"
 int main(int argc,char**argv){
   struct b_tonegen*t=allocTonegen();initToneGenerator(t,NULL);
+  int what = argc > 1 ? atoi(argv[1]) : 0;   /* 0 upper (default), 1 lower, 2 pedals (key 0..31 = setBfree key 128..159, bus 0..8) */
   printf("floor %g min %g\n",t->contributionFloorLevel,t->contributionMinLevel);
-  for(int k=0;k<61;k++){for(ListElement*l=t->keyContrib[k];l;l=l->next){
-    if(l->u.ssf.sb<9)printf("%d %d %d %.6f\n",k,l->u.ssf.sb,l->u.ssf.sa,l->u.ssf.fc);}}
+  if(what==2){
+    for(int k=0;k<32;k++){for(ListElement*l=t->keyContrib[128+k];l;l=l->next)
+      if(l->u.ssf.sb>=18&&l->u.ssf.sb<27)printf("%d %d %d %.6f\n",k,l->u.ssf.sb-18,l->u.ssf.sa,l->u.ssf.fc);}
+  } else {
+    int base = what==1 ? 64 : 0, bus0 = what==1 ? 9 : 0;
+    for(int k=0;k<61;k++){for(ListElement*l=t->keyContrib[base+k];l;l=l->next){
+      if(l->u.ssf.sb>=bus0&&l->u.ssf.sb<bus0+9)printf("%d %d %d %.6f\n",k,l->u.ssf.sb-bus0,l->u.ssf.sa,l->u.ssf.fc);}}
+  }
   return 0;}

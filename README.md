@@ -29,7 +29,8 @@ build.
 | **Reverb** | setBfree's reverb (combs and all-passes), amount on KNOB 4 or CC 91; impulse response within -45 dB of setBfree's. |
 | **Leslie** | setBfree's rotary model: horn and drum with Doppler, horn directivity, reflections, stop / slow / fast with acceleration and braking; the stopped state matches setBfree's to about -40 dB. |
 | **Programs** | All 110 programs of setBfree's `default.pgm` (registrations and switch settings), by the PRESETS knob or MIDI program change. |
-| **MIDI** | USB and the TRS jack, any channel, setBfree's default controller numbers (drawbars 70 to 78, swell 7 / 11, Leslie 1 / 64, vibrato 31 / 92, percussion 66 / 80 to 83, overdrive 65 / 93, reverb 91). |
+| **Manuals** | Upper (MIDI channel 1, with percussion), lower (channel 2, its own drawbars and vibrato switch) and pedal (channel 3, 16' and 8' only, no vibrato or percussion); setBfree's wiring and tapering for all three. |
+| **MIDI** | USB and the TRS jack, channels 1 to 3 as above (other channels play the upper manual), setBfree's default controller numbers (drawbars 70 to 78 follow the channel, swell 7 / 11, Leslie 1 / 64, vibrato 31 / 92, percussion 66 / 80 to 83, overdrive 65 / 93, reverb 91). |
 | **USB audio, updates, rescue** | The platform underneath (Felucca, SLOOP, Dinghy): updates over USB through the [FM-1 Firmware Hub](https://fm1.designburgapps.com), a USB rescue (hold **OCT-** while switching on), a crash screen, and the FM-1 as a stereo USB audio input for recording. |
 
 ## Measured against a Raspberry Pi running setBfree
@@ -56,17 +57,24 @@ recording to recording by up to 10 dB or more, and the Raspberry Pi has more ene
 
 | Control | What it does |
 | --- | --- |
-| Keys F3 to G5, **OCT-** / **OCT+** | Play; shift the octave |
-| **SELECT** knob / **ALGORITHM** knob | Choose a drawbar / set its level 0 to 8 |
-| **PRESETS** knob | Step through setBfree's registrations (e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith) |
-| **KNOB 1** | Overdrive amount |
+| Keys F3 to G5, **OCT-** / **OCT+** | Play the manual **REC** chose; shift the octave |
+| **REC** | The FM-1's own keys play the upper manual, the lower manual or the pedal (shown as `KEYS UPPER` and so on on every screen) |
+| **KNOB 1** | Screen: 1 upper, 2 lower, 3 pedal |
+| **SELECT** knob / **ALGORITHM** knob | Choose a drawbar / set its level 0 to 8, on the manual of the screen (the pedal has two: 16' and 8') |
+| **PRESETS** knob | Step through setBfree's registrations (e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith); they set the upper manual |
 | **KNOB 2** | Vibrato / chorus type V1, C1, V2, C2, V3, C3 |
-| **KNOB 3** | Leslie stop / slow / fast |
+| **KNOB 3** | Overdrive amount (0 to 8) |
 | **KNOB 4** | Reverb amount (0 to 127) |
-| **FX** | Vibrato on / off |
+| **FX** | Vibrato / chorus on or off for the manual of the screen (upper on screen 1, lower on screen 2) |
 | **LFO** | Leslie: stop, slow, fast |
-| **EDIT** | Overdrive on / off |
-| **ENV**, **SEL**, **ARP**, **SEQ** | Percussion on / off, 2nd / 3rd, fast / slow, soft / normal |
+| **SEL** | Overdrive on / off |
+| **ENV**, **ARP**, **SEQ**, **PLAY** | Percussion on / off, 2nd / 3rd, fast / slow, soft / normal (screen 1: percussion belongs to the upper manual) |
+| **EDIT**, **SAVE** | Free |
+
+The screen has three pages, each with the drawbars of its manual as bars and the other two manuals' values above and below; the switches, the
+knob values, the program and the battery are on all three. The load of the audio block (`W` wheels sounding, µs now, and the peak since
+switching on) is on page 3. Vibrato / chorus is on the upper manual, the lower manual or both, through one scanner as in setBfree; the
+pedal and the percussion never go through it.
 
 **Battery:** the cell at the bottom right of the screen has four bars (the factory firmware's three steps, 531 / 561 / 591 on the 10-bit
 reading of the battery divider, and a fourth at 621; about 3.4 / 3.6 / 3.8 / 4.0 V). One bar is red, an empty cell has a red outline. A bolt in its

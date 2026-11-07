@@ -29,7 +29,8 @@ static struct { uint32_t notes, buttons; } fm1_in;
 static uint32_t host_edges;
 static uint32_t fm1_input_edges(uint32_t *released) { uint32_t b = host_edges; host_edges = 0; *released = 0; return b; }
 static uint32_t fm1_input_note_edges(void) { return 0; }   /* (the script sets fm1_in.notes) */
-static int32_t fm1_enc_take(uint32_t e) { (void)e; return 0; }
+static int32_t host_enc[8];                     /* script: "T enc ID DELTA" turns an encoder (ENC_* of platform.c) */
+static int32_t fm1_enc_take(uint32_t e) { int32_t d = host_enc[e & 7u]; host_enc[e & 7u] = 0; return d; }
 static void fm1_led_key(uint32_t id, int on) { (void)id; (void)on; }
 
 /* the screen: 240 x 240 RGB565, as the ST7789 gets it (gfx.c sends the bytes swapped) */
@@ -52,7 +53,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
                 fb[(y + j) * 240u + x + i] = (uint16_t)(c >> 8 | c << 8);
             }
 }
-#define CV_MAX (240u * 64u)
+#define CV_MAX (240u * 124u)                  /* as the firmware's graph strip */
 #include "gfx.c"
 
 static uint8_t host_store[256 + 4];
@@ -85,10 +86,10 @@ static void app_audio(int32_t *out, uint32_t n);
 static void app_main(void);
 
 /* the script: at t ms, keys down (bit k = key k, 0 = F3), a button edge, a MIDI message. A script file (the second
- * argument) replaces it, a line each: "T keys MASK" (hex or decimal), "T btn ID", "T midi ST D1 D2", "T end" */
-typedef struct { uint32_t t, keys; int btn; uint8_t st, d1, d2; } host_ev_t;
+ * argument) replaces it, a line each: "T keys MASK" (hex or decimal), "T btn ID", "T midi ST D1 D2", "T enc ID DELTA", "T shot" (a screen as PNG-to-be), "T end" */
+typedef struct { uint32_t t, keys; int btn; uint8_t st, d1, d2; int enc, delta, shot; } host_ev_t;
 static const host_ev_t SCRIPT0[] = {
-    {200, 1u << 7, -1, 0, 0, 0},                                /* C4 */
+    {200, 1u << 7, -1, 0, 0, 0, -1, 0, 0},                                /* C4 */
     {700, 1u << 7 | 1u << 11 | 1u << 14, -1, 0, 0, 0},          /* + E4 G4: a chord */
     {1500, 0, -1, 0, 0, 0},
     {1700, 0, -1, 0x90, 81, 120},                               /* MIDI in: A5 */
@@ -109,12 +110,14 @@ static void read_script(const char *path)
     uint32_t n = 0;
     if (!f) { perror(path); exit(1); }
     while (fgets(line, sizeof line, f) && n < 4096u) {
-        host_ev_t e = {0, 0, -1, 0, 0, 0};
+        host_ev_t e = {0, 0, -1, 0, 0, 0, -1, 0, 0};
         unsigned a = 0, b = 0, c = 0;
         if (line[0] == '#' || sscanf(line, "%u %15s", &e.t, what) != 2) continue;
         if (!strcmp(what, "end")) { end_ms = e.t; continue; }
         if (!strcmp(what, "keys")) { sscanf(line, "%*u %*s %i", (int *)&e.keys); }
         else if (!strcmp(what, "btn")) { sscanf(line, "%*u %*s %d", &e.btn); }
+        else if (!strcmp(what, "enc")) { sscanf(line, "%*u %*s %d %d", &e.enc, &e.delta); }
+        else if (!strcmp(what, "shot")) { e.shot = 1; }
         else if (!strcmp(what, "midi")) { sscanf(line, "%*u %*s %i %u %u", (int *)&a, &b, &c); e.st = (uint8_t)a; e.d1 = (uint8_t)b; e.d2 = (uint8_t)c; }
         else continue;
         ev[n++] = e;
@@ -180,6 +183,10 @@ static void platform_poll(void)                 /* one call = one millisecond */
             mq_w++;
         } else if (script[step].btn >= 0)
             host_edges |= 1u << script[step].btn;
+        else if (script[step].enc > 0 || script[step].delta)
+            host_enc[(uint32_t)script[step].enc & 7u] += script[step].delta;
+        else if (script[step].shot)
+            write_ppm(fm1_ms);
         else
             fm1_in.notes = script[step].keys;
         step++;

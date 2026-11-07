@@ -19,17 +19,19 @@ or a tag `v0.2` on GitHub: Actions builds `b3organ-0.2.fwsc` and attaches it to 
 ## Controls
 keys (F3..G5, OCT-/OCT+) | SELECT drawbar, ALGORITHM level 0..8 | PRESETS steps through setBfree's registrations
 (default.pgm: 57 of them, e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith) |
-KNOB1 overdrive amount | KNOB2 vibrato V1 C1 V2 C2 V3 C3 | KNOB3 Leslie stop/slow/fast | KNOB4 reverb amount (0..127) |
-FX vibrato on/off | LFO Leslie cycle | EDIT overdrive on/off | ENV percussion | SEL 2nd/3rd | ARP fast/slow | SEQ soft/normal.
+KNOB1 screen (upper, lower, pedal) | KNOB2 vibrato V1 C1 V2 C2 V3 C3 | KNOB3 overdrive amount 0..8 | KNOB4 reverb amount (0..127) |
+FX vibrato on/off of the screen's manual | LFO Leslie cycle | SEL overdrive on/off | REC the FM-1's keys play upper/lower/pedal |
+screen 1 only: ENV percussion | ARP 2nd/3rd | SEQ fast/slow | PLAY soft/normal. EDIT and SAVE are free.
 
-## MIDI (USB and the TRS jack, any channel)
-Notes fold into C2..C7. **Program change** n selects setBfree program n+1 (its `pgm.controller.offset` default), all 110
+## MIDI (USB and the TRS jack)
+Channel 1 plays the upper manual, 2 the lower one, 3 the pedal (setBfree's `midi.upper/lower/pedals.channel` defaults); other channels play
+the upper one. Notes fold into C2..C7 (pedal: C1..G3, MIDI 24 to 55). The drawbars 70..78 follow the channel; the pedal has 16' (70) and 8' (72). **Program change** n selects setBfree program n+1 (its `pgm.controller.offset` default), all 110
 programs of `default.pgm` are in; a program only changes what it names. Programs for the lower manual, pedals, key
-splits are kept but have no effect here (one manual). **Controllers** as setBfree's defaults:
-1 Leslie slow/stop/fast (0..42 slow, 43..85 stop, 86..127 fast), 7 and 11 swell, 31 and 95 vibrato on (upper), 64 rotary toggle, 65 overdrive on,
+splits are kept but have no effect here (programs set the upper manual). **Controllers** as setBfree's defaults:
+1 Leslie slow/stop/fast (0..42 slow, 43..85 stop, 86..127 fast), 7 and 11 swell, 30 vibrato on (lower), 31 (upper), 95 routing (off, lower, upper, both), 64 rotary toggle, 65 overdrive on,
 66 and 80 percussion on, 81 soft, 82 fast, 83 2nd harmonic (64 and up), 92 vibrato knob, 93 overdrive amount, **91 reverb mix** (setBfree's `reverb.mix`, 0..127, default 12),
 70..78 drawbars **inverted as in setBfree** (127 = pushed in, 0 = fully out), 120 and 123 notes off.
-Not used: 30 vibrato lower, 94 convolution. As in setBfree, a program that sets the vibrato knob does not
+Not used: 94 convolution. As in setBfree, a program that sets the vibrato knob does not
 switch vibrato on by itself (FX button, CC 31 or program 50 do).
 
 Regenerate the program table with `python3 tools/gen_programs.py` (reads `data/setbfree-default.pgm`).
@@ -99,6 +101,15 @@ Recordings of the FM-1 and of setBfree on a Raspberry Pi (48 kHz), same notes, o
   recordings, and 2nd against 3rd percussion level by up to 20 dB), and the Raspberry Pi's note has more above 2 kHz (its 12th harmonic at
   4190 Hz is 8 dB louder; not understood yet).
 
+## Manuals
+The 91 wheels are shared, as on the organ: each wheel is computed once and added to two buses, the swell bus and the vibrato bus (setBfree's
+`sgain` and `vgain`), with the levels the manuals' drawbars give it. The lower manual uses the upper one's wiring and tapering (the contribution
+table is the same, checked against setBfree's `keyContrib`), the pedal setBfree's pedal wiring (`data/setbfree-contrib-pedal.txt`, only the 16' and
+8' buses; the 16' sounds the key's own pitch, as in setBfree). The upper and the lower manual go to the scanner if their vibrato switch is on; the
+pedal and the percussion never do (setBfree mixes the swell bus, the scanner's output and the percussion after it). Key compression counts every key
+down, the percussion's single trigger only the upper manual's. A wheel on both buses costs one sine and two products. Measured on the host, 10 + 10 + 4 keys
+with chorus, percussion, overdrive, Leslie and reverb take 6 % more than 10 upper keys; the extra wheels cost more on the FM-1.
+
 ## Not in it (yet)
-Lower manual and pedals, tonewheel waveform colouring, setBfree's equalisation curve.
+Tonewheel waveform colouring, setBfree's equalisation curve, the lower and pedal drawbars in programs, key splits.
 

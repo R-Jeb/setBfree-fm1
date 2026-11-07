@@ -299,6 +299,96 @@ int main(void)
         printf("percussion click: worst error %.1f dB against setBfree's tone generator\n", worst);
         CHECK("percussion click = setBfree (F4, 3rd and 2nd; < 3 dB)", worst < 3.0);
     }
+    {   /* three manuals: the lower one has the upper one's wiring and its own drawbars, the pedal 16' and 8', MIDI channels 1 to 3 */
+        static int32_t out[512];
+        static int32_t rec[2][16384];
+        double lvl[3] = {0, 0, 0};
+        uint32_t m, b, j, i, zc;
+        int ok_route = 1;
+        for (i = 0; i < NB; i++) { P.db[i] = P.dbl[i] = 0; }
+        P.dbp[0] = P.dbp[1] = 0;
+        P.perc = P.vup = P.vlo = P.od = 0; P.les = 0; P.swell = 127; fx_bypass = 1;
+        for (m = 0; m < 3u; m++) {              /* the same drawbar (8') on each manual, the same key (C4): the same level */
+            double e = 0;
+            P.db[2] = (uint8_t)(m == 0 ? 8 : 0); P.dbl[2] = (uint8_t)(m == 1 ? 8 : 0); P.dbp[1] = (uint8_t)(m == 2 ? 8 : 0);
+            pk_lo = pk_hi = mk_lo = mk_hi = pl_lo = pl_hi = ml_lo = ml_hi = pp_k = mp_k = 0;
+            organ_midi_note(m, m == 2u ? 48u : 60u, 1);
+            for (b = 0; b < 200; b++) {
+                memset(out, 0, sizeof out);
+                app_audio(out, 256);
+                if (b >= 100) for (j = 0; j < 256u; j++) e += (double)out[2 * j] * out[2 * j];
+            }
+            organ_midi_note(m, m == 2u ? 48u : 60u, 0);
+            for (b = 0; b < 200; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }
+            lvl[m] = 10 * log10(e / (100.0 * 256.0) / 1073741824.0 + 1e-20);
+        }
+        printf("C4 on 8': upper %.2f dB, lower %.2f dB, pedal (C3 key) %.2f dB\n", lvl[0], lvl[1], lvl[2]);
+        CHECK("the lower manual sounds as the upper one does (same wiring, tapering)", fabs(lvl[0] - lvl[1]) < 0.1);
+        CHECK("the pedal sounds (its 8')", lvl[2] > -60.0 && fabs(lvl[2] - lvl[0]) < 6.0);
+        {   /* the pedal's pitch, as setBfree's wiring has it: the 16' sounds the key's own pitch (MIDI 36 = C2 = 65.4 Hz), the 8' an octave up */
+            static const struct { uint32_t d; double hz; } PD[2] = {{1, 130.81}, {0, 65.41}};
+            double worst = 0;
+            for (m = 0; m < 2u; m++) {
+                P.dbp[0] = P.dbp[1] = 0; P.dbp[PD[m].d] = 8;
+                pk_lo = pk_hi = mk_lo = mk_hi = pl_lo = pl_hi = ml_lo = ml_hi = pp_k = mp_k = 0;
+                organ_midi_note(2, 36, 1);
+                for (b = 0; b < 100; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }
+                for (b = 0; b < 64; b++) {
+                    memset(out, 0, sizeof out);
+                    app_audio(out, 256);
+                    for (j = 0; j < 256u; j++) rec[0][b * 256u + j] = out[2 * j];
+                }
+                organ_midi_note(2, 36, 0);
+                for (b = 0; b < 200; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }
+                zc = 0;
+                for (j = 1; j < 16384u; j++) if (rec[0][j - 1] < 0 && rec[0][j] >= 0) zc++;
+                { double hz = zc * 44100.0 / 16384.0, err = fabs(hz - PD[m].hz) / PD[m].hz; if (err > worst) worst = err; }
+            }
+            printf("pedal pitch: MIDI note 36 at 16' and 8': worst %.1f %% off\n", worst * 100);
+            CHECK("pedal pitch: MIDI note 36 sounds 65.4 Hz (16') and 130.8 Hz (8')", worst < 0.06);
+        }
+        /* the scanner takes the manuals that are routed to it, never the pedal: lower only, vibrato on the upper one: identical to no vibrato */
+        P.db[2] = 0; P.dbl[2] = 8; P.dbp[0] = P.dbp[1] = 0; P.vtype = 5;
+        for (m = 0; m < 3u; m++) {              /* 0: no vibrato, 1: upper only (lower is not routed), 2: lower routed */
+            P.vup = m == 1u; P.vlo = m == 2u;
+            pk_lo = pk_hi = mk_lo = mk_hi = pl_lo = pl_hi = ml_lo = ml_hi = pp_k = mp_k = 0;
+            for (i = 0; i < NW; i++) { wcur[i] = wcurv[i] = 0; wph[i] = i * 7919u; }
+            vwi = 0; vph = 0; memset(vdl, 0, sizeof vdl);
+            organ_midi_note(1, 60, 1);
+            for (b = 0; b < 40; b++) {
+                memset(out, 0, sizeof out);
+                app_audio(out, 256);
+                if (b >= 8) for (j = 0; j < 256u; j++) rec[m == 2u ? 1 : 0][(b - 8) * 256u + j] = out[2 * j];
+                if (m == 1u && b >= 8) for (j = 0; j < 256u; j++) if (rec[0][(b - 8) * 256u + j] != out[2 * j]) ok_route = 0;
+                if (m == 0u && b >= 8) for (j = 0; j < 256u; j++) rec[0][(b - 8) * 256u + j] = out[2 * j];
+            }
+            organ_midi_note(1, 60, 0);
+            for (b = 0; b < 200; b++) { memset(out, 0, sizeof out); app_audio(out, 256); }
+        }
+        { double d = 0; for (j = 0; j < 8192u; j++) d += fabs((double)rec[1][j] - rec[0][j]); printf("lower routed to the scanner changes the sound (mean difference %.0f)\n", d / 8192.0); CHECK("the lower manual follows its own vibrato switch", ok_route && d / 8192.0 > 20.0); }
+        P.vup = P.vlo = 0; fx_bypass = 0;
+        /* MIDI: notes and drawbars by channel */
+        pk_lo = pk_hi = mk_lo = mk_hi = pl_lo = pl_hi = ml_lo = ml_hi = pp_k = mp_k = 0;
+        organ_midi_note(0, 36, 1); organ_midi_note(1, 36, 1); organ_midi_note(2, 36, 1);
+        CHECK("note on channel 1 = upper, 2 = lower, 3 = pedal (36 is C2 / C2 / key 12)", mk_lo == 1u && ml_lo == 1u && mp_k == 1u << 12);
+        organ_midi_note(0, 36, 0); organ_midi_note(1, 36, 0); organ_midi_note(2, 36, 0);
+        CHECK("  and off", !(mk_lo | ml_lo | mp_k));
+        organ_midi_note(2, 20, 1);
+        CHECK("  a pedal note below C1 is folded up an octave to C1 (24 or 32)", mp_k != 0);
+        mp_k = 0;
+        organ_cc_ch(0, 70, 0); organ_cc_ch(1, 70, 0); organ_cc_ch(2, 70, 0); organ_cc_ch(2, 72, 64); organ_cc_ch(2, 71, 0);
+        CHECK("CC 70 on channel 1 = upper 16', channel 2 = lower, channel 3 = pedal 16'", P.db[0] == 8 && P.dbl[0] == 8 && P.dbp[0] == 8);
+        CHECK("  CC 72 on channel 3 = pedal 8' (127 - 64 -> 4), CC 71 = nothing", P.dbp[1] == 4 && P.dbp[0] == 8);
+        organ_cc_ch(0, 30, 127); organ_cc_ch(0, 31, 0);
+        CHECK("CC 30 = vibrato lower, 31 = upper", P.vlo == 1 && P.vup == 0);
+        organ_cc_ch(0, 95, 96);
+        CHECK("CC 95 = 96: both", P.vlo == 1 && P.vup == 1);
+        organ_cc_ch(0, 95, 32);
+        CHECK("CC 95 = 32: lower only", P.vlo == 1 && P.vup == 0);
+        for (i = 0; i < NB; i++) { P.db[i] = 0; P.dbl[i] = 0; }
+        P.vup = P.vlo = 0;
+        organ_program(5u);
+    }
     {   /* the overdrive is setBfree's preamp (b_overdrive/overdrive.c): the same model in double precision, a three-tone signal, three characters */
         static const double CF[8] = {0.00127616566, 0.00497944288, 0.0142455412, 0.14084346, 0.464444974, 0.0142455412, 0.00497944288, 0.00127616566};
         static const double AF[8] = {0.204190232, -0.0633467727, 0.0327789369, -0.0185333957, 0.0103064728, -0.00532702988, 0.00249628401, -0.00122011836};
