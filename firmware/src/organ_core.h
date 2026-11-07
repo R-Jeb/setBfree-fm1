@@ -22,8 +22,14 @@ static volatile struct {
     uint8_t od, drv;                            /* overdrive on, and how hard 0..8 */
     uint8_t swell;                              /* 0..127 (CC 7 / CC 11) */
     uint8_t pgm;                                /* the program last selected (setBfree numbering), 0 none */
-} P = {{8, 8, 8, 0, 0, 0, 0, 0, 0}, 0, 0, 0, 1, 0, 0, 0, 12, 0, 3, 127, 0};
-static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi;   /* keys held: the panel's, and MIDI's (bit k, k = 0..60) */
+    uint8_t dbl[NB];                            /* the lower manual's drawbars (MIDI channel 2) */
+    uint8_t dbp[2];                             /* the pedal's: 16' and 8' (MIDI channel 3) */
+    uint8_t vlo;                                /* vibrato / chorus on the lower manual (the upper one is vup) */
+    uint8_t keys;                               /* the FM-1's own keys play: 0 upper, 1 lower, 2 pedal */
+} P = {{8, 8, 8, 0, 0, 0, 0, 0, 0}, 0, 0, 0, 1, 0, 0, 0, 12, 0, 3, 127, 0, {8, 3, 8, 0, 0, 0, 0, 0, 0}, {8, 6}, 0, 0};
+/* keys held (bit k): the upper manual (k = 0..60, C2..C7) from the panel and from MIDI channel 1, the lower one (the same keys) from the
+ * panel and channel 2, the pedal (k = 0..31, C1..G3) from the panel and channel 3 */
+static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi, pl_lo, pl_hi, ml_lo, ml_hi, pp_k, mp_k;
 static volatile uint32_t load_us, wheels_on;
 static volatile uint8_t fx_bypass;              /* tests: skip the reverb and the Leslie (the tone generator alone, in mono) */    /* the last block: render time, wheels sounding */
 
@@ -37,9 +43,10 @@ static volatile uint8_t fx_bypass;              /* tests: skip the reverb and th
 #define VIB_INC 706089u                         /* 7.25 Hz: f * 2^32 / 44100 */
 
 static uint32_t wph[NW];                        /* tonewheel phases: they turn all the time, as on the organ */
-static int32_t wcur[NW], wtgt[NW];              /* level of each wheel on the bus, Q10 (1024 = one drawbar at 8) */
+static int32_t wcur[NW], wtgt[NW];              /* level of each wheel on the direct bus (setBfree's swell bus), Q10 (1024 = one drawbar at 8) */
+static int32_t wcurv[NW], wtgtv[NW];            /* and on the vibrato bus: what goes through the scanner */
 static int32_t wpc[NW], wpt[NW];                /* the percussion's share of it before the high-pass (Q10), now and next: its attack is differentiated too */
-static int32_t acc[256];
+static int32_t acc[256], accv[256];             /* direct and vibrato bus */
 static int32_t kcl = 4096 << 4;                 /* key compression, now: Q16 */
 static int32_t vdl[256];                        /* scanner delay line */
 static uint32_t vwi, vph;
@@ -56,26 +63,31 @@ static void app_audio(int32_t *out, uint32_t n)
      * here in samples of 44.1 kHz (x 44100 / 48000), Q8 */
     static const int32_t VIBA[3] = {706, 1411, 2117};
     static const int32_t VIBO = 235;            /* the "1 +": one sample of 48 kHz */
-    uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, k, d, w, e, i, nk = 0, act = 0, t0 = fm1_ticks();
+    uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, llo = pl_lo | ml_lo, lhi = pl_hi | ml_hi, pk = pp_k | mp_k;
+    uint32_t k, d, w, e, i, nk = 0, nku = 0, act = 0, vany = 0, t0 = fm1_ticks();
     int32_t pa = 0, kd;
-    uint32_t vm = P.vup ? VIBMODE[P.vtype % 6u] : 0u, dm = P.drv, od = P.od, les = P.les;
+    uint32_t dm = P.drv, od = P.od, les = P.les, vm;
     int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
+    int32_t *tu = P.vup ? wtgtv : wtgt, *tl = P.vlo ? wtgtv : wtgt;   /* the manuals reach the scanner or not (pedals and percussion never do) */
     if (P.perc && !P.soft) gsw = (gsw * PERC_NORMAL_Q15) >> 15;
     if (n > 256u) n = 256u;
 
-    for (w = 0; w < NW; w++) wtgt[w] = wpt[w] = 0;
-    for (k = 0; k < NK; k++)
-        nk += k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u;
-    if (!nk) perc_env = P.soft ? 16424 : 32767; /* single trigger: the envelope restarts when every key is up */
+    for (w = 0; w < NW; w++) wtgt[w] = wtgtv[w] = wpt[w] = 0;
+    for (k = 0; k < NK; k++) {
+        nku += k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u;
+        nk += (k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u) + (k < 32u ? llo >> k & 1u : lhi >> (k - 32u) & 1u);
+    }
+    for (k = 0; k < 32u; k++) nk += pk >> k & 1u;                     /* setBfree's key compression counts every key down */
+    if (!nku) perc_env = P.soft ? 16424 : 32767; /* single trigger: the envelope restarts when every upper key is up */
     else pa = (PERC_Q10 * perc_env) >> 15;     /* percussion level now (setBfree: 11 * 0.5012 when soft, decaying) */
     for (k = 0; k < NK; k++) {
-        if (!(k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u)) continue;
+        if (k < 32u ? !(lo >> k & 1u) : !(hi >> (k - 32u) & 1u)) continue;
         for (d = 0; d < NB; d++) {
             int32_t lvl = P.db[d];
             uint32_t e;
             if (!lvl || (d == 8u && P.perc)) continue;   /* percussion takes the 1' drawbar's place */
             for (e = CT_IDX[k * 9u + d]; e < CT_IDX[k * 9u + d + 1u]; e++)   /* the main wheel, tapered, and the leakage */
-                wtgt[CT_W[e]] += (lvl * 128 * (int32_t)CT_G[e] + 2048) >> 12;
+                tu[CT_W[e]] += (lvl * 128 * (int32_t)CT_G[e] + 2048) >> 12;
         }
         if (P.perc) {                           /* percussion: the 2nd or 3rd harmonic bus (as the 4' or 2 2/3' drawbar's: tapering, leakage), through setBfree's high-pass */
             uint32_t pd = P.perc3 ? 4u : 3u;
@@ -87,29 +99,75 @@ static void app_audio(int32_t *out, uint32_t n)
             }
         }
     }
-    if (nk && P.perc) perc_env = (perc_env * (P.fast ? DEC_FAST : DEC_SLOW)) >> 15;
+    for (k = 0; k < NK; k++) {
+        if (k < 32u ? !(llo >> k & 1u) : !(lhi >> (k - 32u) & 1u)) continue;
+        for (d = 0; d < NB; d++) {              /* the lower manual: the same wiring and tapering, its own drawbars, no percussion */
+            int32_t lvl = P.dbl[d];
+            uint32_t e;
+            if (!lvl) continue;
+            for (e = CT_IDX[k * 9u + d]; e < CT_IDX[k * 9u + d + 1u]; e++)
+                tl[CT_W[e]] += (lvl * 128 * (int32_t)CT_G[e] + 2048) >> 12;
+        }
+    }
+    for (k = 0; k < 32u; k++) {                 /* the pedal: 16' and 8', straight to the swell bus */
+        if (!(pk >> k & 1u)) continue;
+        for (d = 0; d < 2u; d++) {
+            int32_t lvl = P.dbp[d];
+            uint32_t e;
+            if (!lvl) continue;
+            for (e = CP_IDX[k * 2u + d]; e < CP_IDX[k * 2u + d + 1u]; e++)
+                wtgt[CP_W[e]] += (lvl * 128 * (int32_t)CP_G[e] + 2048) >> 12;
+        }
+    }
+    if (nku && P.perc) perc_env = (perc_env * (P.fast ? DEC_FAST : DEC_SLOW)) >> 15;
 
-    for (i = 0; i < n; i++) acc[i] = 0;
+    for (i = 0; i < n; i++) acc[i] = accv[i] = 0;
     for (w = 0; w < NW; w++) {
-        int32_t c = wcur[w], t = wtgt[w];
+        int32_t c = wcur[w], t = wtgt[w], cv = wcurv[w], tv = wtgtv[w];
         uint32_t ph = wph[w], inc = WHEEL_INC[w];
-        if (!c && !t) { wph[w] = ph + inc * n; wpc[w] = wpt[w]; continue; }   /* silent: costs nothing, the wheel turns on */
+        if (!c && !t && !cv && !tv) { wph[w] = ph + inc * n; wpc[w] = wpt[w]; continue; }   /* silent: costs nothing, the wheel turns on */
         {
             act++;
-            if (c == t) {                       /* steady: no envelope */
-                for (i = 0; i < n; i++) {
-                    uint32_t idx;
-                    int32_t s0, s1, s;
-                    ph += inc;
-                    idx = ph >> 24;
-                    s0 = SINE_TAB[idx];
-                    s1 = SINE_TAB[idx + 1u];
-                    s = s0 + (((s1 - s0) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
-                    acc[i] += (s >> 2) * c;
+            if (cv | tv) vany = 1;
+            if (c == t && cv == tv) {           /* steady: no envelope */
+                if (!cv) {
+                    for (i = 0; i < n; i++) {
+                        uint32_t idx;
+                        int32_t s0, s1, s;
+                        ph += inc;
+                        idx = ph >> 24;
+                        s0 = SINE_TAB[idx];
+                        s1 = SINE_TAB[idx + 1u];
+                        s = s0 + (((s1 - s0) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
+                        acc[i] += (s >> 2) * c;
+                    }
+                } else if (!c) {
+                    for (i = 0; i < n; i++) {
+                        uint32_t idx;
+                        int32_t s0, s1, s;
+                        ph += inc;
+                        idx = ph >> 24;
+                        s0 = SINE_TAB[idx];
+                        s1 = SINE_TAB[idx + 1u];
+                        s = s0 + (((s1 - s0) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
+                        accv[i] += (s >> 2) * cv;
+                    }
+                } else {                        /* on both buses: one sine, two products */
+                    for (i = 0; i < n; i++) {
+                        uint32_t idx;
+                        int32_t s0, s1, s;
+                        ph += inc;
+                        idx = ph >> 24;
+                        s0 = SINE_TAB[idx];
+                        s1 = SINE_TAB[idx + 1u];
+                        s = s0 + (((s1 - s0) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
+                        acc[i] += (s >> 2) * c;
+                        accv[i] += (s >> 2) * cv;
+                    }
                 }
-            } else {                            /* the level changes: setBfree's key click (an attack envelope; the release is a ramp) */
+            } else {                            /* a level changes: setBfree's key click (an attack envelope; the release is a ramp) */
                 const uint16_t *env = ATK_ENV[w & 7u];
-                int32_t d = t - c, pd = wpt[w] - wpc[w], sp = 0, ep = 0;
+                int32_t d = t - c, dv = tv - cv, pd = wpt[w] - wpc[w], sp = 0, ep = 0;
                 if (pd) {                       /* setBfree differentiates the percussion bus, envelope and all: d(e s) = e ds + s de, and de is the click */
                     uint32_t i0 = ph >> 24;
                     sp = SINE_TAB[i0] + (((SINE_TAB[i0 + 1u] - SINE_TAB[i0]) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
@@ -125,6 +183,10 @@ static void app_audio(int32_t *out, uint32_t n)
                     e = i >= 128u ? 4096 : t ? (int32_t)env[i] : (int32_t)i << 5;
                     a = c + ((d * e) >> 12);
                     acc[i] += (s >> 2) * a;
+                    if (cv | tv) {
+                        int32_t ev = i >= 128u ? 4096 : tv ? (int32_t)env[i] : (int32_t)i << 5;
+                        accv[i] += (s >> 2) * (cv + ((dv * ev) >> 12));
+                    }
                     if (pd) {
                         acc[i] -= (sp >> 2) * ((pd * (e - ep)) >> 12);
                         sp = s;
@@ -135,18 +197,23 @@ static void app_audio(int32_t *out, uint32_t n)
         }
         wph[w] = ph;
         wcur[w] = t;
+        wcurv[w] = tv;
         wpc[w] = wpt[w];
     }
 
+    vm = vany ? VIBMODE[P.vtype % 6u] : 0u;
     {
         int32_t kt = (int32_t)KEY_COMP[nk > 61u ? 61u : nk] << 4;       /* key compression glides over the block */
         kd = ((kt - kcl) * (int32_t)(65536u / n)) >> 16;
     }
     for (i = 0; i < n; i++) {
-        int32_t x = acc[i] >> 10, y, u;
+        int32_t x = acc[i] >> 10, xv = accv[i] >> 10, y;
         if (x > 262144) x = 262144;
         if (x < -262144) x = -262144;
+        if (xv > 262144) xv = 262144;
+        if (xv < -262144) xv = -262144;
         x = (x * gsw) >> 12;
+        xv = (xv * gsw) >> 12;
         if (vm) {                               /* scanner vibrato / chorus (setBfree vibrato.c): a delay swinging as a sine, 7.25 times a second */
             uint32_t pos, i0, ix;
             int32_t v0, v1, v, s0, s1, sn, a = VIBA[(vm - 1u) % 3u], dl;
@@ -160,9 +227,10 @@ static void app_audio(int32_t *out, uint32_t n)
             v0 = vdl[i0];
             v1 = vdl[(i0 + 1u) & 255u];
             v = v0 + (((v1 - v0) * (int32_t)(pos & 255u)) >> 8);
-            vdl[vwi] = x;
+            vdl[vwi] = xv;
             vwi = (vwi + 1u) & 255u;
-            x = vm >= 4u ? ((x + v) * 181) >> 8 : v;   /* the chorus mixes with 1/sqrt(2) as setBfree does (not 1/2) */
+            xv = vm >= 4u ? ((xv + v) * 181) >> 8 : v;   /* the chorus mixes with 1/sqrt(2) as setBfree does (not 1/2) */
+            x += xv;                            /* setBfree: the swell bus plus the scanner's output (percussion rides on the swell bus) */
         }
         kcl += kd;
         x = (x * (kcl >> 4)) >> 12;
@@ -196,12 +264,36 @@ static void key_set(volatile uint32_t *lo, volatile uint32_t *hi, uint32_t k, in
     if (k < 32u) *lo = on ? *lo | 1u << k : *lo & ~(1u << k);
     else *hi = on ? *hi | 1u << (k - 32u) : *hi & ~(1u << (k - 32u));
 }
+/* a note on one of the three manuals (0 upper, 1 lower, 2 pedal): from the panel, or from MIDI (fold = bring a note outside the keyboard's
+ * range back into it by octaves; the pedal sounds C1..G3, MIDI notes 24 to 55, as in setBfree) */
+static void organ_note(uint32_t manual, uint32_t panel, uint32_t note, int on, int fold)
+{
+    uint32_t n = note;
+    if (manual == 2u) {
+        volatile uint32_t *m = panel ? &pp_k : &mp_k;
+        if (fold) { while (n < 24u) n += 12u; while (n > 55u) n -= 12u; }
+        if (n < 24u || n > 55u) return;
+        n -= 24u;
+        *m = on ? *m | 1u << n : *m & ~(1u << n);
+        return;
+    }
+    if (fold) { while (n < NOTE0) n += 12u; while (n >= NOTE0 + NK) n -= 12u; }
+    if (n < NOTE0 || n >= NOTE0 + NK) return;
+    n -= NOTE0;
+    if (manual == 1u) key_set(panel ? &pl_lo : &ml_lo, panel ? &pl_hi : &ml_hi, n, on);
+    else key_set(panel ? &pk_lo : &mk_lo, panel ? &pk_hi : &mk_hi, n, on);
+}
+static void organ_midi_note(uint32_t ch, uint32_t note, int on)   /* channel 1 upper, 2 lower, 3 pedal; the others play the upper manual, as before */
+{
+    organ_note(ch == 1u ? 1u : ch == 2u ? 2u : 0u, 0u, note, on, 1);
+}
+
 static int quiet(void)                          /* nothing sounds, not even the glide out */
 {
     uint32_t w;
-    if (pk_lo | pk_hi | mk_lo | mk_hi) return 0;
+    if (pk_lo | pk_hi | mk_lo | mk_hi | pl_lo | pl_hi | ml_lo | ml_hi | pp_k | mp_k) return 0;
     for (w = 0; w < NW; w++)
-        if (wcur[w]) return 0;
+        if (wcur[w] | wcurv[w]) return 0;
     return 1;
 }
 
@@ -253,14 +345,17 @@ static void organ_pc(uint32_t uc)               /* MIDI program change: setBfree
     organ_program(uc + 1u);
 }
 
-/* MIDI controllers, as setBfree's defaults (any channel: this organ has one manual). Not used here, no such part:
- * 30 vibrato lower, 91 reverb, 94 convolution, and the lower / pedal drawbars. */
-static void organ_cc(uint32_t cc, uint32_t v)
+/* MIDI controllers, as setBfree's defaults. The drawbars (70 to 78) and the notes follow the channel: 1 upper, 2 lower, 3 pedal (16' and 8'
+ * only); everything else is accepted on any channel. Not used here, no such part: 94 convolution. */
+static void organ_cc_ch(uint32_t ch, uint32_t cc, uint32_t v)   /* ch 0..15: the drawbars follow the channel, 0 upper, 1 lower, 2 pedal (16' = 70, 8' = 72) */
 {
     if (v > 127u) return;
-    if (cc >= 70u && cc <= 78u)                 /* drawbars: 127 is pushed in, 0 pulled out (setBfree: 127 - v) */
-        P.db[cc - 70u] = (uint8_t)((16u * (127u - v) + 127u) / 254u);
-    else switch (cc) {
+    if (cc >= 70u && cc <= 78u) {               /* drawbars: 127 is pushed in, 0 pulled out (setBfree: 127 - v) */
+        uint8_t db = (uint8_t)((16u * (127u - v) + 127u) / 254u);
+        if (ch == 1u) P.dbl[cc - 70u] = db;
+        else if (ch == 2u) { if (cc == 70u) P.dbp[0] = db; else if (cc == 72u) P.dbp[1] = db; }
+        else P.db[cc - 70u] = db;
+    } else switch (cc) {
     case 7: case 11: P.swell = (uint8_t)v; break;                       /* swell pedal */
     case 91: P.rev = (uint8_t)v; break;                                 /* reverb mix (setBfree: reverb.mix) */
     case 1: P.les = v / 43u == 0u ? 1u : v / 43u == 1u ? 0u : 2u; break;    /* rotary preset: slow, stop, fast */
@@ -275,9 +370,11 @@ static void organ_cc(uint32_t cc, uint32_t v)
     case 82: P.fast = v > 63u; break;                                   /* percussion decay: fast at 64 and up */
     case 83: P.perc3 = v < 64u; break;                                  /* percussion harmonic: 2nd at 64 and up */
     case 92: P.vtype = (uint8_t)(v / 23u > 5u ? 5u : v / 23u); break;   /* vibrato knob: V1 C1 V2 C2 V3 C3 */
-    case 95: P.vup = v / 32u >= 2u; break;                              /* vibrato routing: upper from 64 */
+    case 95: P.vup = v / 32u >= 2u; P.vlo = (v / 32u & 1u) != 0u; break;   /* vibrato routing: off, lower, upper, both */
     case 31: P.vup = v > 63u; break;                                    /* vibrato upper */
-    case 120: case 123: mk_lo = mk_hi = 0; break;                       /* all sound / notes off */
+    case 30: P.vlo = v > 63u; break;                                    /* vibrato lower */
+    case 120: case 123: mk_lo = mk_hi = ml_lo = ml_hi = mp_k = 0; break;   /* all sound / notes off (MIDI's notes; the panel's stay) */
     default: break;
     }
 }
+static void organ_cc(uint32_t cc, uint32_t v) { organ_cc_ch(0u, cc, v); }

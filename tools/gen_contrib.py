@@ -40,5 +40,26 @@ out += arr("CT_IDX", "uint16_t", idx, 16)     # entries of (key k, bus b): CT_ID
 out += arr("CT_W", "uint8_t", ws, 24)         # wheel 0..90
 out += arr("CT_G", "uint16_t", gs, 16)        # gain, Q12
 out += arr("CT_MAIN", "uint8_t", main, 27)    # the strongest wheel of (key, bus): percussion takes the 4' / 2 2/3' ones
+
+# pedals (data/setbfree-contrib-pedal.txt, made by tools/dump_contrib.c 2): 32 keys C1..G3, only the 16' and 8' drawbars (buses 0 and 2)
+prow = [l.split() for l in pathlib.Path("data/setbfree-contrib-pedal.txt").read_text().splitlines()[1:]]
+pby = collections.defaultdict(list)
+for k, b, w, g in prow:
+    pby[(int(k), int(b))].append((int(w) - 1, float(g)))
+pidx, pws, pgs = [], [], []
+for k in range(32):
+    for b in (0, 2):
+        lst = sorted(pby[(k, b)], key=lambda e: -e[1])
+        pidx.append(len(pws))
+        for w, g in lst:
+            if g >= THR:
+                assert 0 <= w < 91
+                pws.append(w)
+                pgs.append(round(g * 4096))
+pidx.append(len(pws))
+out += arr("CP_IDX", "uint16_t", pidx, 16)    # the pedal's entries of (key k, drawbar 0 = 16' / 1 = 8'): CP_IDX[k * 2 + d]
+out += arr("CP_W", "uint8_t", pws, 24)
+out += arr("CP_G", "uint16_t", pgs, 16)
+print("pedals: %d entries" % len(pws))
 pathlib.Path("firmware/src/organ_contrib.h").write_text("\n".join(out))
 print("%d entries (%.1f per key and bus), %d bytes" % (len(ws), len(ws) / 549, len(ws) * 3 + len(idx) * 2 + 549))
