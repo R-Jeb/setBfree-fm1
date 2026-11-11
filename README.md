@@ -14,7 +14,7 @@ build.
 
 **Try it in the browser:** [r-jeb.github.io/setBfree-fm1/play](https://r-jeb.github.io/setBfree-fm1/play/), the same engine as WebAssembly (`web/`, rebuilt with `web/build.sh`; `docs/play/index.html` is a copy of `web/index.html`).
 
-> **Status:** 0.2, tested on an FM-1 by one person. Please report what sounds different from setBfree.
+> **Status:** 0.3, tested on an FM-1 by one person. Please report what sounds different from setBfree.
 
 ## What you get
 
@@ -92,7 +92,7 @@ of each part are in **[README_ORGAN.md](README_ORGAN.md)**.
 2. Install it over USB with `python3 tools/fm1_install.py b3organ-<version>.fwsc`, or with the
    [FM-1 Firmware Hub](https://fm1.designburgapps.com) in Chrome or Edge. Back to the official firmware or to another
    one from the hub at any time.
-3. The version shows top left (`B3 ORGAN v0.2`; builds that are not releases show `d` and four digits of the commit).
+3. The version shows top left (`B3 ORGAN v0.3`; builds that are not releases show `d` and four digits of the commit).
 
 Installing firmware is at your own risk. If something goes wrong, hold **OCT-** while switching on: the USB rescue.
 
