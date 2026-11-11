@@ -64,7 +64,7 @@ recording to recording by up to 10 dB or more, and the Raspberry Pi has more ene
 | **PRESETS** knob | Step through setBfree's registrations (e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith); they set the upper manual |
 | **KNOB 2** | Vibrato / chorus type V1, C1, V2, C2, V3, C3 |
 | **KNOB 3** | Overdrive amount (0 to 8) |
-| **KNOB 4** | Reverb amount (0 to 127) |
+| **KNOB 4** | Reverb amount (0 to 127), in doubling steps: 0, 1, 2, 4, 8, 16, 32, 64, 127 |
 | **FX** | Vibrato / chorus on or off for the manual of the screen (upper on screen 1, lower on screen 2) |
 | **LFO** | Leslie: stop, slow, fast |
 | **SEL** | Overdrive on / off |

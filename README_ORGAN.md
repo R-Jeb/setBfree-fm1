@@ -19,7 +19,7 @@ or a tag `v0.2` on GitHub: Actions builds `b3organ-0.2.fwsc` and attaches it to 
 ## Controls
 keys (F3..G5, OCT-/OCT+) | SELECT drawbar, ALGORITHM level 0..8 | PRESETS steps through setBfree's registrations
 (default.pgm: 57 of them, e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith) |
-KNOB1 screen (upper, lower, pedal) | KNOB2 vibrato V1 C1 V2 C2 V3 C3 | KNOB3 overdrive amount 0..8 | KNOB4 reverb amount (0..127) |
+KNOB1 screen (upper, lower, pedal) | KNOB2 vibrato V1 C1 V2 C2 V3 C3 | KNOB3 overdrive amount 0..8 | KNOB4 reverb amount (0, 1, 2, 4, 8, 16, 32, 64, 127) |
 FX vibrato on/off of the screen's manual | LFO Leslie cycle | SEL overdrive on/off | REC the FM-1's keys play upper/lower/pedal |
 screen 1 only: ENV percussion | ARP 2nd/3rd | SEQ fast/slow | PLAY soft/normal. EDIT and SAVE are free.
 
