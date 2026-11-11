@@ -31,6 +31,7 @@ static volatile struct {
  * panel and channel 2, the pedal (k = 0..31, C1..G3) from the panel and channel 3 */
 static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi, pl_lo, pl_hi, ml_lo, ml_hi, pp_k, mp_k;
 static volatile uint32_t load_us, wheels_on;
+static volatile uint32_t load_org, load_od, load_rv, load_le;   /* peaks since the screen last looked: organ, preamp, reverb, Leslie (us) */
 static volatile uint8_t fx_bypass;              /* tests: skip the reverb and the Leslie (the tone generator alone, in mono) */    /* the last block: render time, wheels sounding */
 
 /* ---- the sound (runs in the audio ISR: keep it short, no flash, no screen) */
@@ -64,7 +65,7 @@ static void app_audio(int32_t *out, uint32_t n)
     static const int32_t VIBA[3] = {706, 1411, 2117};
     static const int32_t VIBO = 235;            /* the "1 +": one sample of 48 kHz */
     uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, llo = pl_lo | ml_lo, lhi = pl_hi | ml_hi, pk = pp_k | mp_k;
-    uint32_t k, d, w, e, i, nk = 0, nku = 0, act = 0, vany = 0, t0 = fm1_ticks();
+    uint32_t k, d, w, e, i, nk = 0, nku = 0, act = 0, vany = 0, t0 = fm1_ticks(), t1, t2, t3, t4;
     int32_t pa = 0, kd;
     uint32_t dm = P.drv, od = P.od, les = P.les, vm;
     int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
@@ -237,14 +238,19 @@ static void app_audio(int32_t *out, uint32_t n)
         y = x > 60000 ? 60000 : x < -60000 ? -60000 : x;   /* the preamp below takes it unclipped */
         mono[i] = y;
     }
+    t1 = fm1_ticks();
     if (od) od_run(mono, n, (dm * 127u + 4u) >> 3);   /* setBfree's preamp; character 0..8 -> 0..127 */
     else for (i = 0; i < n; i++) mono[i] = mono[i] > 32767 ? 32767 : mono[i] < -32767 ? -32767 : mono[i];
+    t2 = fm1_ticks();
     if (fx_bypass) {
         for (i = 0; i < n; i++) lbuf[i] = rbuf[i] = mono[i];
+        t3 = t2;
     } else {
         reverb_run(mono, n, P.rev);             /* setBfree's order: overdrive, reverb, Leslie */
+        t3 = fm1_ticks();
         leslie_run(mono, lbuf, rbuf, n, les);
     }
+    t4 = fm1_ticks();
     for (i = 0; i < n; i++) {
         int32_t l = lbuf[i], r = rbuf[i];
         out[2u * i] += l > 32767 ? 32767 : l < -32767 ? -32767 : l;
@@ -252,8 +258,13 @@ static void app_audio(int32_t *out, uint32_t n)
     }
     wheels_on = act;
     {
-        uint32_t us = (uint32_t)(fm1_ticks() - t0) / FM1_TICKS_PER_US;
+        uint32_t us = (uint32_t)(fm1_ticks() - t0) / FM1_TICKS_PER_US, a = (uint32_t)(t1 - t0) / FM1_TICKS_PER_US, b = (uint32_t)(t2 - t1) / FM1_TICKS_PER_US,
+                 c = (uint32_t)(t3 - t2) / FM1_TICKS_PER_US, f = (uint32_t)(t4 - t3) / FM1_TICKS_PER_US;
         if (us > load_us) load_us = us;         /* the peak since the screen last looked */
+        if (a > load_org) load_org = a;
+        if (b > load_od) load_od = b;
+        if (c > load_rv) load_rv = c;
+        if (f > load_le) load_le = f;
     }
 }
 
