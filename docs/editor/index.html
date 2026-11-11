@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>B3 Organ Editor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a console. Header with the connection, tabs, then one page of controls at a time; the drawbars are the hero of the first page.
+   Palette: the FM-1's own: warm graphite, the LCD's orange, and the three drawbar colours of a Hammond. */
+:root {
+  --bg: #f1efea; --panel: #fbfaf7; --panel2: #e9e6df; --line: #cfcac0; --fg: #1d1c1a; --dim: #6b675f;
+  --accent: #c2570c; --accent-fg: #fff; --ok: #2f7d3c; --warn: #a6620a;
+  --db-brown: #7a4b26; --db-white: #f3efe4; --db-black: #1c1c1e; --db-edge: #8d887c;
+  --font: "Barlow Semi Condensed", "Segoe UI", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141517; --panel: #1c1e21; --panel2: #25282c; --line: #34383d; --fg: #e8e5dd; --dim: #8e9096;
+    --accent: #f08a2c; --accent-fg: #1a1208; --ok: #6cc17a; --warn: #e2a24a;
+    --db-brown: #8d5a30; --db-white: #ece7d8; --db-black: #08080a; --db-edge: #4d5056; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141517; --panel: #1c1e21; --panel2: #25282c; --line: #34383d; --fg: #e8e5dd; --dim: #8e9096;
+  --accent: #f08a2c; --accent-fg: #1a1208; --ok: #6cc17a; --warn: #e2a24a;
+  --db-brown: #8d5a30; --db-white: #ece7d8; --db-black: #08080a; --db-edge: #4d5056; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 400 16px/1.4 var(--font); margin: 0;
+  padding-block: 16px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-size: 1.35rem; font-weight: 600; letter-spacing: .02em; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+h2 { font-size: .8rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 0 0 10px; }
+.top { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
+.conn { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip { white-space: nowrap; font: 500 .8rem var(--mono); padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--dim); background: var(--panel); }
+.chip.on { color: var(--ok); border-color: var(--ok); }
+.chip.off { color: var(--warn); border-color: var(--warn); }
+button, select, input[type=number] { font: 500 .95rem var(--font); color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; }
+button { cursor: pointer; }
+button:hover { border-color: var(--dim); }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+nav.tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+nav.tabs button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 10px 14px; color: var(--dim); font-size: 1rem; }
+nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var(--accent); }
+.page[hidden] { display: none; }
+.page { display: grid; gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: var(--panel2); padding: 7px 13px; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed=true] { background: var(--accent); color: var(--accent-fg); }
+.lbl { font-size: .85rem; color: var(--dim); min-width: 88px; }
+/* drawbars */
+.bars { display: flex; gap: 6px; justify-content: space-between; }
+.bar { display: grid; justify-items: center; gap: 6px; width: 100%; max-width: 54px; }
+.bar .ft { font: 500 .95rem var(--font); }
+.bar .val { font: 500 .95rem var(--mono); }
+.track { position: relative; width: 100%; height: 190px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; touch-action: none; cursor: ns-resize; }
+.track::before { content: ""; position: absolute; left: 50%; top: 8px; bottom: 8px; width: 2px; margin-left: -1px; background: var(--line); }
+.ticks { position: absolute; inset: 8px 0; pointer-events: none; background: repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px calc(100% / 8)); opacity: .0; }
+.knob { position: absolute; left: 3px; right: 3px; height: 26px; margin-top: -13px; border-radius: 4px; border: 1px solid var(--db-edge); box-shadow: 0 1px 0 rgba(0,0,0,.25); pointer-events: none; }
+.knob.brown { background: var(--db-brown); } .knob.white { background: var(--db-white); } .knob.black { background: var(--db-black); }
+.manual-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.manual-head h3 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+.slider { display: grid; grid-template-columns: 88px 1fr 56px; gap: 10px; align-items: center; }
+.slider input[type=range] { width: 100%; accent-color: var(--accent); }
+.slider output { font: 500 .9rem var(--mono); text-align: right; }
+.ticksrow { display: flex; justify-content: space-between; font: 400 .75rem var(--mono); color: var(--dim); padding: 0 2px; }
+.params { display: grid; gap: 8px; }
+.param { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(120px, 1.4fr) 110px; gap: 10px; align-items: center; opacity: .55; }
+.param code { font: 400 .8rem var(--mono); color: var(--dim); word-break: break-word; }
+.param .range { font: 400 .8rem var(--mono); color: var(--dim); text-align: right; }
+.banner { border: 1px dashed var(--warn); color: var(--warn); border-radius: 8px; padding: 10px 14px; font-size: .92rem; }
+.log { font: 400 .82rem/1.5 var(--mono); height: 320px; overflow: auto; background: var(--panel2); border-radius: 8px; padding: 10px; }
+.log .out { color: var(--accent); } .log .in { color: var(--ok); } .log .dim { color: var(--dim); }
+.note { color: var(--dim); font-size: .9rem; margin: 0; }
+@media (max-width: 560px) { .param { grid-template-columns: 1fr; } .param .range { text-align: left; } .slider { grid-template-columns: 70px 1fr 48px; } .track { height: 150px; } }
+@media (prefers-reduced-motion: no-preference) { .knob { transition: top .06s linear; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>B3 Organ Editor <span class="chip">for the FM-1 · firmware 0.3</span></h1>
+    <div class="conn">
+      <span id="status" class="chip off">no MIDI</span>
+      <select id="port" aria-label="MIDI output" disabled><option>no output</option></select>
+      <button id="connect" class="primary">Connect</button>
+      <button id="sendall" title="Send every setting below to the organ">Send all</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+
+  <!-- MANUALS -->
+  <section class="page" id="p-manuals" hidden>
+    <div class="grid" id="manuals"></div>
+    <div class="grid">
+      <div class="card">
+        <h2>Vibrato and chorus (one scanner for both manuals)</h2>
+        <div class="row"><span class="lbl">Type</span><div class="seg" id="vtype"></div></div>
+        <div class="row" style="margin-top:10px"><span class="lbl">On for</span>
+          <div class="seg" id="vroute"></div></div>
+        <p class="note" style="margin-top:10px">CC 92 picks V1 C1 V2 C2 V3 C3, CC 31 switches the upper manual, CC 30 the lower one. The pedal and the percussion never go through the scanner.</p>
+      </div>
+      <div class="card">
+        <h2>Percussion (upper manual)</h2>
+        <div class="row"><span class="lbl">Percussion</span><div class="seg" id="perc"></div></div>
+        <div class="row" style="margin-top:10px"><span class="lbl">Harmonic</span><div class="seg" id="harm"></div></div>
+        <div class="row" style="margin-top:10px"><span class="lbl">Decay</span><div class="seg" id="decay"></div></div>
+        <div class="row" style="margin-top:10px"><span class="lbl">Volume</span><div class="seg" id="vol"></div></div>
+      </div>
+      <div class="card">
+        <h2>Level</h2>
+        <div class="slider"><span class="lbl">Swell</span><input type="range" id="swell" min="0" max="127" step="1"><output id="swellv"></output></div>
+        <p class="note" style="margin-top:10px">CC 11. With the percussion on and not soft, the whole sound is 4.4 dB quieter, as in setBfree.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- OVERDRIVE -->
+  <section class="page" id="p-overdrive" hidden>
+    <div class="card">
+      <h2>Preamp / overdrive</h2>
+      <div class="row"><span class="lbl">Overdrive</span><div class="seg" id="od"></div></div>
+      <div class="slider" style="margin-top:12px"><span class="lbl">Character</span><input type="range" id="drv" min="0" max="8" step="1"><output id="drvv"></output></div>
+      <div class="ticksrow"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span></div>
+      <p class="note" style="margin-top:10px">CC 65 switches it on, CC 93 sets setBfree's <code>overdrive.character</code> in nine steps (0, 16 … 127), which sets the two bass filters' feedback.</p>
+    </div>
+    <div class="card"><h2>Advanced · setBfree's names and defaults</h2><div class="banner">Not in the firmware yet. These are setBfree's own parameters; the sliders show its defaults and cannot be moved until the firmware can take them.</div><div class="params" id="adv-od" style="margin-top:12px"></div></div>
+  </section>
+
+  <!-- LESLIE -->
+  <section class="page" id="p-leslie" hidden>
+    <div class="card">
+      <h2>Rotary speaker</h2>
+      <div class="row"><span class="lbl">Speed</span><div class="seg" id="les"></div></div>
+      <p class="note" style="margin-top:10px">CC 1 selects slow, stop or fast; CC 64 (sustain pedal) toggles slow and fast. The horn and the drum run up and down on their own time constants.</p>
+    </div>
+    <div class="card"><h2>Advanced · setBfree's names and defaults</h2><div class="banner">Not in the firmware yet.</div><div class="params" id="adv-les" style="margin-top:12px"></div></div>
+  </section>
+
+  <!-- REVERB -->
+  <section class="page" id="p-reverb" hidden>
+    <div class="card">
+      <h2>Reverb</h2>
+      <div class="slider"><span class="lbl">Mix</span><input type="range" id="rev" min="0" max="8" step="1"><output id="revv"></output></div>
+      <div class="ticksrow"><span>0</span><span>1</span><span>2</span><span>4</span><span>8</span><span>16</span><span>32</span><span>64</span><span>127</span></div>
+      <p class="note" style="margin-top:10px">CC 91, setBfree's <code>reverb.mix</code>. The steps double, like the knob on the FM-1; the first ones are fine.</p>
+    </div>
+    <div class="card"><h2>Advanced · setBfree's names and defaults</h2><div class="banner">Not in the firmware yet.</div><div class="params" id="adv-rev" style="margin-top:12px"></div></div>
+  </section>
+
+  <!-- TONE -->
+  <section class="page" id="p-tone" hidden>
+    <div class="card"><h2>Tone generator, percussion, scanner · setBfree's names and defaults</h2><div class="banner">Not in the firmware yet.</div><div class="params" id="adv-tone" style="margin-top:12px"></div></div>
+  </section>
+
+  <!-- PROGRAMS -->
+  <section class="page" id="p-programs" hidden>
+    <div class="card">
+      <h2>Program</h2>
+      <div class="row">
+        <span class="lbl">Program change</span>
+        <input type="number" id="pgm" min="1" max="110" value="5" style="width:90px"> <span id="pgmname" class="chip"></span>
+        <button id="pgmsend" class="primary">Send</button>
+      </div>
+      <p class="note" style="margin-top:10px">setBfree's <code>default.pgm</code>: 110 programs. The FM-1 takes them as program change n − 1. A program changes only what it names.</p>
+    </div>
+    <div class="card">
+      <h2>Settings as text</h2>
+      <div class="row"><button id="copy">Copy</button><button id="paste">Load from box</button></div>
+      <textarea id="json" rows="6" style="width:100%;margin-top:10px;font:400 .85rem var(--mono);background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px" aria-label="settings"></textarea>
+    </div>
+  </section>
+
+  <!-- MONITOR -->
+  <section class="page" id="p-monitor" hidden>
+    <div class="card"><h2>MIDI monitor</h2><div class="log" id="log" aria-live="off"></div>
+    <p class="note" style="margin-top:10px">Orange: sent by the editor. Green: arrives from the FM-1 or a keyboard on the selected input. The FM-1 does not report its own state yet, so the editor shows what it last sent.</p></div>
+    <div class="card"><h2>Channels</h2>
+      <div class="row"><span class="lbl">Upper</span><select id="ch0"></select><span class="lbl">Lower</span><select id="ch1"></select><span class="lbl">Pedal</span><select id="ch2"></select></div>
+      <p class="note" style="margin-top:10px">The firmware plays channel 1 on the upper manual, 2 on the lower, 3 on the pedal. Change this only if you changed it in the firmware.</p></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var FT = ["16", "5⅓", "8", "4", "2⅔", "2", "1⅗", "1⅓", "1"];
+  var COL = ["brown", "brown", "white", "white", "black", "white", "black", "white", "white"];
+  var PGM = { 5: "Standard B", 11: "Brian Auger 3rd", 15: "Booker T", 104: "Jimmy Smith" };
+  var REVS = [0, 1, 2, 4, 8, 16, 32, 64, 127];
+  var VT = ["V1", "C1", "V2", "C2", "V3", "C3"], VTCC = [10, 33, 56, 78, 100, 121];   /* inside both setBfree's and the firmware's ranges */
+  var S, midi = null, out = null, inp = null;
+
+  function defaults() {
+    return { up: [8, 8, 8, 0, 0, 0, 0, 0, 0], lo: [8, 3, 8, 0, 0, 0, 0, 0, 0], pd: [8, 6], vtype: 0, vup: 0, vlo: 0,
+      perc: 0, third: 1, fast: 0, soft: 0, swell: 127, od: 0, drv: 3, les: 0, rev: 12, pgm: 5, ch: [1, 2, 3] };
+  }
+  try { S = JSON.parse(localStorage.getItem("b3editor") || "null"); } catch (e) { S = null; }
+  if (!S || !S.up || !S.ch) S = defaults();
+  function save() { try { localStorage.setItem("b3editor", JSON.stringify(S)); } catch (e) {} jsonbox(); }
+  function $(id) { return document.getElementById(id); }
+
+  /* ---- MIDI out */
+  function logline(cls, text) {
+    var l = $("log"), d = document.createElement("div"); d.className = cls; d.textContent = text; l.appendChild(d);
+    while (l.childNodes.length > 200) l.removeChild(l.firstChild);
+    l.scrollTop = l.scrollHeight;
+  }
+  var NAMES = { 1: "rotary speed", 11: "swell", 30: "vibrato lower", 31: "vibrato upper", 64: "rotary toggle", 65: "overdrive", 66: "percussion", 80: "percussion", 81: "perc soft", 82: "perc fast", 83: "perc harmonic", 91: "reverb", 92: "vibrato knob", 93: "overdrive character", 95: "vibrato routing" };
+  function cc(ch, n, v) {
+    v = Math.max(0, Math.min(127, v | 0));
+    var nm = n >= 70 && n <= 78 ? "drawbar " + FT[n - 70] + "'" : (NAMES[n] || "");
+    logline("out", "ch " + ch + "  CC " + n + " = " + v + (nm ? "   " + nm : ""));
+    if (out) try { out.send([0xB0 | (ch - 1), n, v]); } catch (e) {}
+  }
+  function pc(ch, n) { logline("out", "ch " + ch + "  PC " + n); if (out) try { out.send([0xC0 | (ch - 1), n]); } catch (e) {} }
+  var dbv = function (d) { return 127 - Math.round(d * 127 / 8); };      /* setBfree: 127 is pushed in, 0 pulled out */
+  var dig = function (d) { return Math.round(d * 127 / 8); };
+  function sendDb(m, i) {
+    var arr = m === 0 ? S.up : m === 1 ? S.lo : S.pd;
+    cc(S.ch[m], m === 2 ? (i === 0 ? 70 : 72) : 70 + i, dbv(arr[i]));
+  }
+  function bin(ch, n, on) { cc(ch, n, on ? 127 : 0); }
+  function sendAll() {
+    [0, 1, 2].forEach(function (m) { (m === 2 ? [0, 1] : [0, 1, 2, 3, 4, 5, 6, 7, 8]).forEach(function (i) { sendDb(m, i); }); });
+    var c = S.ch[0];
+    cc(c, 92, VTCC[S.vtype]); bin(c, 31, S.vup); bin(c, 30, S.vlo);
+    bin(c, 80, S.perc); cc(c, 83, S.third ? 0 : 127); bin(c, 82, S.fast); bin(c, 81, S.soft);
+    cc(c, 11, S.swell); bin(c, 65, S.od); cc(c, 93, dig(S.drv)); cc(c, 1, [20, 64, 110][S.les === 0 ? 1 : S.les === 1 ? 0 : 2]); cc(c, 91, S.rev);
+  }
+  function setStatus() {
+    var s = $("status");
+    if (out) { s.textContent = "connected: " + out.name; s.className = "chip on"; } else { s.textContent = midi ? "no output selected" : "no MIDI"; s.className = "chip off"; }
+  }
+  function useOutput(id) {
+    out = null; if (!midi) return;
+    midi.outputs.forEach(function (o) { if (o.id === id) out = o; });
+    setStatus();
+  }
+  function listPorts() {
+    var sel = $("port"); sel.innerHTML = ""; var pick = null;
+    midi.outputs.forEach(function (o) {
+      var op = document.createElement("option"); op.value = o.id; op.textContent = o.name; sel.appendChild(op);
+      if (!pick && /fm-?1|m-?vave/i.test(o.name)) pick = o.id;
+    });
+    if (!sel.options.length) { var e = document.createElement("option"); e.textContent = "no output"; sel.appendChild(e); sel.disabled = true; out = null; setStatus(); return; }
+    sel.disabled = false; sel.value = pick || sel.options[0].value; useOutput(sel.value);
+    if (inp) inp.onmidimessage = null;
+    inp = null;
+    midi.inputs.forEach(function (i) { if (!inp && (!pick || /fm-?1|m-?vave/i.test(i.name))) inp = i; });
+    if (inp) inp.onmidimessage = function (ev) {
+      var d = ev.data; if (d.length < 2) return; var t = d[0] & 0xF0;
+      if (t === 0xF8 || t === 0xFE) return;
+      logline("in", "ch " + ((d[0] & 15) + 1) + "  " + (t === 0x90 ? "note " + d[1] + (d[2] ? " on " + d[2] : " off") : t === 0x80 ? "note " + d[1] + " off" : t === 0xB0 ? "CC " + d[1] + " = " + d[2] : t === 0xC0 ? "PC " + d[1] : d[0].toString(16)));
+    };
+  }
+  $("connect").onclick = function () {
+    if (!navigator.requestMIDIAccess) { logline("dim", "Web MIDI is not available here. Open this page in Chrome or Edge from the web (https), not in a preview frame."); $("status").textContent = "Web MIDI not available"; return; }
+    navigator.requestMIDIAccess({ sysex: false }).then(function (m) { midi = m; listPorts(); m.onstatechange = listPorts; }, function () { logline("dim", "MIDI access was refused."); });
+  };
+  $("port").onchange = function () { useOutput(this.value); };
+  $("sendall").onclick = sendAll;
+
+  /* ---- controls */
+  function seg(id, labels, get, set) {
+    var box = $(id); box.innerHTML = "";
+    labels.forEach(function (t, i) {
+      var b = document.createElement("button"); b.type = "button"; b.textContent = t;
+      b.onclick = function () { set(i); save(); paint(); };
+      box.appendChild(b);
+    });
+    box._get = get;
+  }
+  function paintSeg(id) { var box = $(id), g = box._get(); Array.prototype.forEach.call(box.children, function (b, i) { b.setAttribute("aria-pressed", String(i === g)); }); }
+
+  function drawbars(m, n, label, arr) {
+    var card = document.createElement("div"); card.className = "card";
+    card.innerHTML = '<div class="manual-head"><h3>' + label + '</h3><span class="chip">channel <b class="chn"></b></span></div><div class="bars"></div>';
+    var bars = card.querySelector(".bars"), nodes = [];
+    for (var i = 0; i < n; i++) (function (i) {
+      var w = document.createElement("div"); w.className = "bar";
+      var ft = m === 2 ? (i === 0 ? "16" : "8") : FT[i], colr = m === 2 ? (i === 0 ? "brown" : "white") : COL[i];
+      w.innerHTML = '<span class="ft">' + ft + '</span><div class="track" role="slider" tabindex="0" aria-label="' + label + ' ' + ft + ' feet" aria-valuemin="0" aria-valuemax="8"><div class="knob ' + colr + '"></div></div><span class="val"></span>';
+      var tr = w.querySelector(".track"), kn = w.querySelector(".knob"), vl = w.querySelector(".val");
+      function paintOne() { var v = arr[i]; kn.style.top = (8 + (tr.clientHeight - 16) * v / 8) + "px"; vl.textContent = v; tr.setAttribute("aria-valuenow", v); }
+      function setv(v) { v = Math.max(0, Math.min(8, v)); if (v === arr[i]) return; arr[i] = v; paintOne(); sendDb(m, i); save(); }
+      function fromY(ev) { var r = tr.getBoundingClientRect(); return Math.round((ev.clientY - r.top - 8) / (r.height - 16) * 8); }
+      tr.onpointerdown = function (ev) { tr.setPointerCapture(ev.pointerId); setv(fromY(ev)); };
+      tr.onpointermove = function (ev) { if (tr.hasPointerCapture(ev.pointerId)) setv(fromY(ev)); };
+      tr.onkeydown = function (ev) { var k = ev.key; if (k === "ArrowDown" || k === "ArrowRight") { setv(arr[i] + 1); ev.preventDefault(); } if (k === "ArrowUp" || k === "ArrowLeft") { setv(arr[i] - 1); ev.preventDefault(); } };
+      nodes.push(paintOne); bars.appendChild(w);
+    })(i);
+    card._paint = function () { nodes.forEach(function (f) { f(); }); card.querySelector(".chn").textContent = S.ch[m]; };
+    return card;
+  }
+  var manualCards = [];
+  function buildManuals() {
+    var host = $("manuals"); host.innerHTML = ""; manualCards = [];
+    [["Upper manual", 9, S.up], ["Lower manual", 9, S.lo], ["Pedal", 2, S.pd]].forEach(function (d, m) {
+      var c = drawbars(m, d[1], d[0], d[2]); manualCards.push(c); host.appendChild(c);
+    });
+  }
+
+  function buildSegs() {
+    seg("vtype", VT, function () { return S.vtype; }, function (i) { S.vtype = i; cc(S.ch[0], 92, VTCC[i]); });
+    seg("vroute", ["Off", "Lower", "Upper", "Both"], function () { return (S.vup ? 2 : 0) + (S.vlo ? 1 : 0); }, function (i) {
+      var u = i >= 2 ? 1 : 0, l = i & 1; if (u !== S.vup) { S.vup = u; bin(S.ch[0], 31, u); } if (l !== S.vlo) { S.vlo = l; bin(S.ch[0], 30, l); } });
+    seg("perc", ["Off", "On"], function () { return S.perc; }, function (i) { S.perc = i; bin(S.ch[0], 80, i); });
+    seg("harm", ["3rd", "2nd"], function () { return S.third ? 0 : 1; }, function (i) { S.third = i === 0 ? 1 : 0; cc(S.ch[0], 83, i === 1 ? 127 : 0); });
+    seg("decay", ["Slow", "Fast"], function () { return S.fast; }, function (i) { S.fast = i; bin(S.ch[0], 82, i); });
+    seg("vol", ["Normal", "Soft"], function () { return S.soft; }, function (i) { S.soft = i; bin(S.ch[0], 81, i); });
+    seg("od", ["Off", "On"], function () { return S.od; }, function (i) { S.od = i; bin(S.ch[0], 65, i); });
+    seg("les", ["Stop", "Slow", "Fast"], function () { return S.les; }, function (i) { S.les = i; cc(S.ch[0], 1, [64, 20, 110][i]); });
+  }
+  function bindRange(id, outId, get, set, fmt) {
+    var r = $(id), o = $(outId);
+    r.oninput = function () { set(+r.value); o.textContent = fmt(+r.value); save(); };
+  }
+  bindRange("swell", "swellv", null, function (v) { S.swell = v; cc(S.ch[0], 11, v); }, function (v) { return v; });
+  bindRange("drv", "drvv", null, function (v) { S.drv = v; cc(S.ch[0], 93, dig(v)); }, function (v) { return v + " / 8"; });
+  bindRange("rev", "revv", null, function (v) { S.rev = REVS[v]; cc(S.ch[0], 91, REVS[v]); }, function (v) { return REVS[v]; });
+  function nearestRev(v) { var b = 0; REVS.forEach(function (x, i) { if (Math.abs(x - v) < Math.abs(REVS[b] - v)) b = i; }); return b; }
+
+  /* ---- program and settings text */
+  function pgmName() { var n = +$("pgm").value; $("pgmname").textContent = PGM[n] || "program " + n; }
+  $("pgm").oninput = pgmName;
+  $("pgmsend").onclick = function () { var n = Math.max(1, Math.min(110, +$("pgm").value || 1)); S.pgm = n; pc(S.ch[0], n - 1); save(); };
+  function jsonbox() { $("json").value = JSON.stringify(S); }
+  $("copy").onclick = function () { var t = $("json"); t.select(); try { navigator.clipboard.writeText(t.value); } catch (e) { document.execCommand("copy"); } };
+  $("paste").onclick = function () { try { var o = JSON.parse($("json").value); if (o.up && o.lo && o.pd && o.ch) { S = o; save(); buildManuals(); buildSegs(); paint(); } } catch (e) { logline("dim", "That is not a settings text."); } };
+
+  /* ---- channels */
+  [0, 1, 2].forEach(function (m) {
+    var s = $("ch" + m); for (var c = 1; c <= 16; c++) { var o = document.createElement("option"); o.value = c; o.textContent = c; s.appendChild(o); }
+    s.onchange = function () { S.ch[m] = +s.value; save(); paint(); };
+  });
+
+  /* ---- advanced (setBfree's names; shown, not yet sendable) */
+  var ADV = {
+    od: [["overdrive.inputgain", 0.3567, 0, 1], ["overdrive.outputgain", 0.07873, 0, 1], ["xov.ctl_biased", 0.5347, 0, 1], ["xov.ctl_biased_gfb", 0.6214, 0, 1],
+      ["xov.ctl_biased_fb", 0.5821, 0, 1], ["xov.ctl_biased_fb2", 0.999, 0, 1], ["xov.ctl_sagtobias", 0.188, 0, 1]],
+    les: [["whirl.horn.slowrpm", 40.32, 0, 120, "rpm"], ["whirl.horn.fastrpm", 423.36, 0, 800, "rpm"], ["whirl.horn.acceleration", 0.161, 0, 5, "s"], ["whirl.horn.deceleration", 0.321, 0, 5, "s"],
+      ["whirl.drum.slowrpm", 36, 0, 120, "rpm"], ["whirl.drum.fastrpm", 357.3, 0, 800, "rpm"], ["whirl.drum.acceleration", 4.127, 0, 10, "s"], ["whirl.drum.deceleration", 1.371, 0, 10, "s"],
+      ["whirl.horn.radius", 19.2, 5, 40, "cm"], ["whirl.drum.radius", 22, 5, 40, "cm"], ["whirl.mic.distance", 42, 10, 100, "cm"], ["whirl.horn.level", 0.7, 0, 1], ["whirl.horn.leak", 0.15, 0, 1],
+      ["whirl.drum.filter.hz", 811.9695, 100, 4000, "Hz"], ["whirl.drum.filter.q", 1.6016, 0.1, 8], ["whirl.drum.filter.gain", -38.9291, -60, 0, "dB"],
+      ["whirl.horn.filter.a.hz", 4500, 500, 12000, "Hz"], ["whirl.horn.filter.b.hz", 300, 50, 2000, "Hz"]],
+    rev: [["reverb.mix", 0.1, 0, 1], ["reverb.inputgain", 0.1, 0, 1], ["reverb.outputgain", 1, 0, 2]],
+    tone: [["osc.tuning", 440, 400, 480, "Hz"], ["osc.perc.fast", 1, 0.2, 4, "s"], ["osc.perc.slow", 4, 1, 8, "s"], ["osc.perc.soft", 0.5012, 0, 1], ["osc.perc.gain", 11, 0, 20],
+      ["osc.attack.click.level", 0.5, 0, 1], ["osc.release.click.level", 0.25, 0, 1], ["scanner.hz", 7.25, 4, 10, "Hz"],
+      ["scanner.modulation.v1", 3, 0, 12], ["scanner.modulation.v2", 6, 0, 12], ["scanner.modulation.v3", 9, 0, 12]]
+  };
+  Object.keys(ADV).forEach(function (k) {
+    var host = $("adv-" + k);
+    ADV[k].forEach(function (p) {
+      var d = document.createElement("div"); d.className = "param";
+      d.innerHTML = '<code>' + p[0] + '</code><input type="range" disabled min="' + p[2] + '" max="' + p[3] + '" step="any" value="' + p[1] + '" aria-label="' + p[0] + '"><span class="range">' + p[1] + (p[4] ? " " + p[4] : "") + '</span>';
+      host.appendChild(d);
+    });
+  });
+
+  /* ---- paint and tabs */
+  function paint() {
+    manualCards.forEach(function (c) { c._paint(); });
+    ["vtype", "vroute", "perc", "harm", "decay", "vol", "od", "les"].forEach(paintSeg);
+    $("swell").value = S.swell; $("swellv").textContent = S.swell;
+    $("drv").value = S.drv; $("drvv").textContent = S.drv + " / 8";
+    var ri = nearestRev(S.rev); $("rev").value = ri; $("revv").textContent = REVS[ri];
+    $("pgm").value = S.pgm; pgmName();
+    [0, 1, 2].forEach(function (m) { $("ch" + m).value = S.ch[m]; });
+    jsonbox();
+  }
+  var TABS = [["manuals", "Manuals"], ["overdrive", "Overdrive"], ["leslie", "Leslie"], ["reverb", "Reverb"], ["tone", "Tone"], ["programs", "Programs"], ["monitor", "Monitor"]];
+  var tabs = $("tabs");
+  TABS.forEach(function (t) {
+    var b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "tab"); b.id = "t-" + t[0]; b.textContent = t[1];
+    b.onclick = function () { show(t[0]); try { history.replaceState(null, "", "#" + t[0]); } catch (e) {} };
+    tabs.appendChild(b);
+  });
+  function show(n) {
+    if (!TABS.some(function (t) { return t[0] === n; })) n = "manuals";
+    TABS.forEach(function (t) { $("p-" + t[0]).hidden = t[0] !== n; $("t-" + t[0]).setAttribute("aria-selected", String(t[0] === n)); });
+    if (n === "manuals") paint();
+  }
+  window.addEventListener("hashchange", function () { show(location.hash.slice(1)); });
+  buildManuals(); buildSegs(); show(location.hash.slice(1)); paint();
+  window.addEventListener("resize", paint);
+  logline("dim", "Draft: nothing is sent until you connect. Moving a control here only logs what it would send.");
+})();
+</script>
+
+</body>
+</html>
