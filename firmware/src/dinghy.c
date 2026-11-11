@@ -88,6 +88,11 @@ static void draw_battery(uint32_t st)           /* st: bars 0 .. 4, bit 3 = a US
 static const char *const MAN[3] = {"UPPER", "LOWER", "PEDAL"};
 static const uint8_t PEDID[2] = {0, 2};         /* the pedal's drawbars sit in the columns of the 16' and the 8' */
 static uint32_t screen, sel[3];
+#ifdef DINGHY_HOST
+#define CORES() 2u
+#else
+#define CORES() (fm1_c1_on ? 2u : 1u)                  /* the second core runs (fm1_cpu1.h), or it was not there / was given up */
+#endif
 static uint32_t load_peak, load_now, load_wheels, ld_org, ld_od, ld_rv, ld_le;
 static uint32_t midi_ch, midi_kind, midi_cnt, midi_t, midi_d1;   /* the last message that came in: channel 1..16, kind 0 none 1 on 2 off 3 CC 4 PC 5 other */
 
@@ -168,6 +173,7 @@ static void band_block(uint32_t scr, uint32_t m)
             char *q;
             q = su(sp(t, "LOAD "), load_now); *q = 0;          /* the peaks since the screen last looked, in us: all, organ, preamp, reverb, Leslie */
             cv_text(104, 0, &FONT_S, t, C_BAR);
+            cv_text(176, 0, &FONT_S, CORES() == 2u ? "C2" : "C1", CORES() == 2u ? C_BAR : C_ACC);   /* cores working: C1 = one (the second did not answer) */
             q = su(sp(su(sp(t, "ORG "), ld_org), " W"), load_wheels); *q = 0;
             cv_text(104, 16, &FONT_S, t, C_BAR);
             q = su(sp(su(sp(t, "OD "), ld_od), " RV "), ld_rv); *q = 0;
@@ -262,6 +268,9 @@ static void app_main(void)
     uint32_t prev = 0, k, i, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
     uint32_t hash[9], drawn_screen = 99, drawn_batt = ~0u;
     uint8_t held[27], heldm[27];
+#ifdef DINGHY_HOST
+    if (getenv("ORGAN_ONE")) organ_two = 0;          /* tests: all the wheels in one call, to compare with the two halves */
+#endif
     int32_t oct = 0;
 
     for (i = 0; i < NW; i++) { seed = seed * 1664525u + 1013904223u; wph[i] = seed; }   /* the wheels start anywhere */
@@ -382,7 +391,7 @@ static void app_main(void)
                 h = hmix(hmix(1, screen), m);
                 for (i = 0; i < cnt; i++) h = hmix(h, v[i]);
                 h = hmix(h, sel[m]);
-                if (m == 2u && screen == 2u) h = hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(h, load_now), ld_org), ld_od), ld_rv), ld_le), load_peak), load_wheels), midi_ch * 8u + midi_kind + midi_cnt * 64u + midi_d1 * 4096u), midi_kind && fm1_ms - midi_t < 1000u);
+                if (m == 2u && screen == 2u) h = hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(h, CORES()), load_now), ld_org), ld_od), ld_rv), ld_le), load_peak), load_wheels), midi_ch * 8u + midi_kind + midi_cnt * 64u + midi_d1 * 4096u), midi_kind && fm1_ms - midi_t < 1000u);
                 if (h != hash[1 + m]) { hash[1 + m] = h; band_block(screen, m); }
             }
             for (r = 0; r < 4u; r++) {
