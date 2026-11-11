@@ -26,9 +26,16 @@ jobs:
       - name: Install tools
         run: |
           python3 -m pip install Pillow
-          APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
-          sudo apt-get $APT update
-          sudo apt-get $APT install -y clang lld
+          # the runner image has clang and often lld already: apt only when one is missing (its package mirror has been down)
+          WASMLD="$(command -v wasm-ld || ls /usr/lib/llvm-*/bin/wasm-ld 2>/dev/null | sort -V | tail -1 || true)"
+          if command -v clang >/dev/null && [ -n "$WASMLD" ]; then
+            echo "clang and wasm-ld are there: $WASMLD"
+            case "$WASMLD" in /usr/lib/llvm-*) echo "$(dirname "$WASMLD")" >> "$GITHUB_PATH";; esac
+          else
+            APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+            sudo apt-get $APT update
+            sudo apt-get $APT install -y clang lld
+          fi
       - name: Firmware engine on this computer (WAV and screen PNGs)
         run: tests/run_host.sh
       - name: Two halves of the wheels equal all of them (the second core's split)
