@@ -31,6 +31,9 @@ enum { ENC_SELECT = 0, ENC_ALGORITHM = 1, ENC_KNOB1 = 2, ENC_KNOB2 = 3, ENC_KNOB
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+#include "fm1_cpu1.h"                          /* the second core: organ_split (organ_core.h) hands it the odd tonewheels */
+#define ORGAN_C1_RUN(fn, arg) fm1_cpu1_run(fn, arg)
+#define ORGAN_C1_WAIT() fm1_cpu1_wait()
 #include "fm1_input.h"
 #include "fm1_timer.h"
 #include "fm1_lcd_hw.h"
@@ -358,6 +361,8 @@ void fm1_cstart(void)
     extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
     uint32_t *s, *d, p3, boot_mode;
     fm1_time_init();
+    fm1_cpu1_halt();                            /* a reset may have left core 1 running: held before the RAM it may read is cleared */
+    fm1_supplies_stock();                       /* with both cores running the boot loader's supply levels read wrong on some units: M-VAVE's own (as Dinghy / SLOOP do) */
     fm1_reset_reason();
     p3 = fm1_boot.p3_rst;
     fm1_wdt_arm(0x0D);
@@ -388,6 +393,9 @@ void fm1_cstart(void)
     uart_midi_init();                           /* before the timer starts: it does a PORTH read-modify-write */
 #endif
     fm1_timer5_start(isr_timer5, 4);
+    fm1_guard_pc_open();                        /* core 1 starts in the chip's ROM: the PC limits open while it comes up */
+    fm1_cpu1_start();                           /* -1 (it did not answer): one core, nothing else changes */
+    fm1_guard_enable(FM1_GUARD_PC);
     fm1_guard_lock_top();
     fm1_irq_enable_all();
     app_main();
