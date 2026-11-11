@@ -324,7 +324,14 @@ static void app_main(void)
         }
         if ((e = fm1_enc_take(ENC_KNOB2)) != 0) P.vtype = clampu((int32_t)P.vtype + e, 5);
         if ((e = fm1_enc_take(ENC_KNOB3)) != 0) P.drv = clampu((int32_t)P.drv + e, 8);
-        if ((e = fm1_enc_take(ENC_KNOB4)) != 0) P.rev = clampu((int32_t)P.rev + e * 8, 127);   /* reverb mix, like CC 91 */
+        if ((e = fm1_enc_take(ENC_KNOB4)) != 0) {               /* reverb mix, like CC 91: a doubling a step, fine at the bottom */
+            static const uint8_t REVS[9] = {0, 1, 2, 4, 8, 16, 32, 64, 127};
+            int32_t j = 0;
+            while (j < 8 && REVS[j + 1] <= P.rev) j++;                      /* the step at or below the value (CC 91 may sit between) */
+            if (REVS[j] < P.rev && e < 0) e++;                              /* between two steps: down lands on the one below, up on the next */
+            j += e;
+            P.rev = REVS[clampu(j, 8)];
+        }
 
         while (midi_get(&st, &d1, &d2)) {       /* USB-MIDI in: channel 1 upper, 2 lower, 3 pedal */
             uint32_t cmd = st & 0xF0u, ch = st & 0x0Fu;
