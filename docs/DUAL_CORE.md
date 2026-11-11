@@ -9,7 +9,7 @@ On the FM-1 one audio block (256 frames, 5800 us) of a loaded patch costs: organ
 sum 6200 us with the overdrive on: over the limit. The tonewheels are most of the organ's time.
 
 ## The split: even / odd tonewheels, no extra latency
-`organ_wheels(w0, ws, n, acc, accv, &act, &vany)` (firmware/src/organ_core.h) renders the wheels w0, w0 + ws, ... of a block into its own buses.
+`wheels_render(w0, ws, n, acc, accv, &act, &vany)` (firmware/src/organ_core.h) renders the wheels w0, w0 + ws, ... of a block into its own buses.
 Every wheel has its own phase and levels, so the even wheels on core 0 and the odd ones on core 1 add up to exactly what one call over all wheels
 gives, bit for bit (integer addition). `organ_split` hands the odd wheels to core 1 (`ORGAN_C1_RUN`), does the even ones itself, waits
 (`ORGAN_C1_WAIT`), adds the buses. Nothing is delayed: the block is the same block, so the latency stays what it was. The preamp, reverb and

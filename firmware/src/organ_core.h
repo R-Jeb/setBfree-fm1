@@ -61,7 +61,7 @@ static const uint8_t VIBMODE[6] = {1, 4, 2, 5, 3, 6};   /* knob position -> mode
 /* The tonewheels w0, w0 + ws, ... of one block into the buses ac (direct) and acv (vibrato): the part of the sound that costs the time. Every wheel
  * is its own (phase, levels), so two calls with the even and the odd wheels, one on each core (organ_c1_job), add to exactly the sum of one call
  * with all of them. *act counts the wheels sounding, *vany says one of them reaches the scanner. */
-static void organ_wheels(uint32_t w0, uint32_t ws, uint32_t n, int32_t *acc, int32_t *accv, uint32_t *actp, uint32_t *vanyp)
+static void wheels_render(uint32_t w0, uint32_t ws, uint32_t n, int32_t *acc, int32_t *accv, uint32_t *actp, uint32_t *vanyp)
 {
     uint32_t w, i, act = 0, vany = 0;
     for (i = 0; i < n; i++) acc[i] = accv[i] = 0;
@@ -156,15 +156,15 @@ static uint8_t organ_two = 1;
 #define ORGAN_C1_RUN(fn, arg) (organ_two ? ((fn)(arg), 1) : 0)
 #define ORGAN_C1_WAIT() 0
 #endif
-static void organ_c1_job(uint32_t n) { organ_wheels(1u, 2u, n, acc2, accv2, (uint32_t *)&c1_act, (uint32_t *)&c1_vany); }
+static void organ_c1_job(uint32_t n) { wheels_render(1u, 2u, n, acc2, accv2, (uint32_t *)&c1_act, (uint32_t *)&c1_vany); }
 static void organ_split(uint32_t n, uint32_t *act, uint32_t *vany)
 {
     uint32_t a0, v0, i;
     if (!ORGAN_C1_RUN(organ_c1_job, n)) {
-        organ_wheels(0u, 1u, n, acc, accv, act, vany);
+        wheels_render(0u, 1u, n, acc, accv, act, vany);
         return;
     }
-    organ_wheels(0u, 2u, n, acc, accv, &a0, &v0);
+    wheels_render(0u, 2u, n, acc, accv, &a0, &v0);
     if (ORGAN_C1_WAIT())                        /* core 1 did not answer in time: it is held now, the odd wheels (one block late) on this one from here on */
         organ_c1_job(n);
     for (i = 0; i < n; i++) {
