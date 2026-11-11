@@ -88,7 +88,7 @@ static void draw_battery(uint32_t st)           /* st: bars 0 .. 4, bit 3 = a US
 static const char *const MAN[3] = {"UPPER", "LOWER", "PEDAL"};
 static const uint8_t PEDID[2] = {0, 2};         /* the pedal's drawbars sit in the columns of the 16' and the 8' */
 static uint32_t screen, sel[3];
-static uint32_t load_peak, load_now, load_wheels;
+static uint32_t load_peak, load_now, load_wheels, ld_org, ld_od, ld_rv, ld_le;
 static uint32_t midi_ch, midi_kind, midi_cnt, midi_t, midi_d1;   /* the last message that came in: channel 1..16, kind 0 none 1 on 2 off 3 CC 4 PC 5 other */
 
 static uint32_t hmix(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
@@ -166,25 +166,26 @@ static void band_block(uint32_t scr, uint32_t m)
         if (!act) cv_text(4 + 8 * 6, 0, &FONT_S, "INFO", C_OFF);
         if (m == 2 && act) {                    /* the free area of the pedal screen: the load of the audio block */
             char *q;
-            cv_text(104, 0, &FONT_S, "LOAD", C_OFF);
-            q = su(sp(t, "W "), load_wheels); *q = 0;
+            q = su(sp(t, "LOAD "), load_now); *q = 0;          /* the peaks since the screen last looked, in us: all, organ, preamp, reverb, Leslie */
+            cv_text(104, 0, &FONT_S, t, C_BAR);
+            q = su(sp(su(sp(t, "ORG "), ld_org), " W"), load_wheels); *q = 0;
             cv_text(104, 16, &FONT_S, t, C_BAR);
-            q = sp(su(t, load_now), " us"); *q = 0;
-            cv_text(104, 32, &FONT_S, t, C_BAR);
-            q = su(sp(t, "MAX "), load_peak); *q = 0;
+            q = su(sp(su(sp(t, "OD "), ld_od), " RV "), ld_rv); *q = 0;
+            cv_text(104, 32, &FONT_S, t, C_OFF);
+            q = su(sp(t, "LES "), ld_le); *q = 0;
             cv_text(104, 48, &FONT_S, t, C_OFF);
             {                                   /* MIDI in: the channel of the last message (bright for a second), and how many came */
                 static const char *const KN[6] = {"--", "ON", "OFF", "CC", "PC", "?"};
                 uint16_t mc = midi_kind && fm1_ms - midi_t < 1000u ? C_ACC : C_OFF;
-                cv_text(184, 0, &FONT_S, "MIDI", C_OFF);
+                cv_text(200, 0, &FONT_S, "MIDI", C_OFF);
                 q = midi_kind ? su(sp(t, "CH "), midi_ch) : sp(t, "CH -"); *q = 0;
-                cv_text(184, 16, &FONT_S, t, mc);
+                cv_text(200, 16, &FONT_S, t, mc);
                 q = sp(t, KN[midi_kind]);                       /* a controller or program change shows its number: "CC 64" */
                 if (midi_kind == 3u || midi_kind == 4u) q = su(sp(q, " "), midi_d1);
                 *q = 0;
-                cv_text(184, 32, &FONT_S, t, mc);
+                cv_text(200, 32, &FONT_S, t, mc);
                 q = su(t, midi_cnt % 10000u); *q = 0;
-                cv_text(184, 48, &FONT_S, t, C_OFF);
+                cv_text(200, 48, &FONT_S, t, C_OFF);
             }
         }
         y0 = 16;
@@ -360,9 +361,9 @@ static void app_main(void)
 
         if (fm1_ms - t_load > 500u) {           /* how close to the 5800 us a block has: the number to watch */
             t_load = fm1_ms;
-            load_now = load_us; load_wheels = wheels_on;
+            load_now = load_us; load_wheels = wheels_on; ld_org = load_org; ld_od = load_od; ld_rv = load_rv; ld_le = load_le;
             if (load_now > load_peak) load_peak = load_now;
-            load_us = 0;
+            load_us = load_org = load_od = load_rv = load_le = 0;
         }
 
         if (screen != drawn_screen) {           /* a new screen: clear, and draw every band */
@@ -381,7 +382,7 @@ static void app_main(void)
                 h = hmix(hmix(1, screen), m);
                 for (i = 0; i < cnt; i++) h = hmix(h, v[i]);
                 h = hmix(h, sel[m]);
-                if (m == 2u && screen == 2u) h = hmix(hmix(hmix(hmix(hmix(h, load_now), load_peak), load_wheels), midi_ch * 8u + midi_kind + midi_cnt * 64u + midi_d1 * 4096u), midi_kind && fm1_ms - midi_t < 1000u);
+                if (m == 2u && screen == 2u) h = hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(h, load_now), ld_org), ld_od), ld_rv), ld_le), load_peak), load_wheels), midi_ch * 8u + midi_kind + midi_cnt * 64u + midi_d1 * 4096u), midi_kind && fm1_ms - midi_t < 1000u);
                 if (h != hash[1 + m]) { hash[1 + m] = h; band_block(screen, m); }
             }
             for (r = 0; r < 4u; r++) {
