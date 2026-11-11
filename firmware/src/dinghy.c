@@ -262,6 +262,9 @@ static void app_main(void)
     uint32_t prev = 0, k, i, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
     uint32_t hash[9], drawn_screen = 99, drawn_batt = ~0u;
     uint8_t held[27], heldm[27];
+#ifdef DINGHY_HOST
+    if (getenv("ORGAN_ONE")) organ_two = 0;          /* tests: all the wheels in one call, to compare with the two halves */
+#endif
     int32_t oct = 0;
 
     for (i = 0; i < NW; i++) { seed = seed * 1664525u + 1013904223u; wph[i] = seed; }   /* the wheels start anywhere */

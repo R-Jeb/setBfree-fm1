@@ -58,72 +58,14 @@ static int32_t perc_env = 32767;                /* Q15 */
 
 static const uint8_t VIBMODE[6] = {1, 4, 2, 5, 3, 6};   /* knob position -> mode: 1..3 V1..V3, 4..6 C1..C3 */
 
-static void app_audio(int32_t *out, uint32_t n)
+/* The tonewheels w0, w0 + ws, ... of one block into the buses ac (direct) and acv (vibrato): the part of the sound that costs the time. Every wheel
+ * is its own (phase, levels), so two calls with the even and the odd wheels, one on each core (organ_c1_job), add to exactly the sum of one call
+ * with all of them. *act counts the wheels sounding, *vany says one of them reaches the scanner. */
+static void organ_wheels(uint32_t w0, uint32_t ws, uint32_t n, int32_t *acc, int32_t *accv, uint32_t *actp, uint32_t *vanyp)
 {
-    /* setBfree scanner.modulation.v1..v3: the delay is 1 + A + A sin(phase) samples, A = 3, 6, 9, at 48 kHz (the Pi it was measured on);
-     * here in samples of 44.1 kHz (x 44100 / 48000), Q8 */
-    static const int32_t VIBA[3] = {706, 1411, 2117};
-    static const int32_t VIBO = 235;            /* the "1 +": one sample of 48 kHz */
-    uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, llo = pl_lo | ml_lo, lhi = pl_hi | ml_hi, pk = pp_k | mp_k;
-    uint32_t k, d, w, e, i, nk = 0, nku = 0, act = 0, vany = 0, t0 = fm1_ticks(), t1, t2, t3, t4;
-    int32_t pa = 0, kd;
-    uint32_t dm = P.drv, od = P.od, les = P.les, vm;
-    int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
-    int32_t *tu = P.vup ? wtgtv : wtgt, *tl = P.vlo ? wtgtv : wtgt;   /* the manuals reach the scanner or not (pedals and percussion never do) */
-    if (P.perc && !P.soft) gsw = (gsw * PERC_NORMAL_Q15) >> 15;
-    if (n > 256u) n = 256u;
-
-    for (w = 0; w < NW; w++) wtgt[w] = wtgtv[w] = wpt[w] = 0;
-    for (k = 0; k < NK; k++) {
-        nku += k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u;
-        nk += (k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u) + (k < 32u ? llo >> k & 1u : lhi >> (k - 32u) & 1u);
-    }
-    for (k = 0; k < 32u; k++) nk += pk >> k & 1u;                     /* setBfree's key compression counts every key down */
-    if (!nku) perc_env = P.soft ? 16424 : 32767; /* single trigger: the envelope restarts when every upper key is up */
-    else pa = (PERC_Q10 * perc_env) >> 15;     /* percussion level now (setBfree: 11 * 0.5012 when soft, decaying) */
-    for (k = 0; k < NK; k++) {
-        if (k < 32u ? !(lo >> k & 1u) : !(hi >> (k - 32u) & 1u)) continue;
-        for (d = 0; d < NB; d++) {
-            int32_t lvl = P.db[d];
-            uint32_t e;
-            if (!lvl || (d == 8u && P.perc)) continue;   /* percussion takes the 1' drawbar's place */
-            for (e = CT_IDX[k * 9u + d]; e < CT_IDX[k * 9u + d + 1u]; e++)   /* the main wheel, tapered, and the leakage */
-                tu[CT_W[e]] += (lvl * 128 * (int32_t)CT_G[e] + 2048) >> 12;
-        }
-        if (P.perc) {                           /* percussion: the 2nd or 3rd harmonic bus (as the 4' or 2 2/3' drawbar's: tapering, leakage), through setBfree's high-pass */
-            uint32_t pd = P.perc3 ? 4u : 3u;
-            for (e = CT_IDX[k * 9u + pd]; e < CT_IDX[k * 9u + pd + 1u]; e++)
-            {
-                int32_t pl = (pa * (int32_t)CT_G[e]) >> 12;
-                wpt[CT_W[e]] += pl;
-                wtgt[CT_W[e]] += (pl * (int32_t)PERC_HP[CT_W[e]]) >> 15;
-            }
-        }
-    }
-    for (k = 0; k < NK; k++) {
-        if (k < 32u ? !(llo >> k & 1u) : !(lhi >> (k - 32u) & 1u)) continue;
-        for (d = 0; d < NB; d++) {              /* the lower manual: the same wiring and tapering, its own drawbars, no percussion */
-            int32_t lvl = P.dbl[d];
-            uint32_t e;
-            if (!lvl) continue;
-            for (e = CT_IDX[k * 9u + d]; e < CT_IDX[k * 9u + d + 1u]; e++)
-                tl[CT_W[e]] += (lvl * 128 * (int32_t)CT_G[e] + 2048) >> 12;
-        }
-    }
-    for (k = 0; k < 32u; k++) {                 /* the pedal: 16' and 8', straight to the swell bus */
-        if (!(pk >> k & 1u)) continue;
-        for (d = 0; d < 2u; d++) {
-            int32_t lvl = P.dbp[d];
-            uint32_t e;
-            if (!lvl) continue;
-            for (e = CP_IDX[k * 2u + d]; e < CP_IDX[k * 2u + d + 1u]; e++)
-                wtgt[CP_W[e]] += (lvl * 128 * (int32_t)CP_G[e] + 2048) >> 12;
-        }
-    }
-    if (nku && P.perc) perc_env = (perc_env * (P.fast ? DEC_FAST : DEC_SLOW)) >> 15;
-
+    uint32_t w, i, act = 0, vany = 0;
     for (i = 0; i < n; i++) acc[i] = accv[i] = 0;
-    for (w = 0; w < NW; w++) {
+    for (w = w0; w < NW; w += ws) {
         int32_t c = wcur[w], t = wtgt[w], cv = wcurv[w], tv = wtgtv[w];
         uint32_t ph = wph[w], inc = WHEEL_INC[w];
         if (!c && !t && !cv && !tv) { wph[w] = ph + inc * n; wpc[w] = wpt[w]; continue; }   /* silent: costs nothing, the wheel turns on */
@@ -201,7 +143,103 @@ static void app_audio(int32_t *out, uint32_t n)
         wcurv[w] = tv;
         wpc[w] = wpt[w];
     }
+    *actp = act;
+    *vanyp = vany;
+}
 
+/* The second core. platform.c defines ORGAN_C1_RUN / ORGAN_C1_WAIT (fm1_cpu1.h); elsewhere (host tests, the browser) the odd wheels run in the same
+ * thread, one after the other, with the same result: the sum of the two halves is the whole (organ_two = 0 runs all the wheels in one call). */
+static int32_t acc2[256], accv2[256];           /* the odd wheels' buses */
+static volatile uint32_t c1_act, c1_vany;
+static uint8_t organ_two = 1;
+#ifndef ORGAN_C1_RUN
+#define ORGAN_C1_RUN(fn, arg) (organ_two ? ((fn)(arg), 1) : 0)
+#define ORGAN_C1_WAIT() 0
+#endif
+static void organ_c1_job(uint32_t n) { organ_wheels(1u, 2u, n, acc2, accv2, (uint32_t *)&c1_act, (uint32_t *)&c1_vany); }
+static void organ_split(uint32_t n, uint32_t *act, uint32_t *vany)
+{
+    uint32_t a0, v0, i;
+    if (!ORGAN_C1_RUN(organ_c1_job, n)) {
+        organ_wheels(0u, 1u, n, acc, accv, act, vany);
+        return;
+    }
+    organ_wheels(0u, 2u, n, acc, accv, &a0, &v0);
+    if (ORGAN_C1_WAIT())                        /* core 1 did not answer in time: it is held now, the odd wheels (one block late) on this one from here on */
+        organ_c1_job(n);
+    for (i = 0; i < n; i++) {
+        acc[i] += acc2[i];
+        accv[i] += accv2[i];
+    }
+    *act = a0 + c1_act;
+    *vany = v0 | c1_vany;
+}
+
+static void app_audio(int32_t *out, uint32_t n)
+{
+    /* setBfree scanner.modulation.v1..v3: the delay is 1 + A + A sin(phase) samples, A = 3, 6, 9, at 48 kHz (the Pi it was measured on);
+     * here in samples of 44.1 kHz (x 44100 / 48000), Q8 */
+    static const int32_t VIBA[3] = {706, 1411, 2117};
+    static const int32_t VIBO = 235;            /* the "1 +": one sample of 48 kHz */
+    uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, llo = pl_lo | ml_lo, lhi = pl_hi | ml_hi, pk = pp_k | mp_k;
+    uint32_t k, d, w, e, i, nk = 0, nku = 0, act = 0, vany = 0, t0 = fm1_ticks(), t1, t2, t3, t4;
+    int32_t pa = 0, kd;
+    uint32_t dm = P.drv, od = P.od, les = P.les, vm;
+    int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
+    int32_t *tu = P.vup ? wtgtv : wtgt, *tl = P.vlo ? wtgtv : wtgt;   /* the manuals reach the scanner or not (pedals and percussion never do) */
+    if (P.perc && !P.soft) gsw = (gsw * PERC_NORMAL_Q15) >> 15;
+    if (n > 256u) n = 256u;
+
+    for (w = 0; w < NW; w++) wtgt[w] = wtgtv[w] = wpt[w] = 0;
+    for (k = 0; k < NK; k++) {
+        nku += k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u;
+        nk += (k < 32u ? lo >> k & 1u : hi >> (k - 32u) & 1u) + (k < 32u ? llo >> k & 1u : lhi >> (k - 32u) & 1u);
+    }
+    for (k = 0; k < 32u; k++) nk += pk >> k & 1u;                     /* setBfree's key compression counts every key down */
+    if (!nku) perc_env = P.soft ? 16424 : 32767; /* single trigger: the envelope restarts when every upper key is up */
+    else pa = (PERC_Q10 * perc_env) >> 15;     /* percussion level now (setBfree: 11 * 0.5012 when soft, decaying) */
+    for (k = 0; k < NK; k++) {
+        if (k < 32u ? !(lo >> k & 1u) : !(hi >> (k - 32u) & 1u)) continue;
+        for (d = 0; d < NB; d++) {
+            int32_t lvl = P.db[d];
+            uint32_t e;
+            if (!lvl || (d == 8u && P.perc)) continue;   /* percussion takes the 1' drawbar's place */
+            for (e = CT_IDX[k * 9u + d]; e < CT_IDX[k * 9u + d + 1u]; e++)   /* the main wheel, tapered, and the leakage */
+                tu[CT_W[e]] += (lvl * 128 * (int32_t)CT_G[e] + 2048) >> 12;
+        }
+        if (P.perc) {                           /* percussion: the 2nd or 3rd harmonic bus (as the 4' or 2 2/3' drawbar's: tapering, leakage), through setBfree's high-pass */
+            uint32_t pd = P.perc3 ? 4u : 3u;
+            for (e = CT_IDX[k * 9u + pd]; e < CT_IDX[k * 9u + pd + 1u]; e++)
+            {
+                int32_t pl = (pa * (int32_t)CT_G[e]) >> 12;
+                wpt[CT_W[e]] += pl;
+                wtgt[CT_W[e]] += (pl * (int32_t)PERC_HP[CT_W[e]]) >> 15;
+            }
+        }
+    }
+    for (k = 0; k < NK; k++) {
+        if (k < 32u ? !(llo >> k & 1u) : !(lhi >> (k - 32u) & 1u)) continue;
+        for (d = 0; d < NB; d++) {              /* the lower manual: the same wiring and tapering, its own drawbars, no percussion */
+            int32_t lvl = P.dbl[d];
+            uint32_t e;
+            if (!lvl) continue;
+            for (e = CT_IDX[k * 9u + d]; e < CT_IDX[k * 9u + d + 1u]; e++)
+                tl[CT_W[e]] += (lvl * 128 * (int32_t)CT_G[e] + 2048) >> 12;
+        }
+    }
+    for (k = 0; k < 32u; k++) {                 /* the pedal: 16' and 8', straight to the swell bus */
+        if (!(pk >> k & 1u)) continue;
+        for (d = 0; d < 2u; d++) {
+            int32_t lvl = P.dbp[d];
+            uint32_t e;
+            if (!lvl) continue;
+            for (e = CP_IDX[k * 2u + d]; e < CP_IDX[k * 2u + d + 1u]; e++)
+                wtgt[CP_W[e]] += (lvl * 128 * (int32_t)CP_G[e] + 2048) >> 12;
+        }
+    }
+    if (nku && P.perc) perc_env = (perc_env * (P.fast ? DEC_FAST : DEC_SLOW)) >> 15;
+
+    organ_split(n, &act, &vany);
     vm = vany ? VIBMODE[P.vtype % 6u] : 0u;
     {
         int32_t kt = (int32_t)KEY_COMP[nk > 61u ? 61u : nk] << 4;       /* key compression glides over the block */

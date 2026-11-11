@@ -29,6 +29,11 @@ jobs:
           sudo apt-get install -y clang lld
       - name: Firmware engine on this computer (WAV and screen PNGs)
         run: tests/run_host.sh
+      - name: Two halves of the wheels equal all of them (the second core's split)
+        run: |
+          cp build/host/dinghy.wav build/host/two.wav
+          ORGAN_ONE=1 build/host/dinghy build/host/one > /dev/null
+          cmp build/host/one.wav build/host/two.wav
       - name: Programs and MIDI controllers (setBfree's defaults)
         run: |
           mkdir -p build
