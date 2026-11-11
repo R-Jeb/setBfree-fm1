@@ -1,7 +1,8 @@
 # The second core (branch dual-core-2)
 
-State: **written without a build for the AC791N** (the cloud session that wrote it has no toolchain). The host tests pass; the device code has
-never been compiled or run. Build it locally (`tools/get_toolchain.sh`, the SDK, `./build.sh`), fix what the compiler says, test on an FM-1.
+State: **runs on an FM-1** (tested 2026-11-11). Idle 94 us (0 wheels). Loaded patch (4 keys upper and lower, percussion, chorus, Leslie fast, reverb 4):
+organ about 2000 us, total about 4000 us with the overdrive off and about 4400 us with it on (one core: organ 3600 to 3800, total 5800 to 6200).
+No dropouts, the response is as before. The host tests pass (the two halves are identical to one call, bit for bit).
 
 ## Why
 On the FM-1 one audio block (256 frames, 5800 us) of a loaded patch costs: organ 3600 to 3800 us (70 wheels), Leslie 1580, preamp 440, reverb 244,
