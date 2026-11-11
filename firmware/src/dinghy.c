@@ -89,6 +89,7 @@ static const char *const MAN[3] = {"UPPER", "LOWER", "PEDAL"};
 static const uint8_t PEDID[2] = {0, 2};         /* the pedal's drawbars sit in the columns of the 16' and the 8' */
 static uint32_t screen, sel[3];
 static uint32_t load_peak, load_now, load_wheels;
+static uint32_t midi_ch, midi_kind, midi_cnt, midi_t, midi_d1;   /* the last message that came in: channel 1..16, kind 0 none 1 on 2 off 3 CC 4 PC 5 other */
 
 static uint32_t hmix(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
 static uint32_t colx(uint32_t i) { return 3u + 26u * i; }
@@ -172,6 +173,19 @@ static void band_block(uint32_t scr, uint32_t m)
             cv_text(104, 32, &FONT_S, t, C_BAR);
             q = su(sp(t, "MAX "), load_peak); *q = 0;
             cv_text(104, 48, &FONT_S, t, C_OFF);
+            {                                   /* MIDI in: the channel of the last message (bright for a second), and how many came */
+                static const char *const KN[6] = {"--", "ON", "OFF", "CC", "PC", "?"};
+                uint16_t mc = midi_kind && fm1_ms - midi_t < 1000u ? C_ACC : C_OFF;
+                cv_text(184, 0, &FONT_S, "MIDI", C_OFF);
+                q = midi_kind ? su(sp(t, "CH "), midi_ch) : sp(t, "CH -"); *q = 0;
+                cv_text(184, 16, &FONT_S, t, mc);
+                q = sp(t, KN[midi_kind]);                       /* a controller or program change shows its number: "CC 64" */
+                if (midi_kind == 3u || midi_kind == 4u) q = su(sp(q, " "), midi_d1);
+                *q = 0;
+                cv_text(184, 32, &FONT_S, t, mc);
+                q = su(t, midi_cnt % 10000u); *q = 0;
+                cv_text(184, 48, &FONT_S, t, C_OFF);
+            }
         }
         y0 = 16;
     }
@@ -310,10 +324,14 @@ static void app_main(void)
         }
         if ((e = fm1_enc_take(ENC_KNOB2)) != 0) P.vtype = clampu((int32_t)P.vtype + e, 5);
         if ((e = fm1_enc_take(ENC_KNOB3)) != 0) P.drv = clampu((int32_t)P.drv + e, 8);
-        if ((e = fm1_enc_take(ENC_KNOB4)) != 0) P.rev = clampu((int32_t)P.rev + e * 4, 127);   /* reverb mix, like CC 91 */
+        if ((e = fm1_enc_take(ENC_KNOB4)) != 0) P.rev = clampu((int32_t)P.rev + e * 8, 127);   /* reverb mix, like CC 91 */
 
         while (midi_get(&st, &d1, &d2)) {       /* USB-MIDI in: channel 1 upper, 2 lower, 3 pedal */
             uint32_t cmd = st & 0xF0u, ch = st & 0x0Fu;
+            if (cmd >= 0x80u && cmd < 0xF0u) {
+                midi_ch = ch + 1u; midi_cnt++; midi_t = fm1_ms; midi_d1 = d1;
+                midi_kind = cmd == 0x90u && d2 ? 1u : cmd == 0x80u || cmd == 0x90u ? 2u : cmd == 0xB0u ? 3u : cmd == 0xC0u ? 4u : 5u;
+            }
             if (cmd == 0x90u && d2) organ_midi_note(ch, d1, 1);
             else if (cmd == 0x80u || cmd == 0x90u) organ_midi_note(ch, d1, 0);
             else if (cmd == 0xB0u) organ_cc_ch(ch, d1, d2);     /* setBfree's controller numbers (organ_core.h) */
@@ -356,7 +374,7 @@ static void app_main(void)
                 h = hmix(hmix(1, screen), m);
                 for (i = 0; i < cnt; i++) h = hmix(h, v[i]);
                 h = hmix(h, sel[m]);
-                if (m == 2u && screen == 2u) h = hmix(hmix(hmix(h, load_now), load_peak), load_wheels);
+                if (m == 2u && screen == 2u) h = hmix(hmix(hmix(hmix(hmix(h, load_now), load_peak), load_wheels), midi_ch * 8u + midi_kind + midi_cnt * 64u + midi_d1 * 4096u), midi_kind && fm1_ms - midi_t < 1000u);
                 if (h != hash[1 + m]) { hash[1 + m] = h; band_block(screen, m); }
             }
             for (r = 0; r < 4u; r++) {
