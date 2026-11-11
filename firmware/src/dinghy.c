@@ -324,7 +324,7 @@ static void app_main(void)
         }
         if ((e = fm1_enc_take(ENC_KNOB2)) != 0) P.vtype = clampu((int32_t)P.vtype + e, 5);
         if ((e = fm1_enc_take(ENC_KNOB3)) != 0) P.drv = clampu((int32_t)P.drv + e, 8);
-        if ((e = fm1_enc_take(ENC_KNOB4)) != 0) P.rev = clampu((int32_t)P.rev + e * 4, 127);   /* reverb mix, like CC 91 */
+        if ((e = fm1_enc_take(ENC_KNOB4)) != 0) P.rev = clampu((int32_t)P.rev + e * 8, 127);   /* reverb mix, like CC 91 */
 
         while (midi_get(&st, &d1, &d2)) {       /* USB-MIDI in: channel 1 upper, 2 lower, 3 pedal */
             uint32_t cmd = st & 0xF0u, ch = st & 0x0Fu;
