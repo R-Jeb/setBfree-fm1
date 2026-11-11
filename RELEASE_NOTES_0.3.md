@@ -13,12 +13,12 @@ Three manuals, a new flash chip, finer reverb. What is new since 0.2:
   last message that came in (`CH 2`, `ON`, `CC 64`, `PC 12`) and a counter.
 - **Keys:** REC puts the FM-1's own keys on the upper, lower or pedal manual (shown as `KEYS UPPER` and so on on every screen).
   FX switches the vibrato of the screen's manual, LFO the Leslie, SEL the overdrive. **EDIT and SAVE are left free.**
-- **Controls moved:** the screen is on KNOB 1, the overdrive amount (0 to 8) on KNOB 3, the reverb on KNOB 4, the overdrive on/off on
-  SEL (it was EDIT).
+- **Controls moved:** the screen is on KNOB 1, KNOB 2 switches the vibrato / chorus V1, C1, V2, C2, V3, C3 (vibrato 1/2/3 and chorus 1/2/3),
+  the overdrive amount (0 to 8) on KNOB 3, the reverb on KNOB 4, the overdrive on/off on SEL (it was EDIT).
 - **Reverb in doubling steps** on KNOB 4: 0, 1, 2, 4, 8, 16, 32, 64, 127 (fine at the bottom). CC 91 still sets any value.
 - **New flash chip.** Newer FM-1s carry a UC25HQ80 (JEDEC id 0xB36014) instead of the Puya P25Q80 (0x856014). The firmware and the
-  update loader accept both now (as Dinghy 0.5): on the new chip the settings are saved and the firmware can be updated, where an older
-  build saved to RAM only. Please say if your FM-1 has the new chip and it works.
+  update loader accept both now (as Dinghy 0.5): an older build saved to RAM only on the new chip, and its update loader did not know it. Tested on an FM-1 with
+  the new chip: the firmware installs. Please say if your FM-1 has the new chip and it works.
 - **Signal path changes** that can be heard: the percussion is no longer modulated by the vibrato (it was in 0.2; setBfree keeps it dry),
   and the key compression counts the keys of all three manuals.
 
