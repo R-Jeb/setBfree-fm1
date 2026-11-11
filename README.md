@@ -4,7 +4,7 @@
 91 tonewheels, nine drawbars, key click, vibrato and chorus, percussion, overdrive, reverb and a Leslie with
 horn and drum, all in integer arithmetic on the FM-1's JieLi AC791N (no FPU, no 64-bit division).
 
-<p align="center"><img src="docs/screen.png" width="240" alt="The screen: nine drawbars, vibrato, Leslie, percussion, overdrive, reverb, the program"></p>
+<p align="center"><img src="docs/screens.png" width="720" alt="The three screens: upper, lower and pedal manual (the pedal screen also shows the load and the MIDI input)"></p>
 
 The organ follows setBfree wherever that is practical: its tonewheel gear ratios, the tapering and the crosstalk
 between wheels from its compiled play matrix, key click and key compression, the vibrato scanner, the reverb, the
