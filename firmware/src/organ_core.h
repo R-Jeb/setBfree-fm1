@@ -179,18 +179,30 @@ static void organ_split(uint32_t n, uint32_t *act, uint32_t *vany)
     *vany = v0 | c1_vany;
 }
 
-/* A soft limiter instead of a hard clip, for the sum of the wheels with the overdrive off (six notes with four drawbars out reach full scale; a
- * hard clip makes harsh, aliased overtones, the "digital noise"). Up to 3/4 of full scale the signal passes unchanged; above it the slope falls
- * smoothly to zero at 1.25 (y = x - d^2 / 2^15 with d = x - 3/4, Q15), where it reaches the ceiling 1.0. */
-static int32_t soft_lim(int32_t x)
+/* A limiter for the sum of the wheels with the overdrive off. A hard clip makes harsh, aliased overtones (six or seven notes with four drawbars
+ * out and the chorus on reach full scale); a static soft clip only moves the same distortion lower down (measured: a sine 5 % over full scale
+ * still carries -29 dB of it). So this one turns the gain down instead: the whole block is looked at first, the gain for it is the one that keeps
+ * its peak at LIM_T, it falls to that within 32 samples and comes back 1/16 of the way every block (about 90 ms). A gain that moves slowly
+ * only changes the loudness; whatever still gets over (a note that starts inside the first 32 samples) is clipped as before. */
+#define LIM_T 29491                                /* 0.9 of full scale */
+static int32_t lim_g = 32768;                      /* Q15, the gain the last block ended with */
+static void block_limit(int32_t *x, uint32_t n)
 {
-    int32_t a = x < 0 ? -x : x, d;
-    if (a <= 24576) return x;
-    if (a >= 40960) return x < 0 ? -32767 : 32767;
-    d = a - 24576;
-    a -= (d * d) >> 15;                             /* d is below 16384, d * d fits */
-    if (a > 32767) a = 32767;
-    return x < 0 ? -a : a;
+    int32_t pk = 0, g1, g0 = lim_g;
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        int32_t a = x[i] < 0 ? -x[i] : x[i];
+        if (a > pk) pk = a;
+    }
+    g1 = pk > LIM_T ? (int32_t)(((int64_t)LIM_T << 15) / pk) : 32768;
+    if (g1 >= g0) g1 = g0 + ((g1 - g0 + 15) >> 4);      /* back up slowly (the gain is 1 again after a few hundred ms) */
+    if (g1 == 32768 && g0 == 32768) return;        /* the usual case: nothing to do */
+    for (i = 0; i < n; i++) {
+        int32_t g = i < 32u ? g0 + (int32_t)(((int64_t)(g1 - g0) * (int32_t)i) >> 5) : g1;
+        int32_t y = (int32_t)(((int64_t)x[i] * g) >> 15);
+        x[i] = y > 32767 ? 32767 : y < -32767 ? -32767 : y;
+    }
+    lim_g = g1;
 }
 
 static void app_audio(int32_t *out, uint32_t n)
@@ -300,7 +312,7 @@ static void app_audio(int32_t *out, uint32_t n)
     sum_clip += scl;
     t1 = fm1_ticks();
     if (od) od_run(mono, n, OD_CHARACTER, dm);   /* setBfree's preamp: a fixed character, the drive is the input gain */
-    else for (i = 0; i < n; i++) mono[i] = soft_lim(mono[i]);   /* overdrive off: the sum is limited softly, not clipped */
+    else block_limit(mono, n);                      /* overdrive off: the sum is limited by turning the gain down, not clipped */
     t2 = fm1_ticks();
     if (fx_bypass) {
         for (i = 0; i < n; i++) lbuf[i] = rbuf[i] = mono[i];
