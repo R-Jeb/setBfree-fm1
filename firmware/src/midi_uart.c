@@ -17,6 +17,7 @@ static struct {
     uint32_t rd, pend;
     volatile uint32_t bytes, drops, msgs, resync;  /* TIMER5 writes; read-only CDC diagnostics; resync: the DMA lapped the reader */
     uint8_t st, need, got, d0, sysex;
+    uint8_t vol[16], expr[16];                     /* the last CC 7 and CC 11 of each channel (0xFF: none yet) */
 } um;
 
 static void uart_midi_init(void)                   /* before timer5_start(): PORTH RMW */
@@ -25,6 +26,8 @@ static void uart_midi_init(void)                   /* before timer5_start(): POR
     for (i = 0; i < UM_RING; i++)
         um_ring[i] = 0xFFu;
     um.rd = 0;
+    for (i = 0; i < 16u; i++)
+        um.vol[i] = um.expr[i] = 0xFFu;
     fm1_uart1_midi_init(um_ring, UM_RING);
 }
 
@@ -62,6 +65,11 @@ static void um_byte(uint32_t b)
         uint32_t d1 = um.need == 2u ? um.d0 : b, d2 = um.need == 2u ? b : 0u;
         uint32_t pkt = (um.st >> 4) | (uint32_t)um.st << 8 | d1 << 16 | d2 << 24;
         um.got = 0;
+        if ((um.st & 0xF0u) == 0xB0u && (d1 == 7u || d1 == 11u)) {     /* a pedal that repeats its value (or a keyboard that sends it all the time) says nothing new */
+            uint8_t *last = d1 == 7u ? &um.vol[um.st & 15u] : &um.expr[um.st & 15u];
+            if (*last == (uint8_t)d2) return;
+            *last = (uint8_t)d2;
+        }
         if ((um.st & 0xF0u) == 0xA0u || (um.st & 0xF0u) == 0xD0u || (um.st & 0xF0u) == 0xE0u)
             return;                                    /* aftertouch and pitch bend: the organ has no use for them, and a stream of them fills the queue */
         if (midi_enqueue(pkt, 2u)) {
