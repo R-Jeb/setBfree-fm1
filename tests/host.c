@@ -73,6 +73,7 @@ static int settings_save(const void *p, uint32_t n)
 
 static uint8_t mq[64][3];
 static uint32_t mq_w, mq_r;
+static volatile uint8_t midi_in_overflow;       /* the real one is in usb.c */
 static int midi_get(uint8_t *st, uint8_t *d1, uint8_t *d2)
 {
     if (mq_r == mq_w) return 0;

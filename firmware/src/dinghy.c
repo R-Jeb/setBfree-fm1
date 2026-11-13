@@ -192,6 +192,12 @@ static void band_block(uint32_t scr, uint32_t m)
                 cv_text(200, 32, &FONT_S, t, mc);
                 q = su(t, midi_cnt % 10000u); *q = 0;
                 cv_text(200, 48, &FONT_S, t, C_OFF);
+#if FELUCCA_UART
+                if (um.drops + um.resync) {             /* the DIN input lost something (a full queue, or the DMA lapped the reader): E and how often */
+                    q = su(sp(t, "E"), um.drops + um.resync > 99u ? 99u : um.drops + um.resync); *q = 0;
+                    cv_text(176, 16, &FONT_S, t, C_ACC);
+                }
+#endif
             }
         }
         y0 = 16;
@@ -344,6 +350,10 @@ static void app_main(void)
             P.rev = REVS[clampu(j, 8)];
         }
 
+        if (midi_in_overflow) {                 /* a message was lost (queue full): its note off may have been it, so release the MIDI notes */
+            midi_in_overflow = 0;
+            organ_cc_ch(0, 123, 0);
+        }
         while (midi_get(&st, &d1, &d2)) {       /* USB-MIDI in: channel 1 upper, 2 lower, 3 pedal */
             uint32_t cmd = st & 0xF0u, ch = st & 0x0Fu;
             if (cmd >= 0x80u && cmd < 0xF0u) {
