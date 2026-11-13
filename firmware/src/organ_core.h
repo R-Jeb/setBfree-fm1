@@ -37,6 +37,9 @@ static volatile uint8_t fx_bypass;              /* tests: skip the reverb and th
 
 /* ---- the sound (runs in the audio ISR: keep it short, no flash, no screen) */
 #define PERC_Q10 11264                          /* percussion level, setBfree's percEnvScaling 11 (1024 = a drawbar at 8); soft is in perc_env (0.5012) */
+#ifndef ORGAN_LEVEL
+#define ORGAN_LEVEL 20675                       /* the whole tone generator 4 dB below setBfree's level (Q15, 0.631): six notes with four drawbars out clipped the sum at full swell; the preamp is compensated (organ_od.h) */
+#endif
 #define PERC_NORMAL_Q15 19828                   /* setBfree's percDrawbarNormalGain 0.60512: with percussion on and not soft, the whole sound is this much quieter */
 /* the envelope's decay per 256 frames, Q15: setBfree's plug-in multiplies by 0.9999 (slow) or 0.9995 (fast) every sample (its
  * computePercResets, the "4 s" and "1 s", is not called), at 48 kHz as on the Pi it was measured on: 0.9999 ^ (256 * 48000 / 44100) */
@@ -203,6 +206,7 @@ static void app_audio(int32_t *out, uint32_t n)
     int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
     int32_t *tu = P.vup ? wtgtv : wtgt, *tl = P.vlo ? wtgtv : wtgt;   /* the manuals reach the scanner or not (pedals and percussion never do) */
     if (P.perc && !P.soft) gsw = (gsw * PERC_NORMAL_Q15) >> 15;
+    gsw = (gsw * ORGAN_LEVEL) >> 15;
     if (n > 256u) n = 256u;
 
     for (w = 0; w < NW; w++) wtgt[w] = wtgtv[w] = wpt[w] = 0;

@@ -410,7 +410,7 @@ int main(void)
             for (i = 0; i < 4096u; i++) {
                 double xin, bias, norm, u, v, t, in = 32768.0 * 0.045 * (sin(0.0592 * i) + 0.5 * sin(0.1488 * i) + 0.35 * sin(0.2961 * i)) / 1.85 * 1.6;
                 in = floor(in + 0.5) / 32768.0;
-                xin = 3.5675 * in; sag = 0.991 * sag + fabs(xin); bias = 0.5347 - 0.0094 * sag; norm = 1 - 1 / (1 + bias * bias);
+                xin = 3.5675 / (ORGAN_LEVEL / 32768.0) * in; sag = 0.991 * sag + fabs(xin); bias = 0.5347 - 0.0094 * sag; norm = 1 - 1 / (1 + bias * bias);
                 for (k = 7; k > 0; k--) xh[k] = xh[k - 1];
                 xh[0] = xin;
                 u = 0;
@@ -423,7 +423,7 @@ int main(void)
                 yh[0] = v;
                 t = 0.323601515 * yh[16];
                 for (k = 0; k < 8u; k++) t += AF[k] * (yh[15 - 2 * k] + yh[17 + 2 * k]);
-                t *= OD_GOUT[12] / 32768.0;   /* the default input gain (drive 12) with its output gain */
+                t *= OD_GOUT[12] / 32768.0 * (ORGAN_LEVEL / 32768.0);   /* the default input gain (drive 12) with its output gain */
                 if (i >= 256u) { se += (q[i] / 32768.0 - t) * (q[i] / 32768.0 - t); sr += t * t; }
             }
             if (10 * log10(sr / (se + 1e-30)) < worst) worst = 10 * log10(sr / (se + 1e-30));

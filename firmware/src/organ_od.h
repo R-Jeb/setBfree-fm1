@@ -33,7 +33,8 @@ static void od_run(int32_t *x, uint32_t n, uint32_t chr, uint32_t drv)   /* x: Q
     int32_t fb, fb2;                                                                 /* Q15 */
     uint32_t i, k;
     if (drv > OD_DRIVE_MAX) drv = OD_DRIVE_MAX;
-    GIN = OD_GIN[drv]; GOUT = OD_GOUT[drv];
+    GIN = (int32_t)(((int64_t)OD_GIN[drv] << 15) / ORGAN_LEVEL);   /* the tone generator is ORGAN_LEVEL quieter: the preamp sees what it always saw, */
+    GOUT = (int32_t)(((int64_t)OD_GOUT[drv] * ORGAN_LEVEL) >> 15);   /* and its output follows the generator, so on and off stay equally loud */
     if (chr < 32u) { fb = 19075; fb2 = 32735 + (int32_t)(((19075 - 32735) * (int32_t)chr) / 31); }
     else if (chr < 64u) { fb = 19075 + (int32_t)(((32735 - 19075) * (int32_t)(chr - 32u)) / 31); fb2 = 19075; }
     else { fb = 32735; fb2 = 19075 + (int32_t)(((32735 - 19075) * (int32_t)(chr - 64u)) / 63); }
