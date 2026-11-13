@@ -38,7 +38,7 @@ static volatile uint8_t fx_bypass;              /* tests: skip the reverb and th
 /* ---- the sound (runs in the audio ISR: keep it short, no flash, no screen) */
 #define PERC_Q10 11264                          /* percussion level, setBfree's percEnvScaling 11 (1024 = a drawbar at 8); soft is in perc_env (0.5012) */
 #ifndef ORGAN_LEVEL
-#define ORGAN_LEVEL 20675                       /* the whole tone generator 4 dB below setBfree's level (Q15, 0.631): six notes with four drawbars out clipped the sum at full swell; the preamp is compensated (organ_od.h) */
+#define ORGAN_LEVEL 32768                       /* the tone generator's level against setBfree's (Q15, 32768 = the same); a lower value makes room, the preamp is compensated (organ_od.h) */
 #endif
 #define PERC_NORMAL_Q15 19828                   /* setBfree's percDrawbarNormalGain 0.60512: with percussion on and not soft, the whole sound is this much quieter */
 /* the envelope's decay per 256 frames, Q15: setBfree's plug-in multiplies by 0.9999 (slow) or 0.9995 (fast) every sample (its
@@ -186,6 +186,7 @@ static void organ_split(uint32_t n, uint32_t *act, uint32_t *vany)
  * only changes the loudness; whatever still gets over (a note that starts inside the first 32 samples) is clipped as before. */
 #define LIM_T 29491                                /* 0.9 of full scale */
 static int32_t lim_g = 32768;                      /* Q15, the gain the last block ended with */
+static volatile int32_t lim_lo = 32768;            /* the lowest gain since the screen last looked */
 static void block_limit(int32_t *x, uint32_t n)
 {
     int32_t pk = 0, g1, g0 = lim_g;
@@ -203,6 +204,7 @@ static void block_limit(int32_t *x, uint32_t n)
         x[i] = y > 32767 ? 32767 : y < -32767 ? -32767 : y;
     }
     lim_g = g1;
+    if (g1 < lim_lo) lim_lo = g1;
 }
 
 static void app_audio(int32_t *out, uint32_t n)
