@@ -59,7 +59,7 @@ recording to recording by up to 10 dB or more, and the Raspberry Pi has more ene
 | --- | --- |
 | Keys F3 to G5, **OCT-** / **OCT+** | Play the manual **REC** chose; shift the octave |
 | **REC** | The FM-1's own keys play the upper manual, the lower manual or the pedal (shown as `KEYS UPPER` and so on on every screen) |
-| **KNOB 1** | Screen: 1 upper, 2 lower, 3 pedal |
+| **KNOB 1** | Screen: 1 upper, 2 lower, 3 pedal, 4 test values (load of each stage, level of the wheels, limiter, output, MIDI) |
 | **SELECT** knob / **ALGORITHM** knob | Choose a drawbar / set its level 0 to 8, on the manual of the screen (the pedal has two: 16' and 8') |
 | **PRESETS** knob | Step through setBfree's registrations (e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith); they set the upper manual |
 | **KNOB 2** | Vibrato / chorus type V1, C1, V2, C2, V3, C3 |
