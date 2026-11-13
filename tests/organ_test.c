@@ -432,16 +432,17 @@ int main(void)
         CHECK("overdrive = setBfree's preamp (SNR > 35 dB)", worst > 35.0);
     }
     {   /* the limiter: a sine over full scale comes out at 0.9 with little distortion; a burst starts with few clipped samples; the gain comes back */
-        static int32_t x[256], all[256 * 40];
+        static int32_t x[256], all[256 * 40], yy[256];
+        lim_t st = {32768, 32768};
         uint32_t blk, i, k0, clipped = 0;
         double amp[3] = {1.05, 1.3, 1.8}, ph = 0.0;
         int okthd = 1, okpk = 1;
         for (k0 = 0; k0 < 3u; k0++) {
             double pkout = 0, hs = 0, ts = 0;
-            lim_g = 32768; ph = 0;
+            st.g = 32768; ph = 0;
             for (blk = 0; blk < 40u; blk++) {
                 for (i = 0; i < 256u; i++) { x[i] = (int32_t)(amp[k0] * 32768.0 * sin(ph)); ph += 2 * 3.14159265358979 * 1000.0 / 44100.0; }
-                block_limit(x, 256u);
+                block_limit(&st, x, 0, 256u);
                 for (i = 0; i < 256u; i++) all[blk * 256u + i] = x[i];
             }
             for (i = 256u * 20u; i < 256u * 40u; i++) { double a = fabs((double)all[i]); if (a > pkout) pkout = a; }
@@ -458,17 +459,17 @@ int main(void)
         CHECK("limiter keeps the peak at 0.9", okpk);
         CHECK("limiter distortion below -45 dB", okthd);
         {   /* a burst out of silence */
-            lim_g = 32768; ph = 0;
+            st.g = 32768; ph = 0;
             for (blk = 0; blk < 4u; blk++) {
                 for (i = 0; i < 256u; i++) { x[i] = (int32_t)(1.5 * 32768.0 * sin(ph)); ph += 2 * 3.14159265358979 * 1000.0 / 44100.0; }
-                block_limit(x, 256u);
+                block_limit(&st, x, 0, 256u);
                 for (i = 0; i < 256u; i++) if (x[i] >= 32767 || x[i] <= -32767) clipped++;
             }
             printf("limiter, a burst at 1.5 out of silence: %u samples clipped of 1024\n", clipped);
             CHECK("a burst clips less than 16 samples", clipped < 16u);
         }
-        for (blk = 0; blk < 200u; blk++) { for (i = 0; i < 256u; i++) x[i] = 1000; block_limit(x, 256u); }
-        CHECK("the gain comes back to 1", lim_g == 32768);
+        for (blk = 0; blk < 200u; blk++) { for (i = 0; i < 256u; i++) x[i] = 1000; block_limit(&st, x, 0, 256u); }
+        CHECK("the gain comes back to 1", st.g == 32768);
     }
     return bad;
 }

@@ -185,26 +185,30 @@ static void organ_split(uint32_t n, uint32_t *act, uint32_t *vany)
  * its peak at LIM_T, it falls to that within 32 samples and comes back 1/16 of the way every block (about 90 ms). A gain that moves slowly
  * only changes the loudness; whatever still gets over (a note that starts inside the first 32 samples) is clipped as before. */
 #define LIM_T 29491                                /* 0.9 of full scale */
-static int32_t lim_g = 32768;                      /* Q15, the gain the last block ended with */
-static volatile int32_t lim_lo = 32768;            /* the lowest gain since the screen last looked */
-static void block_limit(int32_t *x, uint32_t n)
+typedef struct { int32_t g; volatile int32_t lo; } lim_t;     /* g: Q15, the gain the last block ended with; lo: the lowest gain since the screen last looked */
+static lim_t lim_sum = {32768, 32768}, lim_out = {32768, 32768};
+/* x and y (y may be 0): one block; returns its peak before the limiter */
+static uint32_t block_limit(lim_t *s, int32_t *x, int32_t *y, uint32_t n)
 {
-    int32_t pk = 0, g1, g0 = lim_g;
+    int32_t pk = 0, g1, g0 = s->g;
     uint32_t i;
     for (i = 0; i < n; i++) {
         int32_t a = x[i] < 0 ? -x[i] : x[i];
         if (a > pk) pk = a;
+        if (y) { a = y[i] < 0 ? -y[i] : y[i]; if (a > pk) pk = a; }
     }
     g1 = pk > LIM_T ? (int32_t)(((int64_t)LIM_T << 15) / pk) : 32768;
-    if (g1 >= g0) g1 = g0 + ((g1 - g0 + 15) >> 4);      /* back up slowly (the gain is 1 again after a few hundred ms) */
-    if (g1 == 32768 && g0 == 32768) return;        /* the usual case: nothing to do */
+    if (g1 >= g0) g1 = g0 + ((g1 - g0 + 15) >> 4);   /* back up slowly (the gain is 1 again after a few hundred ms) */
+    if (g1 == 32768 && g0 == 32768) return (uint32_t)pk;   /* the usual case: nothing to do */
     for (i = 0; i < n; i++) {
         int32_t g = i < 32u ? g0 + (int32_t)(((int64_t)(g1 - g0) * (int32_t)i) >> 5) : g1;
-        int32_t y = (int32_t)(((int64_t)x[i] * g) >> 15);
-        x[i] = y > 32767 ? 32767 : y < -32767 ? -32767 : y;
+        int32_t v = (int32_t)(((int64_t)x[i] * g) >> 15);
+        x[i] = v > 32767 ? 32767 : v < -32767 ? -32767 : v;
+        if (y) { v = (int32_t)(((int64_t)y[i] * g) >> 15); y[i] = v > 32767 ? 32767 : v < -32767 ? -32767 : v; }
     }
-    lim_g = g1;
-    if (g1 < lim_lo) lim_lo = g1;
+    s->g = g1;
+    if (g1 < s->lo) s->lo = g1;
+    return (uint32_t)pk;
 }
 
 static void app_audio(int32_t *out, uint32_t n)
@@ -314,7 +318,7 @@ static void app_audio(int32_t *out, uint32_t n)
     sum_clip += scl;
     t1 = fm1_ticks();
     if (od) od_run(mono, n, OD_CHARACTER, dm);   /* setBfree's preamp: a fixed character, the drive is the input gain */
-    else block_limit(mono, n);                      /* overdrive off: the sum is limited by turning the gain down, not clipped */
+    else block_limit(&lim_sum, mono, 0, n);          /* overdrive off: the sum is limited by turning the gain down, not clipped */
     t2 = fm1_ticks();
     if (fx_bypass) {
         for (i = 0; i < n; i++) lbuf[i] = rbuf[i] = mono[i];
@@ -325,10 +329,9 @@ static void app_audio(int32_t *out, uint32_t n)
         leslie_run(mono, lbuf, rbuf, n, les);
     }
     t4 = fm1_ticks();
+    opk = block_limit(&lim_out, lbuf, rbuf, n);      /* the output, after reverb and Leslie (they add gain too): the same limiter, over both channels */
     for (i = 0; i < n; i++) {
-        int32_t l = lbuf[i], r = rbuf[i], al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
-        if ((uint32_t)al > opk) opk = (uint32_t)al;
-        if ((uint32_t)ar > opk) opk = (uint32_t)ar;
+        int32_t l = lbuf[i], r = rbuf[i];
         out[2u * i] += l > 32767 ? 32767 : l < -32767 ? -32767 : l;
         out[2u * i + 1u] += r > 32767 ? 32767 : r < -32767 ? -32767 : r;
     }

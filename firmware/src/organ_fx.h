@@ -75,11 +75,12 @@ static int32_t bq_run(bq_t *s, const int32_t *c, int32_t x)   /* Q19 in, Q19 out
     return yh >> 8;
 }
 
-/* the sound x lands in a delay line, where the microphone will read it t / 16 samples from now (Q4 samples) */
+/* the sound x lands in a delay line, where the microphone will read it t / 256 samples from now (Q8 samples: with 1/16 the delay moved in steps,
+ * and every step of a sample's fraction is a small error of phase, a noise of about -70 dB at 6 to 12 kHz with the horn turning) */
 static void ls_put(int32_t *buf, int32_t x, int32_t t)
 {
-    uint32_t r = ls_pos + (uint32_t)(t >> 4);
-    int32_t q = (x * (t & 15)) >> 4;
+    uint32_t r = ls_pos + (uint32_t)(t >> 8);
+    int32_t q = (x * (t & 255)) >> 8;                 /* x is Q19, below 2^22 even for a hot signal: x * 255 fits */
     buf[r & LS_M] += x - q;
     buf[(r + 1u) & LS_M] += q;
 }

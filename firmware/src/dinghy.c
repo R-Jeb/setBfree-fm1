@@ -93,7 +93,7 @@ static uint32_t screen, sel[4];                 /* screen 0..2 are the manuals, 
 #else
 #define CORES() (fm1_c1_on ? 2u : 1u)                  /* the second core runs (fm1_cpu1.h), or it was not there / was given up */
 #endif
-static uint32_t load_peak, load_now, load_wheels, ld_org, ld_od, ld_rv, ld_le, ld_pk, ld_g, ld_q;
+static uint32_t load_peak, load_now, load_wheels, ld_org, ld_od, ld_rv, ld_le, ld_pk, ld_g, ld_go, ld_q;
 static uint32_t midi_ch, midi_kind, midi_cnt, midi_t, midi_d1;   /* the last message that came in: channel 1..16, kind 0 none 1 on 2 off 3 CC 4 PC 5 other */
 
 static uint32_t hmix(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
@@ -205,7 +205,7 @@ static const char *const VIB[6] = {"V1", "C1", "V2", "C2", "V3", "C3"};
 static const char *const LES[3] = {"STOP", "SLOW", "FAST"};
 static const char *const KEYN[3] = {"UPPER", "LOWER", "PEDAL"};
 /* ---- screen 4: the test values, one row each */
-#define TEST_ROWS 9
+#define TEST_ROWS 10
 static uint32_t test_vals(uint32_t r, uint32_t *a, uint32_t *b)    /* what row r shows; the return value says whether it is a warning */
 {
     *a = *b = 0;
@@ -217,9 +217,10 @@ static uint32_t test_vals(uint32_t r, uint32_t *a, uint32_t *b)    /* what row r
     case 4: *a = ld_pk; return ld_pk > 100u;
     case 5: *a = ld_g; return ld_g < 100u;
     case 6: *a = ld_q; return ld_q > 100u;
-    case 7: *a = midi_ch * 16u + midi_kind; *b = midi_cnt; return 0;
+    case 7: *a = ld_go; return ld_go < 100u;
+    case 8: *a = midi_ch * 16u + midi_kind; *b = midi_cnt; return 0;
 #if FELUCCA_UART
-    case 8: *a = um.drops + um.resync; *b = um.bytes; return um.drops + um.resync != 0u;
+    case 9: *a = um.drops + um.resync; *b = um.bytes; return um.drops + um.resync != 0u;
 #endif
     }
     return 0;
@@ -236,9 +237,10 @@ static void band_test(uint32_t r)
     case 2: q = su(sp(su(sp(t, "PREAMP "), a), " us   REVERB "), b); sp(q, " us")[0] = 0; break;
     case 3: q = su(sp(su(sp(t, "LESLIE "), a), " us   CORES "), b); *q = 0; break;
     case 4: q = su(sp(t, "SUM OF THE WHEELS "), a > 999u ? 999u : a); sp(q, " %")[0] = 0; break;
-    case 5: q = su(sp(t, "LIMITER GAIN "), a); sp(q, " %")[0] = 0; break;
+    case 5: q = su(sp(t, "SUM LIMITER GAIN "), a); sp(q, " %")[0] = 0; break;
     case 6: q = su(sp(t, "OUTPUT PEAK "), a > 999u ? 999u : a); sp(q, " %")[0] = 0; break;
-    case 7: {
+    case 7: q = su(sp(t, "OUTPUT LIMITER GAIN "), a); sp(q, " %")[0] = 0; break;
+    case 8: {
         static const char *const KN[6] = {"--", "NOTE ON", "NOTE OFF", "CC", "PC", "OTHER"};
         q = a & 15u ? sp(su(sp(t, "MIDI CH "), a >> 4), "  ") : sp(t, "MIDI -  ");
         q = sp(q, KN[(a & 15u) < 6u ? a & 15u : 5u]);
@@ -314,7 +316,7 @@ static void app_main(void)
     struct { uint8_t magic, db[NB], vtype, vup, perc, perc3, fast, soft, les, od, drv, pgm, rev; int8_t oct;
              uint8_t dbl[NB], dbp[2], vlo, keys; } set;
     uint32_t prev = 0, k, i, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
-    uint32_t hash[20], drawn_screen = 99, drawn_batt = ~0u;
+    uint32_t hash[22], drawn_screen = 99, drawn_batt = ~0u;
     uint8_t held[27], heldm[27];
 #ifdef DINGHY_HOST
     if (getenv("ORGAN_ONE")) organ_two = 0;          /* tests: all the wheels in one call, to compare with the two halves */
@@ -423,7 +425,7 @@ static void app_main(void)
         if (fm1_ms - t_load > 500u) {           /* how close to the 5800 us a block has: the number to watch */
             t_load = fm1_ms;
             load_now = load_us; load_wheels = wheels_on; ld_org = load_org; ld_od = load_od; ld_rv = load_rv; ld_le = load_le;
-            ld_pk = (sum_pk * 100u + 16384u) >> 15; sum_pk = 0; ld_q = (out_pk * 100u + 16384u) >> 15; out_pk = 0; ld_g = ((uint32_t)lim_lo * 100u + 16384u) >> 15; lim_lo = 32768;
+            ld_pk = (sum_pk * 100u + 16384u) >> 15; sum_pk = 0; ld_q = (out_pk * 100u + 16384u) >> 15; out_pk = 0; ld_g = ((uint32_t)lim_sum.lo * 100u + 16384u) >> 15; lim_sum.lo = 32768; ld_go = ((uint32_t)lim_out.lo * 100u + 16384u) >> 15; lim_out.lo = 32768;
             if (load_now > load_peak) load_peak = load_now;
             load_us = load_org = load_od = load_rv = load_le = 0;
         }
@@ -431,7 +433,7 @@ static void app_main(void)
         if (screen != drawn_screen) {           /* a new screen: clear, and draw every band */
             drawn_screen = screen;
             lcd_fill(0, 0, 240, 240, C_BLACK);
-            for (i = 0; i < 20u; i++) hash[i] = 0xFFFFFFFFu;
+            for (i = 0; i < 22u; i++) hash[i] = 0xFFFFFFFFu;
             drawn_batt = ~0u;
         }
         {
