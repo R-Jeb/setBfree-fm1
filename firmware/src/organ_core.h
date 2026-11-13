@@ -176,16 +176,16 @@ static void organ_split(uint32_t n, uint32_t *act, uint32_t *vany)
     *vany = v0 | c1_vany;
 }
 
-/* A soft limiter instead of a hard clip (the sum of six or seven notes with four drawbars out reaches full scale; a hard clip makes harsh,
- * aliased overtones, the "digital noise"): up to 1/2 of full scale the signal passes unchanged, above it the slope falls smoothly to zero at 1.5
- * (y = x - d^2 / 2 with d = x - 1/2), and 1.0 is the ceiling. All Q15. */
+/* A soft limiter instead of a hard clip, for the sum of the wheels with the overdrive off (six notes with four drawbars out reach full scale; a
+ * hard clip makes harsh, aliased overtones, the "digital noise"). Up to 3/4 of full scale the signal passes unchanged; above it the slope falls
+ * smoothly to zero at 1.25 (y = x - d^2 / 2^15 with d = x - 3/4, Q15), where it reaches the ceiling 1.0. */
 static int32_t soft_lim(int32_t x)
 {
     int32_t a = x < 0 ? -x : x, d;
-    if (a <= 16384) return x;
-    if (a >= 49152) return x < 0 ? -32767 : 32767;
-    d = a - 16384;
-    a -= (d * d) >> 16;                             /* d is at most 32768, d * d fits */
+    if (a <= 24576) return x;
+    if (a >= 40960) return x < 0 ? -32767 : 32767;
+    d = a - 24576;
+    a -= (d * d) >> 15;                             /* d is below 16384, d * d fits */
     if (a > 32767) a = 32767;
     return x < 0 ? -a : a;
 }
@@ -309,8 +309,8 @@ static void app_audio(int32_t *out, uint32_t n)
     t4 = fm1_ticks();
     for (i = 0; i < n; i++) {
         int32_t l = lbuf[i], r = rbuf[i];
-        out[2u * i] += soft_lim(l);
-        out[2u * i + 1u] += soft_lim(r);
+        out[2u * i] += l > 32767 ? 32767 : l < -32767 ? -32767 : l;
+        out[2u * i + 1u] += r > 32767 ? 32767 : r < -32767 ? -32767 : r;
     }
     wheels_on = act;
     {
