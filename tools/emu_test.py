@@ -8,6 +8,7 @@ last screen as a PNG, so a change can be heard and measured before it goes onto 
   chord    seven notes one after the other (F4 A4 C5 E5 F5 A5 C6), four drawbars out, chorus C3, Leslie stop, overdrive off, expression 100 %
   chordod  the same with the overdrive on
   leslie   the chord F5 A5 C6 E6: Leslie stop, then slow, then fast (overdrive off, no vibrato)
+  keys     four of the FM-1's own keys, no MIDI: a check that the sound comes at all
 
 It needs no MIDI tools and no sound card: the emulator runs headless and the MIDI comes from the script. The first run downloads fm1-live
 (Linux, x86-64) from the emulator's releases into ~/.fm1-emu. --strict counts the cycles of both cores as an FM-1 does (slow, no JIT): only
@@ -70,28 +71,23 @@ def setup(od=False, chorus=False, leslie=None):
     return s
 
 
-def notes(t0, pitches, gap, hold):
-    s = []
-    for i, p in enumerate(pitches):
-        s.append(midi(t0 + i * gap, 0x90, p, 100))
-    end = t0 + len(pitches) * gap + hold
-    for p in pitches:
-        s.append(midi(end, 0x80, p, 0))
-    return s, end
+def notes(t0, pitches, gap):
+    return [midi(t0 + i * gap, 0x90, p, 100) for i, p in enumerate(pitches)], t0 + (len(pitches) - 1) * gap
 
 
 def scenario(name):
+    """(events, ms to run). The notes stay on until the end, so that the last screen (the TEST screen, KNOB 1 turned three clicks at 2.3 s)
+    shows the values of the playing."""
+    screen = ["1500:e2:3", "2500:e2:3"]   # the clamp at screen 4 makes the second one harmless
     if name in ("chord", "chordod"):
-        s = setup(od=name == "chordod", chorus=True)
-        n, end = notes(3000, [65, 69, 72, 76, 77, 81, 84], 400, 3000)
-        return s + n + ["%d:e2:3" % (end + 500)], end + 2000          # at the end KNOB 1 turns to the TEST screen
+        n, last = notes(3000, [65, 69, 72, 76, 77, 81, 84], 400)
+        return setup(od=name == "chordod", chorus=True) + screen + n, last + 2000
     if name == "leslie":
-        s = setup(leslie="stop")
-        n, end = notes(3000, [77, 81, 84, 88], 0, 12000)
-        s += n
-        s += [cc(3000 + 4000, 1, 20), cc(3000 + 8000, 1, 120)]        # slow after 4 s, fast after 8 s
-        return s + ["%d:e2:3" % (end - 500)], end + 1000
-    sys.exit("scenarios: chord, chordod, leslie")
+        n, last = notes(3000, [77, 81, 84, 88], 0)
+        return setup(leslie="stop") + screen + n + [cc(7000, 1, 20), cc(11000, 1, 120)], 14500   # slow after 4 s, fast after 8 s
+    if name == "keys":                          # the FM-1's own keys, no MIDI: does the sound path work at all?
+        return screen + ["3000:C4@100", "3300:E4@100", "3600:G4@100", "3900:C5@100"], 6000
+    sys.exit("scenarios: chord, chordod, leslie, keys")
 
 
 def png(path, w, h, rgb):
@@ -137,12 +133,15 @@ def main():
     cmd = [get_emulator(), "--fwsc", a.fwsc, "--midi", "none", "--bench", str(ms)]
     print(" ".join(cmd)); print("script: %d events, %d ms" % (len(keys), ms))
     subprocess.check_call(cmd, env=env)
-    data = raw.read_bytes()
+    data = raw.read_bytes() if raw.exists() else b""
+    n = len(data) // 2
+    pk = max([abs(x) for x in struct.unpack("<%dh" % n, data[:n * 2])] or [0])
+    print("audio: %.1f s, peak %d of 32767 (%s)" % (n / 2 / 44100.0, pk, "SILENT" if pk == 0 else "ok"))
     with wave.open(str(out / (a.scenario + ".wav")), "wb") as w:
         w.setnchannels(2); w.setsampwidth(2); w.setframerate(44100); w.writeframes(data)
     if ppm.exists():
         ppm_to_png(ppm, out / (a.scenario + ".png"))
-    print("written:", *sorted(str(p) for p in out.glob(a.scenario + ".*") if p.suffix in (".wav", ".png")))
+    print("written:", out / (a.scenario + ".wav"), out / (a.scenario + ".png"))
 
 
 main()
