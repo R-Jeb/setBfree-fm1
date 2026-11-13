@@ -93,7 +93,7 @@ static uint32_t screen, sel[3];
 #else
 #define CORES() (fm1_c1_on ? 2u : 1u)                  /* the second core runs (fm1_cpu1.h), or it was not there / was given up */
 #endif
-static uint32_t load_peak, load_now, load_wheels, ld_org, ld_od, ld_rv, ld_le;
+static uint32_t load_peak, load_now, load_wheels, ld_org, ld_od, ld_rv, ld_le, ld_pk, ld_cl;
 static uint32_t midi_ch, midi_kind, midi_cnt, midi_t, midi_d1;   /* the last message that came in: channel 1..16, kind 0 none 1 on 2 off 3 CC 4 PC 5 other */
 
 static uint32_t hmix(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
@@ -180,6 +180,10 @@ static void band_block(uint32_t scr, uint32_t m)
             cv_text(104, 32, &FONT_S, t, C_OFF);
             q = su(sp(t, "LES "), ld_le); *q = 0;
             cv_text(104, 48, &FONT_S, t, C_OFF);
+            q = su(sp(t, "P"), ld_pk > 999u ? 999u : ld_pk); *q = 0;     /* the sum of the wheels, % of full scale (over 100: it clips with the overdrive off) */
+            cv_text(152, 48, &FONT_S, t, ld_pk > 100u ? C_ACC : C_OFF);
+            q = su(sp(t, "X"), ld_cl > 999u ? 999u : ld_cl); *q = 0;     /* X: how many samples were over (since the start) */
+            cv_text(182, 48, &FONT_S, t, ld_cl ? C_ACC : C_OFF);
             {                                   /* MIDI in: the channel of the last message (bright for a second), and how many came */
                 static const char *const KN[6] = {"--", "ON", "OFF", "CC", "PC", "?"};
                 uint16_t mc = midi_kind && fm1_ms - midi_t < 1000u ? C_ACC : C_OFF;
@@ -382,6 +386,7 @@ static void app_main(void)
         if (fm1_ms - t_load > 500u) {           /* how close to the 5800 us a block has: the number to watch */
             t_load = fm1_ms;
             load_now = load_us; load_wheels = wheels_on; ld_org = load_org; ld_od = load_od; ld_rv = load_rv; ld_le = load_le;
+            ld_pk = (sum_pk * 100u + 16384u) >> 15; sum_pk = 0; ld_cl = sum_clip;
             if (load_now > load_peak) load_peak = load_now;
             load_us = load_org = load_od = load_rv = load_le = 0;
         }
@@ -402,7 +407,7 @@ static void app_main(void)
                 h = hmix(hmix(1, screen), m);
                 for (i = 0; i < cnt; i++) h = hmix(h, v[i]);
                 h = hmix(h, sel[m]);
-                if (m == 2u && screen == 2u) h = hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(h, CORES()), load_now), ld_org), ld_od), ld_rv), ld_le), load_peak), load_wheels), midi_ch * 8u + midi_kind + midi_cnt * 64u + midi_d1 * 4096u), midi_kind && fm1_ms - midi_t < 1000u);
+                if (m == 2u && screen == 2u) h = hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(h, CORES()), load_now), ld_org), ld_od), ld_rv), ld_le), load_peak), load_wheels), ld_pk), ld_cl), midi_ch * 8u + midi_kind + midi_cnt * 64u + midi_d1 * 4096u), midi_kind && fm1_ms - midi_t < 1000u);
                 if (h != hash[1 + m]) { hash[1 + m] = h; band_block(screen, m); }
             }
             for (r = 0; r < 4u; r++) {

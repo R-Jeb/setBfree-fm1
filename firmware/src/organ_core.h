@@ -31,6 +31,7 @@ static volatile struct {
  * panel and channel 2, the pedal (k = 0..31, C1..G3) from the panel and channel 3 */
 static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi, pl_lo, pl_hi, ml_lo, ml_hi, pp_k, mp_k;
 static volatile uint32_t load_us, wheels_on;
+static volatile uint32_t sum_pk, sum_clip;      /* the sum of the wheels before the preamp: its peak since the screen last looked, and the samples above full scale since the start */
 static volatile uint32_t load_org, load_od, load_rv, load_le;   /* peaks since the screen last looked: organ, preamp, reverb, Leslie (us) */
 static volatile uint8_t fx_bypass;              /* tests: skip the reverb and the Leslie (the tone generator alone, in mono) */    /* the last block: render time, wheels sounding */
 
@@ -184,7 +185,7 @@ static void app_audio(int32_t *out, uint32_t n)
     uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, llo = pl_lo | ml_lo, lhi = pl_hi | ml_hi, pk = pp_k | mp_k;
     uint32_t k, d, w, e, i, nk = 0, nku = 0, act = 0, vany = 0, t0 = fm1_ticks(), t1, t2, t3, t4;
     int32_t pa = 0, kd;
-    uint32_t dm = P.drv, od = P.od, les = P.les, vm;
+    uint32_t dm = P.drv, od = P.od, les = P.les, vm, spk = 0, scl = 0;
     int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
     int32_t *tu = P.vup ? wtgtv : wtgt, *tl = P.vlo ? wtgtv : wtgt;   /* the manuals reach the scanner or not (pedals and percussion never do) */
     if (P.perc && !P.soft) gsw = (gsw * PERC_NORMAL_Q15) >> 15;
@@ -273,9 +274,12 @@ static void app_audio(int32_t *out, uint32_t n)
         }
         kcl += kd;
         x = (x * (kcl >> 4)) >> 12;
+        { int32_t ax = x < 0 ? -x : x; if ((uint32_t)ax > spk) spk = (uint32_t)ax; if (ax > 32767) scl++; }
         y = x > 60000 ? 60000 : x < -60000 ? -60000 : x;   /* the preamp below takes it unclipped */
         mono[i] = y;
     }
+    if (spk > sum_pk) sum_pk = spk;
+    sum_clip += scl;
     t1 = fm1_ticks();
     if (od) od_run(mono, n, OD_CHARACTER, dm);   /* setBfree's preamp: a fixed character, the drive is the input gain */
     else for (i = 0; i < n; i++) mono[i] = mono[i] > 32767 ? 32767 : mono[i] < -32767 ? -32767 : mono[i];

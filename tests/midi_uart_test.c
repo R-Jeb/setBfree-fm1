@@ -74,12 +74,13 @@ int main(void)
             expect("only the note comes through", 0x90, 61, 90);
             printf("%-44s %s\n", "and nothing else", get(&a, &b, &c) ? "FAIL" : "ok");
         }
-        {   /* CC 11 repeated with the same value is queued once; a new value is queued again */
-            const uint8_t z[] = {0xB0, 11, 64, 0xB0, 11, 64, 0xB0, 11, 64, 0xB0, 11, 65, 0xB1, 11, 65};
+        {   /* CC 11 repeated, or one step away, is queued once; two steps or an end is queued again */
+            const uint8_t z[] = {0xB0, 11, 64, 0xB0, 11, 64, 0xB0, 11, 65, 0xB0, 11, 63, 0xB0, 11, 66, 0xB0, 11, 127, 0xB0, 11, 126, 0xB1, 11, 65};
             memset(um.expr, 0xFF, sizeof um.expr);
             dma(z, sizeof z); uart_midi_take(0);
             expect("CC 11 = 64", 0xB0, 11, 64);
-            expect("CC 11 = 65", 0xB0, 11, 65);
+            expect("CC 11 = 66 (65 and 63 were jitter)", 0xB0, 11, 66);
+            expect("CC 11 = 127 (an end always passes)", 0xB0, 11, 127);
             expect("CC 11 on channel 2 is its own", 0xB1, 11, 65);
             printf("%-44s %s\n", "repeats are not queued", get(&a, &b, &c) ? "FAIL" : "ok");
         }

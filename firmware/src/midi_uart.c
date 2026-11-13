@@ -65,9 +65,10 @@ static void um_byte(uint32_t b)
         uint32_t d1 = um.need == 2u ? um.d0 : b, d2 = um.need == 2u ? b : 0u;
         uint32_t pkt = (um.st >> 4) | (uint32_t)um.st << 8 | d1 << 16 | d2 << 24;
         um.got = 0;
-        if ((um.st & 0xF0u) == 0xB0u && (d1 == 7u || d1 == 11u)) {     /* a pedal that repeats its value (or a keyboard that sends it all the time) says nothing new */
+        if ((um.st & 0xF0u) == 0xB0u && (d1 == 7u || d1 == 11u)) {     /* a pedal that repeats its value or jitters by one step (or a keyboard that sends it all the time) says nothing new */
             uint8_t *last = d1 == 7u ? &um.vol[um.st & 15u] : &um.expr[um.st & 15u];
-            if (*last == (uint8_t)d2) return;
+            uint32_t df = *last == 0xFFu ? 99u : d2 > *last ? d2 - *last : *last - d2;
+            if (df == 0u || (df == 1u && d2 != 0u && d2 != 127u)) return;   /* the same value, or a pedal's jitter of one step (the ends always pass) */
             *last = (uint8_t)d2;
         }
         if ((um.st & 0xF0u) == 0xA0u || (um.st & 0xF0u) == 0xD0u || (um.st & 0xF0u) == 0xE0u)
