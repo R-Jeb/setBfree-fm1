@@ -31,7 +31,7 @@ static volatile struct {
  * panel and channel 2, the pedal (k = 0..31, C1..G3) from the panel and channel 3 */
 static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi, pl_lo, pl_hi, ml_lo, ml_hi, pp_k, mp_k;
 static volatile uint32_t load_us, wheels_on;
-static volatile uint32_t sum_pk, sum_clip;      /* the sum of the wheels before the preamp: its peak since the screen last looked, and the samples above full scale since the start */
+static volatile uint32_t sum_pk, sum_clip, out_pk;      /* the sum of the wheels before the preamp: its peak since the screen last looked, and the samples above full scale since the start */
 static volatile uint32_t load_org, load_od, load_rv, load_le;   /* peaks since the screen last looked: organ, preamp, reverb, Leslie (us) */
 static volatile uint8_t fx_bypass;              /* tests: skip the reverb and the Leslie (the tone generator alone, in mono) */    /* the last block: render time, wheels sounding */
 
@@ -199,7 +199,7 @@ static void app_audio(int32_t *out, uint32_t n)
     uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, llo = pl_lo | ml_lo, lhi = pl_hi | ml_hi, pk = pp_k | mp_k;
     uint32_t k, d, w, e, i, nk = 0, nku = 0, act = 0, vany = 0, t0 = fm1_ticks(), t1, t2, t3, t4;
     int32_t pa = 0, kd;
-    uint32_t dm = P.drv, od = P.od, les = P.les, vm, spk = 0, scl = 0;
+    uint32_t dm = P.drv, od = P.od, les = P.les, vm, spk = 0, scl = 0, opk = 0;
     int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
     int32_t *tu = P.vup ? wtgtv : wtgt, *tl = P.vlo ? wtgtv : wtgt;   /* the manuals reach the scanner or not (pedals and percussion never do) */
     if (P.perc && !P.soft) gsw = (gsw * PERC_NORMAL_Q15) >> 15;
@@ -308,10 +308,13 @@ static void app_audio(int32_t *out, uint32_t n)
     }
     t4 = fm1_ticks();
     for (i = 0; i < n; i++) {
-        int32_t l = lbuf[i], r = rbuf[i];
+        int32_t l = lbuf[i], r = rbuf[i], al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
+        if ((uint32_t)al > opk) opk = (uint32_t)al;
+        if ((uint32_t)ar > opk) opk = (uint32_t)ar;
         out[2u * i] += l > 32767 ? 32767 : l < -32767 ? -32767 : l;
         out[2u * i + 1u] += r > 32767 ? 32767 : r < -32767 ? -32767 : r;
     }
+    if (opk > out_pk) out_pk = opk;
     wheels_on = act;
     {
         uint32_t us = (uint32_t)(fm1_ticks() - t0) / FM1_TICKS_PER_US, a = (uint32_t)(t1 - t0) / FM1_TICKS_PER_US, b = (uint32_t)(t2 - t1) / FM1_TICKS_PER_US,
