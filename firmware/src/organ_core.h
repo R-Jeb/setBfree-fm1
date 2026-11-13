@@ -19,7 +19,7 @@ static volatile struct {
     uint8_t perc, perc3, fast, soft;            /* percussion: on, 3rd (else 2nd), fast decay, soft */
     uint8_t les;                                /* Leslie: 0 stop, 1 slow, 2 fast */
     uint8_t rev;                                /* reverb mix 0..127 (CC 91) */
-    uint8_t od, drv;                            /* overdrive on, and how hard 0..8 */
+    uint8_t od, drv;                            /* overdrive on, and the drive 0..16 (input gain) */
     uint8_t swell;                              /* 0..127 (CC 7 / CC 11) */
     uint8_t pgm;                                /* the program last selected (setBfree numbering), 0 none */
     uint8_t dbl[NB];                            /* the lower manual's drawbars (MIDI channel 2) */
@@ -277,7 +277,7 @@ static void app_audio(int32_t *out, uint32_t n)
         mono[i] = y;
     }
     t1 = fm1_ticks();
-    if (od) od_run(mono, n, (dm * 127u + 4u) >> 3);   /* setBfree's preamp; character 0..8 -> 0..127 */
+    if (od) od_run(mono, n, OD_CHARACTER, dm);   /* setBfree's preamp: a fixed character, the drive is the input gain */
     else for (i = 0; i < n; i++) mono[i] = mono[i] > 32767 ? 32767 : mono[i] < -32767 ? -32767 : mono[i];
     t2 = fm1_ticks();
     if (fx_bypass) {
@@ -413,7 +413,7 @@ static void organ_cc_ch(uint32_t ch, uint32_t cc, uint32_t v)   /* ch 0..15: the
             P.les = P.les == 1u ? 2u : 1u;
         break;
     case 65: P.od = v > 63u; break;                                     /* overdrive on */
-    case 93: P.drv = (uint8_t)((16u * v + 127u) / 254u); break;         /* overdrive character */
+    case 93: P.drv = (uint8_t)((16u * v + 63u) / 127u); break;          /* overdrive drive 0..16 */
     case 66: case 80: P.perc = v > 63u; break;                          /* percussion on */
     case 81: P.soft = v > 63u; break;                                   /* percussion volume: soft at 64 and up */
     case 82: P.fast = v > 63u; break;                                   /* percussion decay: fast at 64 and up */

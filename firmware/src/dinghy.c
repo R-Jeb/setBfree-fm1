@@ -11,7 +11,7 @@
  *
  *   keys        play the organ (key 0 = F3, OCT-/OCT+ shifts) on the manual REC chose    MASTER   volume (platform.c)
  *   SELECT      choose a drawbar    ALGORITHM  set it 0..8         PRESETS  setBfree's registrations (default.pgm)
- *   KNOB1       screen: upper, lower, pedal    KNOB2   vibrato V1 C1 V2 C2 V3 C3    KNOB3   overdrive amount    KNOB4   reverb
+ *   KNOB1       screen: upper, lower, pedal    KNOB2   vibrato V1 C1 V2 C2 V3 C3    KNOB3   overdrive drive 0..16    KNOB4   reverb
  *   FX          vibrato on/off (upper on screen 1, lower on screen 2)    LFO    Leslie stop/slow/fast    SEL    overdrive on/off
  *   ENV         percussion on/off   ARP  2nd/3rd   SEQ  fast/slow   PLAY  soft/normal   (screen 1)     REC   keys: upper/lower/pedal
  *   EDIT, SAVE  free
@@ -251,10 +251,11 @@ static void band_preset(void)
 static uint32_t state_key(int32_t oct, uint32_t *status)   /* what is worth saving; *status: what the screen shows */
 {
     uint32_t i, dbk = 0, k = P.vtype | P.vup << 3 | P.les << 4 | P.perc << 6 | P.perc3 << 7 | P.fast << 8 | P.soft << 9 |
-                             P.od << 10 | P.drv << 11 | P.pgm << 15 | (uint32_t)P.rev << 22 | P.vlo << 29 | P.keys << 30;
+                             P.od << 10 | P.pgm << 15 | (uint32_t)P.rev << 22 | P.vlo << 29 | P.keys << 30;
     for (i = 0; i < NB; i++) dbk = dbk * 9u + P.db[i];
     for (i = 0; i < NB; i++) dbk = dbk * 9u + P.dbl[i];
     dbk = dbk * 9u + P.dbp[0]; dbk = dbk * 9u + P.dbp[1];
+    dbk = dbk * 17u + P.drv;                    /* the drive 0..16 does not fit the bits above */
     *status = k;
     return (k ^ dbk * 2654435761u) + (uint32_t)(oct + 2);
 }
@@ -277,7 +278,7 @@ static void app_main(void)
     for (i = 0; i < 27u; i++) { held[i] = 255; heldm[i] = 0; }
     sel[0] = sel[1] = 2; sel[2] = 0;
     if (settings_load(&set, sizeof set) == 0 && set.magic == 0xB6 && set.oct >= -2 && set.oct <= 2 && set.vtype < 6u &&
-        set.les < 3u && set.drv < 9u && set.pgm < 128u && set.rev < 128u && set.keys < 3u) {
+        set.les < 3u && set.drv < 17u && set.pgm < 128u && set.rev < 128u && set.keys < 3u) {
         for (i = 0; i < NB; i++) { P.db[i] = set.db[i] > 8u ? 8u : set.db[i]; P.dbl[i] = set.dbl[i] > 8u ? 8u : set.dbl[i]; }
         P.dbp[0] = set.dbp[0] > 8u ? 8u : set.dbp[0]; P.dbp[1] = set.dbp[1] > 8u ? 8u : set.dbp[1];
         P.vtype = set.vtype; P.vup = set.vup & 1u; P.vlo = set.vlo & 1u; P.perc = set.perc & 1u; P.perc3 = set.perc3 & 1u;
@@ -333,7 +334,7 @@ static void app_main(void)
             organ_program(n);
         }
         if ((e = fm1_enc_take(ENC_KNOB2)) != 0) P.vtype = clampu((int32_t)P.vtype + e, 5);
-        if ((e = fm1_enc_take(ENC_KNOB3)) != 0) P.drv = clampu((int32_t)P.drv + e, 8);
+        if ((e = fm1_enc_take(ENC_KNOB3)) != 0) P.drv = clampu((int32_t)P.drv + e, 16);
         if ((e = fm1_enc_take(ENC_KNOB4)) != 0) {               /* reverb mix, like CC 91: a doubling a step, fine at the bottom */
             static const uint8_t REVS[9] = {0, 1, 2, 4, 8, 16, 32, 64, 127};
             int32_t j = 0;

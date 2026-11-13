@@ -67,7 +67,7 @@ EXPORT void organ_set(uint32_t id, uint32_t v)
     case 14: P.soft = v & 1u; break;
     case 15: if (v < 3u) P.les = (uint8_t)v; break;
     case 16: P.od = v & 1u; break;
-    case 17: if (v < 9u) P.drv = (uint8_t)v; break;
+    case 17: if (v < 17u) P.drv = (uint8_t)v; break;
     case 20: if (v < 128u) P.rev = (uint8_t)v; break;
     case 18: if (v < 128u) P.swell = (uint8_t)v; break;
     default: if (id < NB && v < 9u) P.db[id] = (uint8_t)v; break;

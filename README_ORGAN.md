@@ -19,7 +19,7 @@ or a tag `v0.3` on GitHub: Actions builds `b3organ-0.3.fwsc` and attaches it to 
 ## Controls
 keys (F3..G5, OCT-/OCT+) | SELECT drawbar, ALGORITHM level 0..8 | PRESETS steps through setBfree's registrations
 (default.pgm: 57 of them, e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith) |
-KNOB1 screen (upper, lower, pedal) | KNOB2 vibrato V1 C1 V2 C2 V3 C3 | KNOB3 overdrive amount 0..8 | KNOB4 reverb amount (0, 1, 2, 4, 8, 16, 32, 64, 127) |
+KNOB1 screen (upper, lower, pedal) | KNOB2 vibrato V1 C1 V2 C2 V3 C3 | KNOB3 overdrive drive 0..16 | KNOB4 reverb amount (0, 1, 2, 4, 8, 16, 32, 64, 127) |
 FX vibrato on/off of the screen's manual | LFO Leslie cycle | SEL overdrive on/off | REC the FM-1's keys play upper/lower/pedal |
 screen 1 only: ENV percussion | ARP 2nd/3rd | SEQ fast/slow | PLAY soft/normal. EDIT and SAVE are free.
 
@@ -66,8 +66,10 @@ of a key). Measured against the Raspberry Pi (F4, percussion alone, 3rd): the cl
 setBfree's preamp (`b_overdrive/overdrive.c`) in integers (`firmware/src/organ_od.h`): input gain 3.57, a sag that lowers the bias with the level,
 an 8-tap interpolation filter, the transfer curve 1 / (1 + x^2) (a 1025-entry table, `OD_T` in `organ_tab.h`) around a bias between a bass
 filter before and one after it, global negative feedback, and the 33-tap decimation filter, output gain 0.88. About 20 multiplications per
-sample, no division. KNOB 1 / CC 93 select setBfree's `overdrive.character` in nine steps (0, 16, 32, 48, 64, 79, 95, 111, 127); the
-character sets the two bass filters, so the level is not monotonic: it falls from step 0 to step 2 and rises after. Overdrive off bypasses
+sample, no division. KNOB 3 / CC 93 set the drive, 0 to 16: setBfree's `overdrive.inputgain` in steps of 1.5 dB, 12 is its default (3.57), 16 is 6 dB above. The
+character (`overdrive.character`, which sets the two bass filters) is fixed at 16 (`OD_CHARACTER`); until 0.3 the nine steps were the character and the
+input gain stood still. The output gain follows the drive (`OD_GOUT`; the preamp alone is 10 to 30 dB quieter than the tone generator) so that five
+keys at swell 80 are as loud with the overdrive on as off at every step (`tools/od_drive_levels.c`); other playing stays within about 2 dB. Overdrive off bypasses
 the model. A soft clip with a gain stood here until 0.1; it was uniform in level and did not match the Raspberry Pi.
 Measured against the Pi (F4 and the chord F4 A4 C5, each step against "off"): within 0.6 dB on a note and 1.4 dB on the chord.
 `tests/organ_test.c` compares the integer code with the same model in double precision (41 dB signal to error). The input and output gain
