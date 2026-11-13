@@ -176,6 +176,20 @@ static void organ_split(uint32_t n, uint32_t *act, uint32_t *vany)
     *vany = v0 | c1_vany;
 }
 
+/* A soft limiter instead of a hard clip (the sum of six or seven notes with four drawbars out reaches full scale; a hard clip makes harsh,
+ * aliased overtones, the "digital noise"): up to 1/2 of full scale the signal passes unchanged, above it the slope falls smoothly to zero at 1.5
+ * (y = x - d^2 / 2 with d = x - 1/2), and 1.0 is the ceiling. All Q15. */
+static int32_t soft_lim(int32_t x)
+{
+    int32_t a = x < 0 ? -x : x, d;
+    if (a <= 16384) return x;
+    if (a >= 49152) return x < 0 ? -32767 : 32767;
+    d = a - 16384;
+    a -= (d * d) >> 16;                             /* d is at most 32768, d * d fits */
+    if (a > 32767) a = 32767;
+    return x < 0 ? -a : a;
+}
+
 static void app_audio(int32_t *out, uint32_t n)
 {
     /* setBfree scanner.modulation.v1..v3: the delay is 1 + A + A sin(phase) samples, A = 3, 6, 9, at 48 kHz (the Pi it was measured on);
@@ -282,7 +296,7 @@ static void app_audio(int32_t *out, uint32_t n)
     sum_clip += scl;
     t1 = fm1_ticks();
     if (od) od_run(mono, n, OD_CHARACTER, dm);   /* setBfree's preamp: a fixed character, the drive is the input gain */
-    else for (i = 0; i < n; i++) mono[i] = mono[i] > 32767 ? 32767 : mono[i] < -32767 ? -32767 : mono[i];
+    else for (i = 0; i < n; i++) mono[i] = soft_lim(mono[i]);   /* overdrive off: the sum is limited softly, not clipped */
     t2 = fm1_ticks();
     if (fx_bypass) {
         for (i = 0; i < n; i++) lbuf[i] = rbuf[i] = mono[i];
@@ -295,8 +309,8 @@ static void app_audio(int32_t *out, uint32_t n)
     t4 = fm1_ticks();
     for (i = 0; i < n; i++) {
         int32_t l = lbuf[i], r = rbuf[i];
-        out[2u * i] += l > 32767 ? 32767 : l < -32767 ? -32767 : l;
-        out[2u * i + 1u] += r > 32767 ? 32767 : r < -32767 ? -32767 : r;
+        out[2u * i] += soft_lim(l);
+        out[2u * i + 1u] += soft_lim(r);
     }
     wheels_on = act;
     {
