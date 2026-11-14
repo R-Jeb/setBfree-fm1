@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Plays a scripted test on the firmware in Joakim Eriksson's FM-1 emulator (fm1-live, headless) and writes the sound as a WAV and the
+"""EXPERIMENT, not working yet: the firmware runs on real FM-1s (old and new flash chip); in this emulator it does not get going
+(the second core is probably not emulated the way the firmware starts it). Nothing depends on this script.
+
+Plays a scripted test on the firmware in Joakim Eriksson's FM-1 emulator (fm1-live, headless) and writes the sound as a WAV and the
 last screen as a PNG, so a change can be heard and measured before it goes onto an FM-1.
 
   python3 tools/emu_test.py [--fwsc build/b3organ.fwsc] [--out build/emu] SCENARIO [--strict]
@@ -13,7 +16,6 @@ last screen as a PNG, so a change can be heard and measured before it goes onto 
 It needs no MIDI tools and no sound card: the emulator runs headless and the MIDI comes from the script. The first run downloads fm1-live
 (Linux, x86-64) from the emulator's releases into ~/.fm1-emu. --strict counts the cycles of both cores as an FM-1 does (slow, no JIT): only
 then the times on the TEST screen mean something. The encoder numbers of the script (e2 = KNOB 1) are the ones of the firmware's HAL.
-Not run on this firmware yet when this was written: if a flag is refused, `fm1-live --help` has the list.
 """
 import argparse, json, os, pathlib, platform, stat, struct, subprocess, sys, urllib.request, wave, zlib
 

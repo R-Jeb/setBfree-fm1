@@ -25,8 +25,6 @@ What is new since 0.3:
 - **Screen 4 (KNOB 1): test values.** One row each: the load per stage, the sum of the wheels and the limiter's gain, the output peak and its
   limiter, MIDI and MIDI errors. The pedal screen keeps the load and the MIDI indicator.
 - **Flash chip.** The firmware runs on the newer FM-1 with the UC25HQ80 flash chip (accepted since 0.3); tested on both kinds.
-- `tools/emu_test.py` (a scripted run in the fm1-emu emulator) is in the repository; it does not run this firmware properly yet, so it is not
-  a test you can rely on.
 
 Please note:
 
