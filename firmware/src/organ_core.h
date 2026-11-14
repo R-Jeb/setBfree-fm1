@@ -19,7 +19,7 @@ static volatile struct {
     uint8_t perc, perc3, fast, soft;            /* percussion: on, 3rd (else 2nd), fast decay, soft */
     uint8_t les;                                /* Leslie: 0 stop, 1 slow, 2 fast */
     uint8_t rev;                                /* reverb mix 0..127 (CC 91) */
-    uint8_t od, drv;                            /* overdrive on, and how hard 0..8 */
+    uint8_t od, drv;                            /* overdrive on, and the drive 0..16 (input gain) */
     uint8_t swell;                              /* 0..127 (CC 7 / CC 11) */
     uint8_t pgm;                                /* the program last selected (setBfree numbering), 0 none */
     uint8_t dbl[NB];                            /* the lower manual's drawbars (MIDI channel 2) */
@@ -31,11 +31,15 @@ static volatile struct {
  * panel and channel 2, the pedal (k = 0..31, C1..G3) from the panel and channel 3 */
 static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi, pl_lo, pl_hi, ml_lo, ml_hi, pp_k, mp_k;
 static volatile uint32_t load_us, wheels_on;
+static volatile uint32_t sum_pk, sum_clip, out_pk;      /* the sum of the wheels before the preamp: its peak since the screen last looked, and the samples above full scale since the start */
 static volatile uint32_t load_org, load_od, load_rv, load_le;   /* peaks since the screen last looked: organ, preamp, reverb, Leslie (us) */
 static volatile uint8_t fx_bypass;              /* tests: skip the reverb and the Leslie (the tone generator alone, in mono) */    /* the last block: render time, wheels sounding */
 
 /* ---- the sound (runs in the audio ISR: keep it short, no flash, no screen) */
 #define PERC_Q10 11264                          /* percussion level, setBfree's percEnvScaling 11 (1024 = a drawbar at 8); soft is in perc_env (0.5012) */
+#ifndef ORGAN_LEVEL
+#define ORGAN_LEVEL 32768                       /* the tone generator's level against setBfree's (Q15, 32768 = the same); a lower value makes room, the preamp is compensated (organ_od.h) */
+#endif
 #define PERC_NORMAL_Q15 19828                   /* setBfree's percDrawbarNormalGain 0.60512: with percussion on and not soft, the whole sound is this much quieter */
 /* the envelope's decay per 256 frames, Q15: setBfree's plug-in multiplies by 0.9999 (slow) or 0.9995 (fast) every sample (its
  * computePercResets, the "4 s" and "1 s", is not called), at 48 kHz as on the Pi it was measured on: 0.9999 ^ (256 * 48000 / 44100) */
@@ -175,6 +179,38 @@ static void organ_split(uint32_t n, uint32_t *act, uint32_t *vany)
     *vany = v0 | c1_vany;
 }
 
+/* A limiter for the sum of the wheels with the overdrive off. A hard clip makes harsh, aliased overtones (six or seven notes with four drawbars
+ * out and the chorus on reach full scale); a static soft clip only moves the same distortion lower down (measured: a sine 5 % over full scale
+ * still carries -29 dB of it). So this one turns the gain down instead: the whole block is looked at first, the gain for it is the one that keeps
+ * its peak at LIM_T, it falls to that within 32 samples and comes back 1/16 of the way every block (about 90 ms). A gain that moves slowly
+ * only changes the loudness; whatever still gets over (a note that starts inside the first 32 samples) is clipped as before. */
+#define LIM_T 29491                                /* 0.9 of full scale */
+typedef struct { int32_t g; volatile int32_t lo; } lim_t;     /* g: Q15, the gain the last block ended with; lo: the lowest gain since the screen last looked */
+static lim_t lim_sum = {32768, 32768}, lim_out = {32768, 32768};
+/* x and y (y may be 0): one block; returns its peak before the limiter */
+static uint32_t block_limit(lim_t *s, int32_t *x, int32_t *y, uint32_t n)
+{
+    int32_t pk = 0, g1, g0 = s->g;
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        int32_t a = x[i] < 0 ? -x[i] : x[i];
+        if (a > pk) pk = a;
+        if (y) { a = y[i] < 0 ? -y[i] : y[i]; if (a > pk) pk = a; }
+    }
+    g1 = pk > LIM_T ? (int32_t)(((int64_t)LIM_T << 15) / pk) : 32768;
+    if (g1 >= g0) g1 = g0 + ((g1 - g0 + 15) >> 4);   /* back up slowly (the gain is 1 again after a few hundred ms) */
+    if (g1 == 32768 && g0 == 32768) return (uint32_t)pk;   /* the usual case: nothing to do */
+    for (i = 0; i < n; i++) {
+        int32_t g = i < 32u ? g0 + (int32_t)(((int64_t)(g1 - g0) * (int32_t)i) >> 5) : g1;
+        int32_t v = (int32_t)(((int64_t)x[i] * g) >> 15);
+        x[i] = v > 32767 ? 32767 : v < -32767 ? -32767 : v;
+        if (y) { v = (int32_t)(((int64_t)y[i] * g) >> 15); y[i] = v > 32767 ? 32767 : v < -32767 ? -32767 : v; }
+    }
+    s->g = g1;
+    if (g1 < s->lo) s->lo = g1;
+    return (uint32_t)pk;
+}
+
 static void app_audio(int32_t *out, uint32_t n)
 {
     /* setBfree scanner.modulation.v1..v3: the delay is 1 + A + A sin(phase) samples, A = 3, 6, 9, at 48 kHz (the Pi it was measured on);
@@ -184,10 +220,11 @@ static void app_audio(int32_t *out, uint32_t n)
     uint32_t lo = pk_lo | mk_lo, hi = pk_hi | mk_hi, llo = pl_lo | ml_lo, lhi = pl_hi | ml_hi, pk = pp_k | mp_k;
     uint32_t k, d, w, e, i, nk = 0, nku = 0, act = 0, vany = 0, t0 = fm1_ticks(), t1, t2, t3, t4;
     int32_t pa = 0, kd;
-    uint32_t dm = P.drv, od = P.od, les = P.les, vm;
+    uint32_t dm = P.drv, od = P.od, les = P.les, vm, spk = 0, scl = 0, opk = 0;
     int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
     int32_t *tu = P.vup ? wtgtv : wtgt, *tl = P.vlo ? wtgtv : wtgt;   /* the manuals reach the scanner or not (pedals and percussion never do) */
     if (P.perc && !P.soft) gsw = (gsw * PERC_NORMAL_Q15) >> 15;
+    gsw = (gsw * ORGAN_LEVEL) >> 15;
     if (n > 256u) n = 256u;
 
     for (w = 0; w < NW; w++) wtgt[w] = wtgtv[w] = wpt[w] = 0;
@@ -273,12 +310,15 @@ static void app_audio(int32_t *out, uint32_t n)
         }
         kcl += kd;
         x = (x * (kcl >> 4)) >> 12;
+        { int32_t ax = x < 0 ? -x : x; if ((uint32_t)ax > spk) spk = (uint32_t)ax; if (ax > 32767) scl++; }
         y = x > 60000 ? 60000 : x < -60000 ? -60000 : x;   /* the preamp below takes it unclipped */
         mono[i] = y;
     }
+    if (spk > sum_pk) sum_pk = spk;
+    sum_clip += scl;
     t1 = fm1_ticks();
-    if (od) od_run(mono, n, (dm * 127u + 4u) >> 3);   /* setBfree's preamp; character 0..8 -> 0..127 */
-    else for (i = 0; i < n; i++) mono[i] = mono[i] > 32767 ? 32767 : mono[i] < -32767 ? -32767 : mono[i];
+    if (od) od_run(mono, n, OD_CHARACTER, dm);   /* setBfree's preamp: a fixed character, the drive is the input gain */
+    else block_limit(&lim_sum, mono, 0, n);          /* overdrive off: the sum is limited by turning the gain down, not clipped */
     t2 = fm1_ticks();
     if (fx_bypass) {
         for (i = 0; i < n; i++) lbuf[i] = rbuf[i] = mono[i];
@@ -289,11 +329,13 @@ static void app_audio(int32_t *out, uint32_t n)
         leslie_run(mono, lbuf, rbuf, n, les);
     }
     t4 = fm1_ticks();
+    opk = block_limit(&lim_out, lbuf, rbuf, n);      /* the output, after reverb and Leslie (they add gain too): the same limiter, over both channels */
     for (i = 0; i < n; i++) {
         int32_t l = lbuf[i], r = rbuf[i];
         out[2u * i] += l > 32767 ? 32767 : l < -32767 ? -32767 : l;
         out[2u * i + 1u] += r > 32767 ? 32767 : r < -32767 ? -32767 : r;
     }
+    if (opk > out_pk) out_pk = opk;
     wheels_on = act;
     {
         uint32_t us = (uint32_t)(fm1_ticks() - t0) / FM1_TICKS_PER_US, a = (uint32_t)(t1 - t0) / FM1_TICKS_PER_US, b = (uint32_t)(t2 - t1) / FM1_TICKS_PER_US,
@@ -413,7 +455,7 @@ static void organ_cc_ch(uint32_t ch, uint32_t cc, uint32_t v)   /* ch 0..15: the
             P.les = P.les == 1u ? 2u : 1u;
         break;
     case 65: P.od = v > 63u; break;                                     /* overdrive on */
-    case 93: P.drv = (uint8_t)((16u * v + 127u) / 254u); break;         /* overdrive character */
+    case 93: P.drv = (uint8_t)((16u * v + 63u) / 127u); break;          /* overdrive drive 0..16 */
     case 66: case 80: P.perc = v > 63u; break;                          /* percussion on */
     case 81: P.soft = v > 63u; break;                                   /* percussion volume: soft at 64 and up */
     case 82: P.fast = v > 63u; break;                                   /* percussion decay: fast at 64 and up */

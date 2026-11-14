@@ -14,7 +14,7 @@ build.
 
 **Try it in the browser:** [r-jeb.github.io/setBfree-fm1/play](https://r-jeb.github.io/setBfree-fm1/play/), the same engine as WebAssembly (`web/`, rebuilt with `web/build.sh`; `docs/play/index.html` is a copy of `web/index.html`).
 
-> **Status:** 0.3, tested on an FM-1 by one person. Please report what sounds different from setBfree.
+> **Status:** 0.4, tested on an FM-1 by one person. Please report what sounds different from setBfree.
 
 ## What you get
 
@@ -24,7 +24,8 @@ build.
 | **Key click, key compression** | setBfree's attack click (eight random envelopes) and the gain drop when many keys are held (1.2 dB for 2 keys, to 9 dB for 61). |
 | **Vibrato and chorus** | V1 to V3 and C1 to C3 as setBfree's scanner (a sine-swinging delay at 7.25 Hz); matches a setBfree recording in pitch swing (14.8 cents) and to within half a dB in ripple. |
 | **Percussion** | 2nd or 3rd harmonic, slow or fast decay, soft or normal, level and decay as setBfree's tone generator (within 0.4 dB), and its key click: setBfree differentiates the percussion bus with the key's attack envelope, so the bouncing attack comes out as a click. |
-| **Overdrive** | setBfree's own preamp model: biased transfer curve between two bass filters, feedback, sag; nine character settings (setBfree's `overdrive.character` 0, 16 … 127). |
+| **Overdrive** | setBfree's own preamp model: biased transfer curve between two bass filters, feedback, sag; a drive control (setBfree's `overdrive.inputgain`, 17 steps of 1.5 dB, 12 = its default) with a fixed soft character (`overdrive.character` 16); the output follows the drive, so on and off are about equally loud. |
+| **Two cores, limiter** | The tonewheels run on both processor cores of the FM-1 (even and odd wheels, identical to one core bit for bit); a gain limiter keeps the wheels' sum and the output below full scale (distortion -62 dB), so many keys at full swell do not clip. See [docs/DUAL_CORE.md](docs/DUAL_CORE.md). |
 | **Battery** | A four-bar cell at the bottom right of the screen; a bolt instead when a USB host has the FM-1. |
 | **Reverb** | setBfree's reverb (combs and all-passes), amount on KNOB 4 or CC 91; impulse response within -45 dB of setBfree's. |
 | **Leslie** | setBfree's rotary model: horn and drum with Doppler, horn directivity, reflections, stop / slow / fast with acceleration and braking; the stopped state matches setBfree's to about -40 dB. |
@@ -45,7 +46,7 @@ rest off, and every effect on its own. Where the two differed the engine was cha
 | Percussion decay (3rd, slow) | -42 dB per second | -41 dB per second (the plug-in's 0.9999 per sample, at 44.1 kHz: it is scaled) |
 | Percussion level, 3rd and 2nd, soft and normal | | within 0.4 dB of setBfree's tone generator |
 | Percussion click (2 to 8 kHz, first 10 ms, 3rd) | 15 dB above the tone after it | 16 dB (6 dB before: the key's attack was not differentiated) |
-| Overdrive, level of each character step against overdrive off (F4 and F4/A4/C5, 0 / 16 / 32 / 48 / 64 / 79 / 95 / 111 / 127) | -2.7 / -12.5 / -17 / -10 / -2.3 / -0.2 / +1.7 / +4.1 / +6.5 dB | within 0.6 dB on F4, 1.4 dB on the chord (a soft clip before: the steps rose evenly and character 0 was not quieter than off) |
+| Overdrive until 0.3 (nine character steps), level of each step against overdrive off (F4 and F4/A4/C5, 0 / 16 / 32 / 48 / 64 / 79 / 95 / 111 / 127) | -2.7 / -12.5 / -17 / -10 / -2.3 / -0.2 / +1.7 / +4.1 / +6.5 dB | within 0.6 dB on F4, 1.4 dB on the chord (a soft clip before: the steps rose evenly and character 0 was not quieter than off) |
 | Reverb tails, mix 7 / 15 / 31 / 63 | | within 1 dB; the dip and the jump when a held F4 is released are setBfree's own (comb cancellation) |
 | Leslie, stop to slow to stop to fast | slow 0.5 to 0.9 Hz, fast 5.5 Hz after 10 s | slow 0.5 to 0.8 Hz, fast 5.4 Hz after 10 s, the same acceleration |
 
@@ -59,11 +60,11 @@ recording to recording by up to 10 dB or more, and the Raspberry Pi has more ene
 | --- | --- |
 | Keys F3 to G5, **OCT-** / **OCT+** | Play the manual **REC** chose; shift the octave |
 | **REC** | The FM-1's own keys play the upper manual, the lower manual or the pedal (shown as `KEYS UPPER` and so on on every screen) |
-| **KNOB 1** | Screen: 1 upper, 2 lower, 3 pedal |
+| **KNOB 1** | Screen: 1 upper, 2 lower, 3 pedal, 4 test values (load of each stage, level of the wheels, limiter, output, MIDI) |
 | **SELECT** knob / **ALGORITHM** knob | Choose a drawbar / set its level 0 to 8, on the manual of the screen (the pedal has two: 16' and 8') |
 | **PRESETS** knob | Step through setBfree's registrations (e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith); they set the upper manual |
 | **KNOB 2** | Vibrato / chorus type V1, C1, V2, C2, V3, C3 |
-| **KNOB 3** | Overdrive amount (0 to 8) |
+| **KNOB 3** | Overdrive drive (0 to 16) |
 | **KNOB 4** | Reverb amount (0 to 127), in doubling steps: 0, 1, 2, 4, 8, 16, 32, 64, 127 |
 | **FX** | Vibrato / chorus on or off for the manual of the screen (upper on screen 1, lower on screen 2) |
 | **LFO** | Leslie: stop, slow, fast |
@@ -92,7 +93,7 @@ of each part are in **[README_ORGAN.md](README_ORGAN.md)**.
 2. Install it over USB with `python3 tools/fm1_install.py b3organ-<version>.fwsc`, or with the
    [FM-1 Firmware Hub](https://fm1.designburgapps.com) in Chrome or Edge. Back to the official firmware or to another
    one from the hub at any time.
-3. The version shows top left (`B3 ORGAN v0.3`; builds that are not releases show `d` and four digits of the commit).
+3. The version shows top left (`B3 ORGAN v0.4`; builds that are not releases show `d` and four digits of the commit).
 
 Installing firmware is at your own risk. If something goes wrong, hold **OCT-** while switching on: the USB rescue.
 

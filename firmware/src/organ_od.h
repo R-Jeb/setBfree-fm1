@@ -18,20 +18,30 @@ static int32_t od_t(int32_t x)               /* 1 / (1 + x^2) for x in Q15, resu
     t0 = OD_T[i]; t1 = OD_T[i + 1u];
     return t0 + (((t1 - t0) * (int32_t)f) >> 9);
 }
-static void od_run(int32_t *x, uint32_t n, uint32_t chr)   /* x: Q15 in and out; chr: setBfree's overdrive.character 0 .. 127 */
+/* The drive (0 .. 16) is setBfree's overdrive.inputgain: 1.5 dB a step, 12 is its default (3.5675, Q13), 16 is 6 dB above. The output gain
+ * (Q15; 0.8795 is setBfree's default) follows it: the preamp is 10 to 30 dB quieter than the bare tone generator, so each step is raised until
+ * five keys at swell 80 come out as loud as with the overdrive off (tools/od_drive_levels, the numbers are the measured ratios). */
+#define OD_DRIVE_MAX 16u
+#define OD_CHARACTER 16u                         /* setBfree's overdrive.character, fixed (a later editor page may set it) */
+static const int32_t OD_GIN[17] = {3679, 4373, 5197, 6176, 7341, 8724, 10369, 12324, 14647, 17408, 20689, 24589, 29224, 34733, 41280, 49061, 58310};
+static const int32_t OD_GOUT[17] = {960667, 811831, 682938, 577555, 488475, 414676, 346811, 293184, 248021, 210827, 178895, 155113, 134296, 118796, 105684, 98027, 89531};
+static void od_run(int32_t *x, uint32_t n, uint32_t chr, uint32_t drv)   /* x: Q15 in and out; chr: setBfree's overdrive.character 0 .. 127; drv 0 .. 16 */
 {
     static const int32_t C[8] = {10, 41, 117, 1154, 3805, 117, 41, 10};            /* Q13 */
     static const int32_t A[8] = {6691, -2076, 1074, -607, 338, -175, 82, -40};      /* Q15, at distance 1, 3, 5 .. 15 */
-    static const int32_t GIN = 29224 /* 3.5675 Q13 */, GOUT = 28820 /* 0.8795 Q15 */;
+    int32_t GIN, GOUT;
     int32_t fb, fb2;                                                                 /* Q15 */
     uint32_t i, k;
+    if (drv > OD_DRIVE_MAX) drv = OD_DRIVE_MAX;
+    GIN = (int32_t)(((int64_t)OD_GIN[drv] << 15) / ORGAN_LEVEL);   /* the tone generator is ORGAN_LEVEL quieter: the preamp sees what it always saw, */
+    GOUT = (int32_t)(((int64_t)OD_GOUT[drv] * ORGAN_LEVEL) >> 15);   /* and its output follows the generator, so on and off stay equally loud */
     if (chr < 32u) { fb = 19075; fb2 = 32735 + (int32_t)(((19075 - 32735) * (int32_t)chr) / 31); }
     else if (chr < 64u) { fb = 19075 + (int32_t)(((32735 - 19075) * (int32_t)(chr - 32u)) / 31); fb2 = 19075; }
     else { fb = 32735; fb2 = 19075 + (int32_t)(((32735 - 19075) * (int32_t)(chr - 64u)) / 63); }
     for (i = 0; i < n; i++) {
         int32_t xin, bias, norm, u, v, tm, ac, ex;
         int64_t m;
-        xin = (x[i] * GIN) >> 13;                                         /* Q15 */
+        xin = (int32_t)(((int64_t)x[i] * GIN) >> 13);                                         /* Q15 */
         od_sag -= (od_sag * 295) >> 15;                                   /* sag = 0.991 sag + |in|, Q12 */
         od_sag += (xin < 0 ? -xin : xin) >> 3;
         if (od_sag > (1 << 22)) od_sag = 1 << 22;
@@ -57,6 +67,6 @@ static void od_run(int32_t *x, uint32_t n, uint32_t chr)   /* x: Q15 in and out;
         ac = 10604 * od_yh[(od_yi + 16u) & 31u];                           /* the centre tap, 16 samples back; the pairs 1, 3 .. 15 either side */
         for (k = 0; k < 8u; k++)
             ac += A[k] * (od_yh[(od_yi + 15u - 2u * k) & 31u] + od_yh[(od_yi + 17u + 2u * k) & 31u]);
-        x[i] = (int32_t)(((int64_t)ac * GOUT) >> 30);
+        { int64_t o = ((int64_t)ac * GOUT) >> 30; x[i] = o > 32767 ? 32767 : o < -32767 ? -32767 : (int32_t)o; }
     }
 }

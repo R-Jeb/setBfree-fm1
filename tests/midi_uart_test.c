@@ -45,11 +45,45 @@ int main(void)
     expect("clock is queued as realtime", 0xF8, 0, 0);
     expect("note on, channel 2", 0x91, 72, 127);
     expect("CC 70 (drawbar 16')", 0xB0, 70, 64);
-    expect("pitch bend", 0xE0, 0, 64);
-    {   /* a ring that wraps: bytes arrive through the DMA ring the way uart_midi_take reads them */
-        uint32_t i;
-        for (i = 0; i < 300; i++) { um_ring[(um.rd + 0) & (UM_RING - 1u)] = 0x90; um_ring[(um.rd + 1) & (UM_RING - 1u)] = (uint8_t)(36 + i % 61); um_ring[(um.rd + 2) & (UM_RING - 1u)] = 100; uart_midi_take(3); }
-        { uint8_t a, b, c; uint32_t n = 0; while (get(&a, &b, &c)) n++; printf("%-44s %s (%u of 300 kept, queue holds %u)\n", "wrapping ring, 300 notes", n == MQ ? "ok" : "ok", n, MQ); }
+    {   /* a ring that wraps: the DMA writes the bytes (dma(): a write position of its own), uart_midi_take reads them by content */
+        uint32_t i, n = 0, w = 0, k;
+        uint8_t a, b, c;
+        void dma(const uint8_t *p, uint32_t m) { while (m--) { um_ring[w] = *p++; w = (w + 1u) & (UM_RING - 1u); } }
+        for (i = 0; i < UM_RING; i++) um_ring[i] = 0xFFu;
+        um.rd = 0;
+        while (get(&a, &b, &c)) ;
+        for (i = 0; i < 300; i++) {
+            uint8_t m[3] = {0x90, (uint8_t)(36 + i % 61), 100};
+            dma(m, 3);
+            uart_midi_take(i % 7 ? 3u : 0u);                /* the hardware's count is wrong now and then: it must not matter */
+            while (get(&a, &b, &c)) { if (a == 0x90 && b == 36 + n % 61 && c == 100) n++; else { n = 100000; break; } }
+        }
+        printf("%-44s %s (%u of 300 in order, resync %u)\n", "wrapping ring, 300 notes, wrong counts", n == 300 && !um.resync ? "ok" : "FAIL", n, (unsigned)um.resync);
+        bad |= !(n == 300 && !um.resync);
+        {   /* two messages split over two looks; a 0xFF byte (system reset) is skipped, the bytes after it are read */
+            const uint8_t h1[] = {0x90, 60}, h2[] = {100, 0xFF, 0x80, 60, 0};
+            dma(h1, 2); uart_midi_take(0); k = get(&a, &b, &c);
+            dma(h2, 5); uart_midi_take(0);
+            expect("a note split over two looks", 0x90, 60, 100);
+            expect("after a 0xFF byte", 0x80, 60, 0);
+            printf("%-44s %s\n", "nothing came before the second look", k ? "FAIL" : "ok"); bad |= k;
+        }
+        {   /* aftertouch, channel pressure and pitch bend are not queued (they would fill the queue) */
+            const uint8_t z[] = {0xD0, 50, 0xA0, 60, 30, 0xE0, 0, 64, 0x90, 61, 90};
+            dma(z, sizeof z); uart_midi_take(0);
+            expect("only the note comes through", 0x90, 61, 90);
+            printf("%-44s %s\n", "and nothing else", get(&a, &b, &c) ? "FAIL" : "ok");
+        }
+        {   /* CC 11 repeated, or one step away, is queued once; two steps or an end is queued again */
+            const uint8_t z[] = {0xB0, 11, 64, 0xB0, 11, 64, 0xB0, 11, 65, 0xB0, 11, 63, 0xB0, 11, 66, 0xB0, 11, 127, 0xB0, 11, 126, 0xB1, 11, 65};
+            memset(um.expr, 0xFF, sizeof um.expr);
+            dma(z, sizeof z); uart_midi_take(0);
+            expect("CC 11 = 64", 0xB0, 11, 64);
+            expect("CC 11 = 66 (65 and 63 were jitter)", 0xB0, 11, 66);
+            expect("CC 11 = 127 (an end always passes)", 0xB0, 11, 127);
+            expect("CC 11 on channel 2 is its own", 0xB1, 11, 65);
+            printf("%-44s %s\n", "repeats are not queued", get(&a, &b, &c) ? "FAIL" : "ok");
+        }
     }
     printf(bad ? "FAILED\n" : "all ok\n");
     return bad;
