@@ -1,6 +1,6 @@
 # B3 ORGAN for the M-VAVE FM-1 (on zvenson/dinghy)
 
-A fixed-point tonewheel organ modelled on setBfree. State: **0.3, tested on an FM-1 by one person and against a Raspberry Pi running setBfree (see README.md); the host tests run on every build.**
+A fixed-point tonewheel organ modelled on setBfree. State: **0.4, tested on an FM-1 by one person and against a Raspberry Pi running setBfree (see README.md); the host tests run on every build.**
 
 ## Build
 ```
@@ -12,8 +12,8 @@ tests/run_host.sh               # build/host/dinghy.wav + screen PNGs, no FM-1 n
 **Identity and version.** This firmware's package identity is `FM-1_953` (`IDENT` in `tools/build.py`), the same for every version: the
 FM-1 Firmware Hub takes the name and the version from this repository and its releases and only needs an identity no other firmware uses
 (Dinghy itself is `FM-1_99N`; the 95N family is used by other firmwares too, 951, 952 and 958: check the hub's list before you change it).
-The version is on the screen, top left: `B3 ORGAN v0.3` for a release (`./build.sh --release 0.3`,
-or a tag `v0.3` on GitHub: Actions builds `b3organ-0.3.fwsc` and attaches it to the release), `B3 ORGAN vd8362` for any other build:
+The version is on the screen, top left: `B3 ORGAN v0.4` for a release (`./build.sh --release 0.4`,
+or a tag `v0.4` on GitHub: Actions builds `b3organ-0.4.fwsc` and attaches it to the release), `B3 ORGAN vd8362` for any other build:
 `d` plus the first four hex digits of the commit it was built from (on GitHub: the commit of the run you downloaded it from).
 
 ## Controls
