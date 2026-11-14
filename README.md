@@ -14,7 +14,7 @@ build.
 
 **Try it in the browser:** [r-jeb.github.io/setBfree-fm1/play](https://r-jeb.github.io/setBfree-fm1/play/), the same engine as WebAssembly (`web/`, rebuilt with `web/build.sh`; `docs/play/index.html` is a copy of `web/index.html`).
 
-> **Status:** 0.4, tested on an FM-1 by one person. Please report what sounds different from setBfree.
+> **Status:** 0.4, tested by one person on an FM-1 with the older flash chip (Puya P25Q80) and on one with the newer one (UC25HQ80). Please report what sounds different from setBfree.
 
 ## What you get
 
