@@ -146,3 +146,5 @@ brought into this project through **[Dinghy](https://github.com/zvenson/dinghy)*
 Details and third-party parts in [LICENSING.md](LICENSING.md).
 
 M-VAVE and FM-1 are trademarks of their owners; this project is not affiliated with them.
+
+You can also try B3 ORGAN in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
