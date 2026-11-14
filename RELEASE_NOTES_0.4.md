@@ -30,9 +30,7 @@ What is new since 0.3:
 
 Please note:
 
-- The saved settings keep the 0.3 layout. SAVE stores one global state, not one per preset.
-- A recording made at the same settings will be quieter than 0.3 at the tone generator only where the limiter acts; the overdrive's level
-  against "off" is unchanged.
+- SAVE stores one global state, not one per preset.
 - Open: a line at 4190 Hz (the 12th harmonic of F4) that is louder on the Raspberry Pi; the Leslie at fast still has a little more noise than
   the Pi (partly the real Doppler); not explained yet.
 
