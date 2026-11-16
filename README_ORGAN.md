@@ -43,7 +43,7 @@ kept in their own flash sector (0xFD000), written when nothing sounds; the PRESE
 the settings). 2/0 to 2/7 with 14 bits (CC 6 = MSB, then CC 38 = LSB; the value counts when CC 38 arrives): the Leslie, setBfree's `whirl.*` values by
 default: 2/0 horn slow, 2/1 horn fast, 2/2 drum slow, 2/3 drum fast in 0.1 rpm (403, 4234, 360, 3573); 2/4 horn acceleration, 2/5 horn
 deceleration, 2/6 drum acceleration, 2/7 drum deceleration as the time constant in ms (161, 321, 4127, 1371). Saved with the settings, for all
-programs. 3/0 setBfree's `osc.tuning` in 0.1 Hz (4400 = 440 Hz, 4000..4800), 3/1 `osc.attack.click.level` (the key click) in 0.1 %
+programs. 3/0 setBfree's `osc.tuning` in 0.1 Hz (4400 = 440 Hz; rounded to whole Hz, 4300..4500), 3/1 `osc.attack.click.level` (the key click) in 0.1 %
 (500 = 0.5), 14 bits as well, saved with the settings. An RPN (CC 101 / 100) in between makes data entry go nowhere.
 
 **SysEx (the web editor).** `F0 7D 42 33 CMD ... F7` (7D: the ID for non-commercial use, then "B3"), USB only:

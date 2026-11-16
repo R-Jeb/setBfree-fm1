@@ -178,10 +178,10 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     <div class="grid">
       <div class="card">
         <h2>Tone generator</h2>
-        <div class="slider" style="--ow:84px"><span class="lbl">Tuning</span><input type="range" id="tun" min="4000" max="4800" step="1"><output id="tunv"></output></div>
-        <div class="ticksrow" style="--ow:84px" data-max="800" data-off="4000"><span>400</span><span>420</span><span>440</span><span>460</span><span>480</span></div>
-        <div class="row" style="margin-top:10px"><button id="tundef">440 Hz</button><button id="tundn" title="−0.1 Hz">−0.1</button><button id="tunup" title="+0.1 Hz">+0.1</button></div>
-        <p class="note" style="margin-top:10px">setBfree's <code>osc.tuning</code>: the pitch of A, 400 to 480 Hz in steps of 0.1 Hz; all wheels follow (the gears stay). NRPN 3/0 with 14 bits (CC 99 = 3, CC 98 = 0, CC 6 and CC 38: 0.1 Hz), firmware 0.5. Kept with the settings.</p>
+        <div class="slider" style="--ow:84px"><span class="lbl">Tuning</span><input type="range" id="tun" min="4300" max="4500" step="10"><output id="tunv"></output></div>
+        <div class="ticksrow" style="--ow:84px" data-max="200" data-off="4300"><span>430</span><span>435</span><span>440</span><span>445</span><span>450</span></div>
+        <div class="row" style="margin-top:10px"><button id="tundef">440 Hz</button><button id="tundn" title="−1 Hz">−1 Hz</button><button id="tunup" title="+1 Hz">+1 Hz</button></div>
+        <p class="note" style="margin-top:10px">setBfree's <code>osc.tuning</code>: the pitch of A, 430 to 450 Hz in steps of 1 Hz; all wheels follow (the gears stay). NRPN 3/0 with 14 bits (CC 99 = 3, CC 98 = 0, CC 6 and CC 38: 0.1 Hz, the FM-1 rounds to whole Hz), firmware 0.5. Kept with the settings.</p>
         <div class="row" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)"><span class="lbl">Extended parameters</span><div class="seg" id="tonx"></div></div>
         <div id="tonxbox" hidden>
           <div class="slider" style="margin-top:14px;--ow:84px"><span class="lbl">Key click</span><input type="range" id="clk" min="0" max="1000" step="5"><output id="clkv"></output></div>
@@ -248,6 +248,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   if (S.chr === undefined) S.chr = 16;
   if (!S.lesp) S.lesp = [403, 4234, 360, 3573, 161, 321, 4127, 1371];
   if (!S.tonp) S.tonp = [4400, 500];
+  S.tonp[0] = Math.max(4300, Math.min(4500, Math.round(S.tonp[0] / 10) * 10));   /* whole Hz, 430..450 */
   function save() { try { localStorage.setItem("b3editor", JSON.stringify(S)); } catch (e) {} jsonbox(); }
   function $(id) { return document.getElementById(id); }
 
@@ -348,7 +349,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       if (b.length >= 51 && b[35] < 0x20) { for (var k = 0; k < 8; k++) S.lesp[k] = b[35 + 2 * k] << 7 | b[36 + 2 * k]; vs = 51; }   /* the Leslie's (MSBs are < 0x20; a version starts with a digit or d) */
       if (vs === 51 && b.length >= 55) {           /* tuning and key click */
         var tu = b[51] << 7 | b[52], ck = b[53] << 7 | b[54];
-        if (tu >= 4000 && tu <= 4800 && ck <= 1000) { S.tonp = [tu, ck]; vs = 55; }
+        if (tu >= 4000 && tu <= 4800 && ck <= 1000) { S.tonp = [Math.max(4300, Math.min(4500, Math.round(tu / 10) * 10)), ck]; vs = 55; }
       }
       var v = String.fromCharCode.apply(null, b.slice(vs));
       $("fwchip").textContent = "FM-1 · firmware " + (v || "?");
@@ -533,8 +534,8 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   $("tun").oninput = function () { S.tonp[0] = +this.value; save(); paint(); tonSend(0); };
   $("clk").oninput = function () { S.tonp[1] = +this.value; save(); paint(); tonSend(1); };
   $("tundef").onclick = function () { tonTo(0, 4400); };
-  $("tundn").onclick = function () { tonTo(0, Math.max(4000, S.tonp[0] - 1)); };
-  $("tunup").onclick = function () { tonTo(0, Math.min(4800, S.tonp[0] + 1)); };
+  $("tundn").onclick = function () { tonTo(0, Math.max(4300, S.tonp[0] - 10)); };
+  $("tunup").onclick = function () { tonTo(0, Math.min(4500, S.tonp[0] + 10)); };
   $("clkdef").onclick = function () { tonTo(1, 500); };
 
   /* ---- the ticks under a slider: each at its value (data-index: the n-th span is position n) */
@@ -558,7 +559,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     $("drv").value = S.drv; $("drvv").textContent = S.drv;
     $("chr").value = S.chr; $("chrv").textContent = S.chr;
     S.lesp.forEach(function (v, i) { $("lp" + i).value = v; $("lpv" + i).textContent = lesFmt(i, v); });
-    $("tun").value = S.tonp[0]; $("tunv").textContent = (S.tonp[0] / 10).toFixed(1) + " Hz";
+    $("tun").value = S.tonp[0]; $("tunv").textContent = Math.round(S.tonp[0] / 10) + " Hz";
     $("clk").value = S.tonp[1]; $("clkv").textContent = (S.tonp[1] / 10).toFixed(1) + " %";
     var ri = nearestRev(S.rev); $("rev").value = ri; $("revv").textContent = REVS[ri];
     $("pgm").value = S.pgm; pgmName(); programList();

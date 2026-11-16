@@ -217,10 +217,11 @@ int main(void)
     organ_cc(98, 0); organ_cc(6, 127); organ_cc(38, 127); CHECK("  clamped to 150 rpm slow", les_p[0] == 1500);
     les_set(0, 403); les_set(1, 4234); les_set(6, 4127);
     CHECK("setBfree's values give its constants again", ls_tgt[0] == LES_HORN_SLOW && ls_tgt[1] == LES_HORN_FAST && ls_k[2] == LES_DRUM_ACC);
-    organ_cc(99, 3); organ_cc(98, 0); organ_cc(6, 4420 >> 7); organ_cc(38, 4420 & 127);
-    CHECK("NRPN 3/0 tuning 442 Hz (within 5 ppm)", ton_p[0] == 4420 && winc != WHEEL_INC &&
+    organ_cc(99, 3); organ_cc(98, 0); organ_cc(6, 4417 >> 7); organ_cc(38, 4417 & 127);   /* 441.7 Hz: rounded to 442 */
+    CHECK("NRPN 3/0 tuning 441.7 Hz -> 442 Hz (within 5 ppm)", ton_p[0] == 4420 && winc != WHEEL_INC &&
           winc[57] > WHEEL_INC[57] + WHEEL_INC[57] / 220u - 400u && winc[57] < WHEEL_INC[57] + WHEEL_INC[57] / 220u + 400u);
-    organ_cc(6, 0); organ_cc(38, 0); CHECK("  clamped to 400 Hz", ton_p[0] == 4000);
+    organ_cc(6, 0); organ_cc(38, 0); CHECK("  clamped to 430 Hz", ton_p[0] == 4300);
+    organ_cc(6, 127); organ_cc(38, 127); CHECK("  clamped to 450 Hz", ton_p[0] == 4500);
     organ_cc(98, 1); organ_cc(6, 0); organ_cc(38, 0); CHECK("NRPN 3/1 key click 0", ton_p[1] == 0 && atk_kd == 2048);
     organ_cc(6, 1000 >> 7); organ_cc(38, 1000 & 127); CHECK("  key click 1.0", atk_kd == -2048);
     ton_set(0, 4400); ton_set(1, 500); CHECK("setBfree's tuning and click again", winc == WHEEL_INC && atk_kd == 0);

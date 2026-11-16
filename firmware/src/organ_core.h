@@ -87,7 +87,7 @@ static int32_t perc_env = 32767;                /* Q15 */
 static const uint8_t VIBMODE[6] = {1, 4, 2, 5, 3, 6};   /* knob position -> mode: 1..3 V1..V3, 4..6 C1..C3 */
 
 /* ---- the tone generator's tuning and key click (NRPN 3/0, 3/1, the web editor), 14 bits: 3/0 setBfree's osc.tuning in 0.1 Hz (4400:
- * A = 440 Hz, 4000..4800), 3/1 osc.attack.click.level in 0.1 % (500: 0.5, 0..1000). setBfree's values by default. */
+ * A = 440 Hz; rounded to whole Hz, 4300..4500), 3/1 osc.attack.click.level in 0.1 % (500: 0.5, 0..1000). setBfree's values by default. */
 #define TON_NP 2u
 static const uint16_t TON_DEF[TON_NP] = {4400, 500};
 static uint16_t ton_p[TON_NP] = {4400, 500};
@@ -99,8 +99,9 @@ static void ton_set(uint32_t i, uint32_t v)     /* main loop only */
     uint32_t w, m;
     if (i >= TON_NP) return;
     if (i == 0u) {
-        if (v < 4000u) v = 4000u;
-        if (v > 4800u) v = 4800u;
+        v = (v + 5u) / 10u * 10u;                /* whole Hz, 430..450 */
+        if (v < 4300u) v = 4300u;
+        if (v > 4500u) v = 4500u;
         ton_p[0] = (uint16_t)v;
         if (v == 4400u) { winc = WHEEL_INC; return; }
         m = (v << 18) / 4400u;                  /* the ratio, Q18 */
