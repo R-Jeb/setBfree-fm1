@@ -167,9 +167,12 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
         <h2>Leslie</h2>
         <div class="row"><span class="lbl">Speed</span><div class="seg" id="les"></div></div>
         <p class="note" style="margin-top:10px">CC 1 selects slow, stop or fast; CC 64 (sustain pedal) toggles slow and fast.</p>
+        <div class="row" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)"><span class="lbl">Extended parameters</span><div class="seg" id="lesx"></div></div>
+        <div id="lesxbox" hidden>
         <div id="lesp" style="display:grid;gap:10px;margin-top:14px;--lw:112px;--ow:84px"></div>
         <div class="row" style="margin-top:12px"><button id="lesdef">setBfree's values</button></div>
         <p class="note" style="margin-top:10px">setBfree's <code>whirl.horn/drum.slowrpm</code>, <code>fastrpm</code>, <code>acceleration</code> and <code>deceleration</code> (the time to get about two thirds of the way to the new speed). They go as NRPN 2/0 to 2/7 with 14 bits (CC 99 = 2, CC 98 = 0..7, CC 6 and CC 38: 0.1 rpm, or ms) and need firmware 0.5. The FM-1 keeps them with its settings, for all programs.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -464,6 +467,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     seg("decay", ["Slow", "Fast"], function () { return S.fast; }, function (i) { S.fast = i; bin(S.ch[0], 82, i); });
     seg("vol", ["Normal", "Soft"], function () { return S.soft; }, function (i) { S.soft = i; bin(S.ch[0], 81, i); });
     seg("od", ["Off", "On"], function () { return S.od; }, function (i) { S.od = i; bin(S.ch[0], 65, i); });
+    seg("lesx", ["Off", "On"], function () { return lesExt; }, function (i) { lesExt = i; $("lesxbox").hidden = !i; });   /* shown only when switched on, off at every start */
     seg("les", ["Stop", "Slow", "Fast"], function () { return S.les; }, function (i) { S.les = i; cc(S.ch[0], 1, [64, 20, 110][i]); });
   }
   function bindRange(id, outId, get, set, fmt) {
@@ -511,7 +515,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   /* ---- the Leslie's speeds and times (NRPN 2/0..7): stored in 0.1 rpm and ms, shown in rpm and s */
   var LESP = [["Horn slow", 0, 1500, 5, "rpm"], ["Horn fast", 600, 9000, 10, "rpm"], ["Drum slow", 0, 1500, 5, "rpm"], ["Drum fast", 600, 9000, 10, "rpm"],
     ["Horn speed-up", 20, 2000, 1, "s"], ["Horn slow-down", 20, 2000, 1, "s"], ["Drum speed-up", 200, 10000, 10, "s"], ["Drum slow-down", 200, 10000, 10, "s"]];
-  var LESDEF = [403, 4234, 360, 3573, 161, 321, 4127, 1371], lesTimer = {};
+  var LESDEF = [403, 4234, 360, 3573, 161, 321, 4127, 1371], lesTimer = {}, lesExt = 0;
   function lesFmt(i, v) { return LESP[i][4] === "rpm" ? (v / 10).toFixed(1) + " rpm" : (v / 1000).toFixed(v < 1000 ? 3 : 2) + " s"; }
   LESP.forEach(function (p, i) {
     var d = document.createElement("div"); d.className = "slider";
@@ -542,7 +546,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       Array.prototype.forEach.call(manualCards[2].querySelectorAll(".bar"), function (b) { b.style.width = w + "px"; });
     }
     manualCards.forEach(function (c) { c._paint(); });
-    ["vtype", "vroute", "perc", "harm", "decay", "vol", "od", "les"].forEach(paintSeg);
+    ["vtype", "vroute", "perc", "harm", "decay", "vol", "od", "les", "lesx"].forEach(paintSeg);
     $("swell").value = S.swell; $("swellv").textContent = S.swell;
     $("drv").value = S.drv; $("drvv").textContent = S.drv;
     $("chr").value = S.chr; $("chrv").textContent = S.chr;
