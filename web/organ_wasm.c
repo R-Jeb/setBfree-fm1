@@ -41,18 +41,18 @@ EXPORT void organ_midi_cc(uint32_t cc, uint32_t v) { organ_cc(cc, v); }
 EXPORT void organ_midi_pc(uint32_t uc) { organ_pc(uc); }
 EXPORT void organ_select_program(uint32_t n) { organ_program(n); }
 EXPORT uint32_t organ_program_step(uint32_t cur, int32_t dir) { return pgm_step(cur, dir); }
-EXPORT const char *organ_program_name(uint32_t n) { return n < 128u ? PGM[n].name : 0; }
+EXPORT const char *organ_program_name(uint32_t n) { return n < UP_FIRST ? PGM[n].name : 0; }   /* the user's 112..127 live on an FM-1 */
 EXPORT uint32_t organ_program_has_effect(uint32_t n) { return n < 128u && PGM[n].name && PGM[n].set ? 1u : 0u; }
 EXPORT uint32_t organ_program_is_registration(uint32_t n) { return (uint32_t)pgm_registration(n); }
 
 /* state by id: 0..8 drawbars, 9 vibrato knob, 10 vibrato on, 11 perc, 12 perc 3rd, 13 perc fast, 14 perc soft,
- * 15 leslie (0 stop, 1 slow, 2 fast), 16 overdrive on, 17 overdrive amount, 18 swell, 19 program, 20 reverb (0..127) */
+ * 15 leslie (0 stop, 1 slow, 2 fast), 16 overdrive on, 17 overdrive drive (0..16), 18 swell, 19 program, 20 reverb (0..127), 21 character */
 EXPORT uint32_t organ_get(uint32_t id)
 {
     switch (id) {
     case 9: return P.vtype; case 10: return P.vup; case 11: return P.perc; case 12: return P.perc3;
     case 13: return P.fast; case 14: return P.soft; case 15: return P.les; case 16: return P.od;
-    case 17: return P.drv; case 18: return P.swell; case 19: return P.pgm; case 20: return P.rev;
+    case 17: return P.drv; case 18: return P.swell; case 19: return P.pgm; case 20: return P.rev; case 21: return P.chr;
     default: return id < NB ? P.db[id] : 0u;
     }
 }
@@ -69,6 +69,7 @@ EXPORT void organ_set(uint32_t id, uint32_t v)
     case 16: P.od = v & 1u; break;
     case 17: if (v < 17u) P.drv = (uint8_t)v; break;
     case 20: if (v < 128u) P.rev = (uint8_t)v; break;
+    case 21: if (v < 128u) P.chr = (uint8_t)v; break;
     case 18: if (v < 128u) P.swell = (uint8_t)v; break;
     default: if (id < NB && v < 9u) P.db[id] = (uint8_t)v; break;
     }

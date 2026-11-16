@@ -93,6 +93,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; min-height: 36px; min-width: 40px;
 }
 .slider { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.slider.s3 { grid-template-columns: 7.5em 1fr auto; margin-top: 6px; }
 .slider input { width: 100%; accent-color: var(--accent); min-width: 0; }
 .slider output { font-family: var(--font-num); font-size: 12px; color: var(--muted); min-width: 2.5em; text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -117,7 +118,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   <div class="top">
     <div>
       <h1>B3 Organ</h1>
-      <p class="sub">Tonewheel organ for the M-VAVE FM-1, here in the browser.</p>
+      <p class="sub">Tonewheel organ for the M-VAVE FM-1, here in the browser: the engine of firmware 0.5.</p>
     </div>
     <div class="power">
       <button class="btn-main" id="power" aria-pressed="false">Start sound</button>
@@ -148,7 +149,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
     </div>
     <div class="grp"><span class="label">Overdrive</span>
       <div class="seg"><button id="odon" aria-pressed="false">On</button></div>
-      <div class="slider"><input type="range" id="drv" min="0" max="8" step="1" value="3" aria-label="Overdrive amount"><output id="drvo">3</output></div>
+      <div class="slider s3"><span class="label">Drive</span><input type="range" id="drv" min="0" max="16" step="1" value="12" aria-label="Overdrive drive"><output id="drvo">12</output></div>
+      <div class="slider s3"><span class="label">Character</span><input type="range" id="chr" min="0" max="127" step="1" value="16" aria-label="Overdrive character"><output id="chro">16</output></div>
     </div>
     <div class="grp"><span class="label">Reverb</span><div class="slider"><input type="range" id="rev" min="0" max="127" step="1" value="12" aria-label="Reverb"><output id="revo">12</output></div></div>
     <div class="grp"><span class="label">Swell</span><div class="slider"><input type="range" id="swl" min="0" max="127" step="1" value="127" aria-label="Swell"><output id="swlo">127</output></div></div>
@@ -233,6 +235,7 @@ function buildSwitches() {
   $("perc").querySelectorAll("button").forEach((b) => { b.onclick = () => put(+b.dataset.id, get(+b.dataset.id) ^ 1); });
   $("odon").onclick = () => put(16, get(16) ^ 1);
   $("drv").oninput = () => put(17, +$("drv").value);
+  $("chr").oninput = () => put(21, +$("chr").value);
   $("swl").oninput = () => put(18, +$("swl").value);
   $("rev").oninput = () => put(20, +$("rev").value);
   $("vol").oninput = () => { vol = +$("vol").value; $("volo").textContent = vol; if (gainNode) gainNode.gain.value = (vol / 100) * (vol / 100); };
@@ -261,6 +264,7 @@ function render() {
   $("perc").querySelectorAll("button").forEach((b) => pressed(b, get(+b.dataset.id)));
   pressed($("odon"), od);
   if (+$("drv").value !== dr) $("drv").value = dr; $("drvo").textContent = dr;
+  const ch = get(21); if (+$("chr").value !== ch) $("chr").value = ch; $("chro").textContent = ch;
   const rv = get(20); if (+$("rev").value !== rv) $("rev").value = rv; $("revo").textContent = rv;
   if (+$("swl").value !== sw) $("swl").value = sw; $("swlo").textContent = sw;
   if ($("prog").value !== String(pg)) $("prog").value = String(pg);

@@ -27,7 +27,7 @@ static volatile struct {
     uint8_t vlo;                                /* vibrato / chorus on the lower manual (the upper one is vup) */
     uint8_t keys;                               /* the FM-1's own keys play: 0 upper, 1 lower, 2 pedal */
     uint8_t chr;                                /* setBfree's overdrive.character 0..127 (NRPN 1/0, the web editor); 16 as in 0.4 */
-} P = {{8, 8, 8, 0, 0, 0, 0, 0, 0}, 0, 0, 0, 1, 0, 0, 0, 12, 0, 3, 127, 0, {8, 3, 8, 0, 0, 0, 0, 0, 0}, {8, 6}, 0, 0, 16};          /* chr 16: OD_CHARACTER */
+} P = {{8, 8, 8, 0, 0, 0, 0, 0, 0}, 0, 0, 0, 1, 0, 0, 0, 12, 0, 12, 127, 0, {8, 3, 8, 0, 0, 0, 0, 0, 0}, {8, 6}, 0, 0, 16};          /* chr 16: OD_CHARACTER */
 /* keys held (bit k): the upper manual (k = 0..60, C2..C7) from the panel and from MIDI channel 1, the lower one (the same keys) from the
  * panel and channel 2, the pedal (k = 0..31, C1..G3) from the panel and channel 3 */
 static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi, pl_lo, pl_hi, ml_lo, ml_hi, pp_k, mp_k;
