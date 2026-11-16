@@ -150,9 +150,10 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     </div>
   </section>
 
-  <!-- OVERDRIVE -->
-  <section class="page" id="p-overdrive" hidden>
-    <div class="card">
+  <!-- OVERDRIVE AND LESLIE -->
+  <section class="page" id="p-odles" hidden>
+    <div class="grid">
+      <div class="card">
       <h2>Preamp / overdrive</h2>
       <div class="row"><span class="lbl">Overdrive</span><div class="seg" id="od"></div></div>
       <div class="slider" style="margin-top:12px"><span class="lbl">Drive</span><input type="range" id="drv" min="0" max="16" step="1"><output id="drvv"></output></div>
@@ -162,17 +163,15 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       <p class="note" style="margin-top:10px">CC 65 switches it on, CC 93 sets the drive (0 to 16, as KNOB 3 on the FM-1): setBfree's <code>overdrive.inputgain</code> in steps of 1.5 dB, 12 is its default. The output follows the drive, so on and off are about equally loud.</p>
       <p class="note" style="margin-top:6px">The character is setBfree's <code>overdrive.character</code> (0 to 127, 16 in firmware 0.4): it sets the two bass filters around the tube curve. It goes as NRPN 1/0 (CC 99 = 1, CC 98 = 0, CC 6 = value) and needs firmware 0.5. The output is matched to character 16: other values can be louder or quieter (in setBfree too: about −17 dB at 32, +6 dB at 127); the limiter keeps the peaks in.</p>
     </div>
-    <div class="card"><h2>Advanced · setBfree's names and defaults</h2><div class="banner">Not in the firmware yet. These are setBfree's own parameters; the sliders show its defaults and cannot be moved until the firmware can take them.</div><div class="params" id="adv-od" style="margin-top:12px"></div></div>
-  </section>
-
-  <!-- LESLIE -->
-  <section class="page" id="p-leslie" hidden>
-    <div class="card">
-      <h2>Rotary speaker</h2>
-      <div class="row"><span class="lbl">Speed</span><div class="seg" id="les"></div></div>
-      <p class="note" style="margin-top:10px">CC 1 selects slow, stop or fast; CC 64 (sustain pedal) toggles slow and fast. The horn and the drum run up and down on their own time constants.</p>
+      <div class="card">
+        <h2>Leslie</h2>
+        <div class="row"><span class="lbl">Speed</span><div class="seg" id="les"></div></div>
+        <p class="note" style="margin-top:10px">CC 1 selects slow, stop or fast; CC 64 (sustain pedal) toggles slow and fast.</p>
+        <div id="lesp" style="display:grid;gap:10px;margin-top:14px;--lw:112px;--ow:84px"></div>
+        <div class="row" style="margin-top:12px"><button id="lesdef">setBfree's values</button></div>
+        <p class="note" style="margin-top:10px">setBfree's <code>whirl.horn/drum.slowrpm</code>, <code>fastrpm</code>, <code>acceleration</code> and <code>deceleration</code> (the time to get about two thirds of the way to the new speed). They go as NRPN 2/0 to 2/7 with 14 bits (CC 99 = 2, CC 98 = 0..7, CC 6 and CC 38: 0.1 rpm, or ms) and need firmware 0.5. The FM-1 keeps them with its settings, for all programs.</p>
+      </div>
     </div>
-    <div class="card"><h2>Advanced · setBfree's names and defaults</h2><div class="banner">Not in the firmware yet.</div><div class="params" id="adv-les" style="margin-top:12px"></div></div>
   </section>
 
   <!-- REVERB -->
@@ -232,12 +231,13 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 
   function defaults() {
     return { up: [8, 8, 8, 0, 0, 0, 0, 0, 0], lo: [8, 3, 8, 0, 0, 0, 0, 0, 0], pd: [8, 6], vtype: 0, vup: 0, vlo: 0,
-      perc: 0, third: 1, fast: 0, soft: 0, swell: 127, od: 0, drv: 12, chr: 16, v: 2, les: 0, rev: 12, pgm: 5, ch: [1, 2, 3] };
+      perc: 0, third: 1, fast: 0, soft: 0, swell: 127, od: 0, drv: 12, chr: 16, lesp: [403, 4234, 360, 3573, 161, 321, 4127, 1371], v: 2, les: 0, rev: 12, pgm: 5, ch: [1, 2, 3] };
   }
   try { S = JSON.parse(localStorage.getItem("b3editor") || "null"); } catch (e) { S = null; }
   if (!S || !S.up || !S.ch) S = defaults();
   if (!S.v) { S.drv = 12; S.v = 2; }   /* saved before firmware 0.4: drv was the character 0..8, now it is the drive 0..16 */
   if (S.chr === undefined) S.chr = 16;
+  if (!S.lesp) S.lesp = [403, 4234, 360, 3573, 161, 321, 4127, 1371];
   function save() { try { localStorage.setItem("b3editor", JSON.stringify(S)); } catch (e) {} jsonbox(); }
   function $(id) { return document.getElementById(id); }
 
@@ -258,6 +258,11 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     logline("out", "ch " + ch + "  NRPN " + msb + "/" + lsb + " = " + v);
     if (out) try { out.send([0xB0 | (ch - 1), 99, msb, 0xB0 | (ch - 1), 98, lsb, 0xB0 | (ch - 1), 6, v & 127]); } catch (e) {}
   }
+  function nrpn14(ch, msb, lsb, v) {
+    v = Math.max(0, Math.min(16383, Math.round(v)));
+    logline("out", "ch " + ch + "  NRPN " + msb + "/" + lsb + " = " + v);
+    if (out) try { out.send([0xB0 | (ch - 1), 99, msb, 0xB0 | (ch - 1), 98, lsb, 0xB0 | (ch - 1), 6, v >> 7, 0xB0 | (ch - 1), 38, v & 127]); } catch (e) {}
+  }
   function sx(bytes, what) {                      /* F0 7D 42 33 ... F7: the firmware's editor messages */
     logline("out", "SysEx " + what);
     if (out && sysexOk) try { out.send([0xF0, 0x7D, 0x42, 0x33].concat(bytes, [0xF7])); } catch (e) { logline("dim", "SysEx could not be sent: " + e.message); }
@@ -275,7 +280,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     var c = S.ch[0];
     cc(c, 92, VTCC[S.vtype]); bin(c, 31, S.vup); bin(c, 30, S.vlo);
     bin(c, 80, S.perc); cc(c, 83, S.third ? 0 : 127); bin(c, 82, S.fast); bin(c, 81, S.soft);
-    cc(c, 11, S.swell); bin(c, 65, S.od); cc(c, 93, dig(S.drv)); nrpn(c, 1, 0, S.chr); cc(c, 1, [20, 64, 110][S.les === 0 ? 1 : S.les === 1 ? 0 : 2]); cc(c, 91, S.rev);
+    cc(c, 11, S.swell); bin(c, 65, S.od); cc(c, 93, dig(S.drv)); nrpn(c, 1, 0, S.chr); S.lesp.forEach(function (v, i) { nrpn14(c, 2, i, v); }); cc(c, 1, [20, 64, 110][S.les === 0 ? 1 : S.les === 1 ? 0 : 2]); cc(c, 91, S.rev);
   }
   /* the FM-1 calls itself "Felucca" on USB (the platform's name: the installer and the Firmware Hub look for it); here it is the organ */
   function shown(name) { return /felucca/i.test(name) ? "B3 ORGAN" : name; }
@@ -329,7 +334,9 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       S.up = b.slice(0, 9); S.lo = b.slice(9, 18); S.pd = b.slice(18, 20);
       S.vtype = b[20]; S.vup = b[21]; S.vlo = b[22]; S.perc = b[23]; S.third = b[24]; S.fast = b[25]; S.soft = b[26];
       S.les = b[27]; S.od = b[28]; S.drv = b[29]; S.chr = b[30]; S.rev = b[31]; S.swell = b[32]; S.pgm = b[33] || S.pgm;
-      var v = String.fromCharCode.apply(null, b.slice(35));
+      var vs = 35;
+      if (b.length >= 51 && b[35] < 0x20) { for (var k = 0; k < 8; k++) S.lesp[k] = b[35 + 2 * k] << 7 | b[36 + 2 * k]; vs = 51; }   /* the Leslie's (MSBs are < 0x20; a version starts with a digit or d) */
+      var v = String.fromCharCode.apply(null, b.slice(vs));
       $("fwchip").textContent = "FM-1 · firmware " + (v || "?");
       logline("in", "SysEx: the FM-1's sound" + (b[33] ? ", program " + b[33] : "") + ", firmware " + v);
       buildManuals(); save(); paint();
@@ -487,13 +494,6 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 
   /* ---- advanced (setBfree's names; shown, not yet sendable) */
   var ADV = {
-    od: [["overdrive.inputgain", 0.3567, 0, 1], ["overdrive.outputgain", 0.07873, 0, 1], ["xov.ctl_biased", 0.5347, 0, 1], ["xov.ctl_biased_gfb", 0.6214, 0, 1],
-      ["xov.ctl_biased_fb", 0.5821, 0, 1], ["xov.ctl_biased_fb2", 0.999, 0, 1], ["xov.ctl_sagtobias", 0.188, 0, 1]],
-    les: [["whirl.horn.slowrpm", 40.32, 0, 120, "rpm"], ["whirl.horn.fastrpm", 423.36, 0, 800, "rpm"], ["whirl.horn.acceleration", 0.161, 0, 5, "s"], ["whirl.horn.deceleration", 0.321, 0, 5, "s"],
-      ["whirl.drum.slowrpm", 36, 0, 120, "rpm"], ["whirl.drum.fastrpm", 357.3, 0, 800, "rpm"], ["whirl.drum.acceleration", 4.127, 0, 10, "s"], ["whirl.drum.deceleration", 1.371, 0, 10, "s"],
-      ["whirl.horn.radius", 19.2, 5, 40, "cm"], ["whirl.drum.radius", 22, 5, 40, "cm"], ["whirl.mic.distance", 42, 10, 100, "cm"], ["whirl.horn.level", 0.7, 0, 1], ["whirl.horn.leak", 0.15, 0, 1],
-      ["whirl.drum.filter.hz", 811.9695, 100, 4000, "Hz"], ["whirl.drum.filter.q", 1.6016, 0.1, 8], ["whirl.drum.filter.gain", -38.9291, -60, 0, "dB"],
-      ["whirl.horn.filter.a.hz", 4500, 500, 12000, "Hz"], ["whirl.horn.filter.b.hz", 300, 50, 2000, "Hz"]],
     rev: [["reverb.mix", 0.1, 0, 1], ["reverb.inputgain", 0.1, 0, 1], ["reverb.outputgain", 1, 0, 2]],
     tone: [["osc.tuning", 440, 400, 480, "Hz"], ["osc.perc.fast", 1, 0.2, 4, "s"], ["osc.perc.slow", 4, 1, 8, "s"], ["osc.perc.soft", 0.5012, 0, 1], ["osc.perc.gain", 11, 0, 20],
       ["osc.attack.click.level", 0.5, 0, 1], ["osc.release.click.level", 0.25, 0, 1], ["scanner.hz", 7.25, 4, 10, "Hz"],
@@ -507,6 +507,24 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       host.appendChild(d);
     });
   });
+
+  /* ---- the Leslie's speeds and times (NRPN 2/0..7): stored in 0.1 rpm and ms, shown in rpm and s */
+  var LESP = [["Horn slow", 0, 1500, 5, "rpm"], ["Horn fast", 600, 9000, 10, "rpm"], ["Drum slow", 0, 1500, 5, "rpm"], ["Drum fast", 600, 9000, 10, "rpm"],
+    ["Horn speed-up", 20, 2000, 1, "s"], ["Horn slow-down", 20, 2000, 1, "s"], ["Drum speed-up", 200, 10000, 10, "s"], ["Drum slow-down", 200, 10000, 10, "s"]];
+  var LESDEF = [403, 4234, 360, 3573, 161, 321, 4127, 1371], lesTimer = {};
+  function lesFmt(i, v) { return LESP[i][4] === "rpm" ? (v / 10).toFixed(1) + " rpm" : (v / 1000).toFixed(v < 1000 ? 3 : 2) + " s"; }
+  LESP.forEach(function (p, i) {
+    var d = document.createElement("div"); d.className = "slider";
+    d.innerHTML = '<span class="lbl"></span><input type="range" min="' + p[1] + '" max="' + p[2] + '" step="' + p[3] + '" id="lp' + i + '"><output id="lpv' + i + '"></output>';
+    d.firstChild.textContent = p[0];
+    $("lesp").appendChild(d);
+    var r = d.querySelector("input");
+    r.oninput = function () {
+      S.lesp[i] = +r.value; $("lpv" + i).textContent = lesFmt(i, S.lesp[i]); save();
+      clearTimeout(lesTimer[i]); lesTimer[i] = setTimeout(function () { nrpn14(S.ch[0], 2, i, S.lesp[i]); }, 40);   /* not every pixel of a drag */
+    };
+  });
+  $("lesdef").onclick = function () { LESDEF.forEach(function (v, i) { S.lesp[i] = v; nrpn14(S.ch[0], 2, i, v); }); save(); paint(); };
 
   /* ---- the ticks under a slider: each at its value (data-index: the n-th span is position n) */
   Array.prototype.forEach.call(document.querySelectorAll(".ticksrow"), function (row) {
@@ -528,12 +546,13 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     $("swell").value = S.swell; $("swellv").textContent = S.swell;
     $("drv").value = S.drv; $("drvv").textContent = S.drv;
     $("chr").value = S.chr; $("chrv").textContent = S.chr;
+    S.lesp.forEach(function (v, i) { $("lp" + i).value = v; $("lpv" + i).textContent = lesFmt(i, v); });
     var ri = nearestRev(S.rev); $("rev").value = ri; $("revv").textContent = REVS[ri];
     $("pgm").value = S.pgm; pgmName(); programList();
     [0, 1, 2].forEach(function (m) { $("ch" + m).value = S.ch[m]; });
     jsonbox();
   }
-  var TABS = [["manuals", "Manuals"], ["overdrive", "Overdrive"], ["leslie", "Leslie"], ["reverb", "Reverb"], ["tone", "Tone"], ["programs", "Programs"], ["monitor", "Monitor"]];
+  var TABS = [["manuals", "Manuals"], ["odles", "Overdrive & Leslie"], ["reverb", "Reverb"], ["tone", "Tone"], ["programs", "Programs"], ["monitor", "Monitor"]];
   var tabs = $("tabs");
   TABS.forEach(function (t) {
     var b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "tab"); b.id = "t-" + t[0]; b.textContent = t[1];
@@ -541,6 +560,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     tabs.appendChild(b);
   });
   function show(n) {
+    if (n === "overdrive" || n === "leslie") n = "odles";   /* the old pages */
     if (!TABS.some(function (t) { return t[0] === n; })) n = "manuals";
     TABS.forEach(function (t) { $("p-" + t[0]).hidden = t[0] !== n; $("t-" + t[0]).setAttribute("aria-selected", String(t[0] === n)); });
     if (n === "manuals") paint();

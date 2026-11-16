@@ -40,13 +40,16 @@ kept in their own flash sector (0xFD000), written when nothing sounds; the PRESE
 111 to 126 selects them, and they set everything they hold (setBfree's programs change only what they name). Program 111 stays free.
 
 **NRPN.** 1/0 (CC 99 = 1, CC 98 = 0, then CC 6 = 0..127): setBfree's `overdrive.character` (16 at start, as fixed until 0.4; saved with
-the settings). An RPN (CC 101 / 100) in between makes data entry go nowhere.
+the settings). 2/0 to 2/7 with 14 bits (CC 6 = MSB, then CC 38 = LSB; the value counts when CC 38 arrives): the Leslie, setBfree's `whirl.*` values by
+default: 2/0 horn slow, 2/1 horn fast, 2/2 drum slow, 2/3 drum fast in 0.1 rpm (403, 4234, 360, 3573); 2/4 horn acceleration, 2/5 horn
+deceleration, 2/6 drum acceleration, 2/7 drum deceleration as the time constant in ms (161, 321, 4127, 1371). Saved with the settings, for all
+programs. An RPN (CC 101 / 100) in between makes data entry go nowhere.
 
 **SysEx (the web editor).** `F0 7D 42 33 CMD ... F7` (7D: the ID for non-commercial use, then "B3"), USB only:
 
 | To the FM-1 | Answer |
 | --- | --- |
-| `01` read the sound | `41` + upper 9, lower 9, pedal 2 drawbars, vibrato type, upper on, lower on, percussion on, 3rd, fast, soft, Leslie (0 stop, 1 slow, 2 fast), overdrive on, drive, character, reverb, swell, program, keys (0 upper, 1 lower, 2 pedal), then the version in ASCII |
+| `01` read the sound | `41` + upper 9, lower 9, pedal 2 drawbars, vibrato type, upper on, lower on, percussion on, 3rd, fast, soft, Leslie (0 stop, 1 slow, 2 fast), overdrive on, drive, character, reverb, swell, program, keys (0 upper, 1 lower, 2 pedal), the Leslie's 2/0..2/7 (two bytes each, MSB first), then the version in ASCII |
 | `02` read your programs | `42` + number, used (0/1), name (12 bytes, 0 = end), once for each of 112..127 |
 | `03` n name[12]: store the sound now as program n | when the flash is written (nothing sounding): `43` n status (0 saved, 1 not 112..127, 2 flash error), then `42` for n |
 | `04` n: delete program n | as `03` |
