@@ -74,7 +74,8 @@ static volatile uint32_t fm1_ms;                /* milliseconds since power-on (
 
 /* ---- flash: read anywhere; erase / program only the update's staging area and the settings sector */
 #define SETTINGS_AT 0x000FC000u                 /* one 4 KiB sector of Felucca's globals area */
-#define FL_RANGE_OK(off, n) (FL_IN(off, n, FL_OTA_LO, FL_OTA_HI) || FL_IN(off, n, SETTINGS_AT, SETTINGS_AT + 0x1000u))
+#define DATA_AT 0x000FD000u                     /* the next one: the app's own data (data_load / data_save), e.g. user programs */
+#define FL_RANGE_OK(off, n) (FL_IN(off, n, FL_OTA_LO, FL_OTA_HI) || FL_IN(off, n, SETTINGS_AT, SETTINGS_AT + 0x2000u))
 #include "fm1_flash.h"
 static uint8_t flash_ok;
 static int st_read(uint32_t off, void *dst, uint32_t n)
@@ -141,40 +142,59 @@ static void ota_commit(const uint8_t *parm)
 /* ---- settings: [magic][length][crc32] then the bytes; settings_save erases the sector (~50 ms with
  * the interrupts off: the sound drops out), so save when nothing plays, not on every knob step */
 #define SETTINGS_MAGIC 0x59474E44u              /* "DNGY" */
-static uint32_t crc32(const uint8_t *p, uint32_t n)
+static uint32_t crc32_more(uint32_t c, const uint8_t *p, uint32_t n)   /* c: ~0 to start, ~ at the end */
 {
-    uint32_t c = 0xFFFFFFFFu, k;
+    uint32_t k;
     while (n--) {
         c ^= *p++;
         for (k = 0; k < 8u; k++)
             c = c & 1u ? (c >> 1) ^ 0xEDB88320u : c >> 1;
     }
-    return ~c;
+    return c;
 }
-static int settings_load(void *p, uint32_t n)   /* 0: loaded; else p is untouched */
+static uint32_t crc32(const uint8_t *p, uint32_t n) { return ~crc32_more(0xFFFFFFFFu, p, n); }
+static int blob_load(uint32_t at, void *p, uint32_t n)   /* 0: loaded; else p is untouched */
 {
-    static uint8_t buf[256];
-    uint32_t h[3];
-    if (!flash_ok || n > sizeof buf || st_read(SETTINGS_AT, h, sizeof h) || h[0] != SETTINGS_MAGIC || h[1] != n)
+    uint8_t buf[64];
+    uint32_t h[3], c = 0xFFFFFFFFu, o, k;
+    if (!flash_ok || n > 4096u - sizeof h || st_read(at, h, sizeof h) || h[0] != SETTINGS_MAGIC || h[1] != n)
         return -1;
-    if (st_read(SETTINGS_AT + sizeof h, buf, n) || crc32(buf, n) != h[2])
+    for (o = 0; o < n; o += k) {                /* the CRC first, in small pieces, so that p stays untouched on a bad one */
+        k = n - o > sizeof buf ? sizeof buf : n - o;
+        if (st_read(at + sizeof h + o, buf, k))
+            return -1;
+        c = crc32_more(c, buf, k);
+    }
+    if (~c != h[2] || st_read(at + sizeof h, p, n))
         return -1;
-    memcpy(p, buf, n);
     return 0;
 }
-static int settings_save(const void *p, uint32_t n)   /* p in RAM, n <= 256 */
+static int blob_save(uint32_t at, const void *p, uint32_t n)   /* p in RAM */
 {
     uint32_t h[3] = {SETTINGS_MAGIC, n, 0}, took;
     int rc;
-    if (!flash_ok || n > 256u)
+    if (!flash_ok || n > 4096u - sizeof h)
         return -1;
     h[2] = crc32(p, n);
-    if ((rc = fl_erase4k(SETTINGS_AT, &took)) != 0)
+    if ((rc = fl_erase4k(at, &took)) != 0)
         return rc;
-    if ((rc = fl_write(SETTINGS_AT + sizeof h, p, n)) != 0)
+    if ((rc = fl_write(at + sizeof h, p, n)) != 0)
         return rc;
-    return fl_write(SETTINGS_AT, (const uint8_t *)h, sizeof h);   /* the header last: a cut save stays invalid */
+    return fl_write(at, (const uint8_t *)h, sizeof h);   /* the header last: a cut save stays invalid */
 }
+static int settings_load(void *p, uint32_t n) { return n > 256u ? -1 : blob_load(SETTINGS_AT, p, n); }
+static int settings_save(const void *p, uint32_t n) { return n > 256u ? -1 : blob_save(SETTINGS_AT, p, n); }
+static int data_load(void *p, uint32_t n) { return n > 1024u ? -1 : blob_load(DATA_AT, p, n); }      /* a second sector, up to 1 KiB */
+static int data_save(const void *p, uint32_t n) { return n > 1024u ? -1 : blob_save(DATA_AT, p, n); }
+
+/* ---- the app's own SysEx: F0 7D ... F7 (7D: the ID for non-commercial use). The updater's frames go to ota.c;
+ * one that starts with 7D waits for the app (sysex_get, then sysex_done). sysex_send takes the whole F0 .. F7. */
+static int sysex_get(const uint8_t **p, uint32_t *n)   /* 1: a frame, the bytes between F0 and F7 */
+{
+    return ota_frame_get(p, n) && *n && (*p)[0] == 0x7Du;
+}
+static void sysex_done(void) { ota_frame_done(); }
+static int sysex_send(const uint8_t *p, uint32_t n) { return ota_wire_send(p, n); }
 
 /* ---- MIDI over USB: 4-byte USB-MIDI packets, cable 0 */
 static int midi_get(uint8_t *st, uint8_t *d1, uint8_t *d2)   /* 1: a message (status, data 1, data 2) */
@@ -311,7 +331,12 @@ static void platform_poll(void)
     battery_poll(fm1_ms);
     fm1_wdt_feed();
     usb_retry(fm1_ms);
-    ota_service();
+    {
+        const uint8_t *sp_;
+        uint32_t sn_;
+        if (!sysex_get(&sp_, &sn_))
+            ota_service();                      /* the updater's; one of the app's (7D) waits for sysex_get */
+    }
     if (usb.ota_req) {
         usb.ota_req = 0;
         if (flash_ok)

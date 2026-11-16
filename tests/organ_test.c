@@ -194,6 +194,22 @@ int main(void)
     organ_cc(93, 127); CHECK("CC 93 drive 127 = 16", P.drv == 16);
     organ_cc(93, 0);   CHECK("CC 93 drive 0 = 0", P.drv == 0);
     mk_lo = 5; organ_cc(123, 0); CHECK("CC 123 releases MIDI notes", mk_lo == 0);
+    CHECK("character starts at 16", P.chr == 16);
+    organ_cc(99, 1); organ_cc(98, 0); organ_cc(6, 77); CHECK("NRPN 1/0 sets the character", P.chr == 77);
+    organ_cc(101, 0); organ_cc(6, 5); CHECK("  an RPN in between: data entry goes nowhere", P.chr == 77);
+    organ_cc(6, 9); CHECK("  and stays nowhere", P.chr == 77);
+    {
+        static const uint8_t nm[12] = "My Jazz";
+        organ_cc(71, 127); organ_cc(93, 127);
+        CHECK("program 112 empty: not a registration", !pgm_registration(112));
+        user_store(112, nm); CHECK("store into 112", UPGM[0].used == 1 && P.pgm == 112 && pgm_name(112)[0] == 'M');
+        organ_program(5); organ_cc(93, 0); P.chr = 16;
+        CHECK("program 5 sets the 5 1/3' back", P.db[1] == 8);
+        organ_program(112); CHECK("program 112 brings it all back", P.db[1] == 0 && P.drv == 16 && P.chr == 77 && P.pgm == 112);
+        CHECK("  and the PRESETS knob finds it", pgm_step(110, 1) == 112 && pgm_step(112, -1) == 110);
+        organ_pc(111); CHECK("program change 111 selects it", P.pgm == 112);
+        UPGM[0].used = 0; organ_program(5); P.chr = 16; P.drv = 0;
+    }
     printf(bad ? "FAILED\n" : "all ok\n");
     check_levels();
     check_compression();

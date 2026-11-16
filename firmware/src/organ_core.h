@@ -26,7 +26,8 @@ static volatile struct {
     uint8_t dbp[2];                             /* the pedal's: 16' and 8' (MIDI channel 3) */
     uint8_t vlo;                                /* vibrato / chorus on the lower manual (the upper one is vup) */
     uint8_t keys;                               /* the FM-1's own keys play: 0 upper, 1 lower, 2 pedal */
-} P = {{8, 8, 8, 0, 0, 0, 0, 0, 0}, 0, 0, 0, 1, 0, 0, 0, 12, 0, 3, 127, 0, {8, 3, 8, 0, 0, 0, 0, 0, 0}, {8, 6}, 0, 0};
+    uint8_t chr;                                /* setBfree's overdrive.character 0..127 (NRPN 1/0, the web editor); 16 as in 0.4 */
+} P = {{8, 8, 8, 0, 0, 0, 0, 0, 0}, 0, 0, 0, 1, 0, 0, 0, 12, 0, 3, 127, 0, {8, 3, 8, 0, 0, 0, 0, 0, 0}, {8, 6}, 0, 0, 16};          /* chr 16: OD_CHARACTER */
 /* keys held (bit k): the upper manual (k = 0..60, C2..C7) from the panel and from MIDI channel 1, the lower one (the same keys) from the
  * panel and channel 2, the pedal (k = 0..31, C1..G3) from the panel and channel 3 */
 static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi, pl_lo, pl_hi, ml_lo, ml_hi, pp_k, mp_k;
@@ -317,7 +318,7 @@ static void app_audio(int32_t *out, uint32_t n)
     if (spk > sum_pk) sum_pk = spk;
     sum_clip += scl;
     t1 = fm1_ticks();
-    if (od) od_run(mono, n, OD_CHARACTER, dm);   /* setBfree's preamp: a fixed character, the drive is the input gain */
+    if (od) od_run(mono, n, P.chr, dm);          /* setBfree's preamp: the character (NRPN 1/0) and the drive (the input gain) */
     else block_limit(&lim_sum, mono, 0, n);          /* overdrive off: the sum is limited by turning the gain down, not clipped */
     t2 = fm1_ticks();
     if (fx_bypass) {
@@ -399,8 +400,51 @@ static uint32_t rnd(void)                       /* xorshift, stirred with the cl
     return rnd_state;
 }
 
+/* ---- the user's own programs 112 to 127 (stored by the web editor, SysEx): the whole sound of all three manuals */
+#define UP_FIRST 112u
+#define UP_N 16u
+typedef struct {
+    uint8_t used;                               /* 1: the slot holds a program */
+    char name[13];                              /* printable ASCII, 0-terminated */
+    uint8_t db[NB], dbl[NB], dbp[2], vtype, vup, vlo, perc, perc3, fast, soft, les, od, drv, chr, rev;
+    uint8_t rsv[2];                             /* (48 bytes a slot) */
+} organ_user_t;
+static organ_user_t UPGM[UP_N];                 /* loaded from the flash at start (dinghy.c), zero: empty */
+static organ_user_t *user_pgm(uint32_t n) { return n >= UP_FIRST && n < UP_FIRST + UP_N && UPGM[n - UP_FIRST].used == 1u ? &UPGM[n - UP_FIRST] : 0; }
+static const char *pgm_name(uint32_t n)         /* 0: no such program */
+{
+    if (n >= UP_FIRST && n < UP_FIRST + UP_N) return user_pgm(n) ? user_pgm(n)->name : 0;
+    return n < 128u ? PGM[n].name : 0;
+}
+static void user_store(uint32_t n, const uint8_t *name)   /* the sound now into program n (112..127), name: 12 bytes, 0 ends early */
+{
+    organ_user_t *u = &UPGM[n - UP_FIRST];
+    uint32_t i;
+    for (i = 0; i < NB; i++) { u->db[i] = P.db[i]; u->dbl[i] = P.dbl[i]; }
+    u->dbp[0] = P.dbp[0]; u->dbp[1] = P.dbp[1];
+    u->vtype = P.vtype; u->vup = P.vup; u->vlo = P.vlo; u->perc = P.perc; u->perc3 = P.perc3; u->fast = P.fast; u->soft = P.soft;
+    u->les = P.les; u->od = P.od; u->drv = P.drv; u->chr = P.chr; u->rev = P.rev; u->rsv[0] = u->rsv[1] = 0;
+    for (i = 0; i < 12u && name[i]; i++) u->name[i] = name[i] >= 32u && name[i] < 127u ? (char)name[i] : '?';
+    if (i == 0) { u->name[0] = 'U'; u->name[1] = 'S'; u->name[2] = 'E'; u->name[3] = 'R'; i = 4; }
+    for (; i < 13u; i++) u->name[i] = 0;
+    u->used = 1;
+    P.pgm = (uint8_t)n;
+}
+static void user_check(void)                    /* after loading: anything out of range makes the slot empty */
+{
+    uint32_t k, i, ok;
+    for (k = 0; k < UP_N; k++) {
+        organ_user_t *u = &UPGM[k];
+        ok = u->used == 1u && u->name[12] == 0 && u->vtype < 6u && u->les < 3u && u->drv < 17u && u->chr < 128u && u->rev < 128u;
+        for (i = 0; ok && i < NB; i++) ok = u->db[i] < 9u && u->dbl[i] < 9u;
+        ok = ok && u->dbp[0] < 9u && u->dbp[1] < 9u;
+        if (!ok) u->used = 0;
+    }
+}
+
 static int pgm_registration(uint32_t n)         /* a program that sets the drawbars: what the PRESETS knob steps through */
 {
+    if (n >= UP_FIRST) return user_pgm(n) != 0;
     return n < 128u && PGM[n].name && (PGM[n].set & (PGM_DB | PGM_RND));
 }
 static uint32_t pgm_step(uint32_t cur, int32_t dir)
@@ -416,8 +460,17 @@ static uint32_t pgm_step(uint32_t cur, int32_t dir)
 static void organ_program(uint32_t n)           /* only the properties a program names change, as in setBfree */
 {
     const organ_pgm_t *g;
+    const organ_user_t *u = user_pgm(n);
     uint32_t i;
-    if (n < 1u || n > 127u || !PGM[n].name) return;
+    if (u) {                                    /* the user's own: everything it holds */
+        for (i = 0; i < NB; i++) { P.db[i] = u->db[i]; P.dbl[i] = u->dbl[i]; }
+        P.dbp[0] = u->dbp[0]; P.dbp[1] = u->dbp[1];
+        P.vtype = u->vtype; P.vup = u->vup & 1u; P.vlo = u->vlo & 1u; P.perc = u->perc & 1u; P.perc3 = u->perc3 & 1u;
+        P.fast = u->fast & 1u; P.soft = u->soft & 1u; P.les = u->les; P.od = u->od & 1u; P.drv = u->drv; P.chr = u->chr; P.rev = u->rev;
+        P.pgm = (uint8_t)n;
+        return;
+    }
+    if (n < 1u || n >= UP_FIRST || !PGM[n].name) return;
     g = &PGM[n];
     if (g->set & PGM_RND) for (i = 0; i < NB; i++) P.db[i] = (uint8_t)(rnd() % 9u);
     if (g->set & PGM_DB) for (i = 0; i < NB; i++) P.db[i] = g->db[i];
@@ -438,6 +491,7 @@ static void organ_pc(uint32_t uc)               /* MIDI program change: setBfree
 
 /* MIDI controllers, as setBfree's defaults. The drawbars (70 to 78) and the notes follow the channel: 1 upper, 2 lower, 3 pedal (16' and 8'
  * only); everything else is accepted on any channel. Not used here, no such part: 94 convolution. */
+static uint32_t nrpn = 0x3FFFu;                 /* the NRPN chosen by CC 99 / 98 (MSB << 7 | LSB); 0x3FFF none */
 static void organ_cc_ch(uint32_t ch, uint32_t cc, uint32_t v)   /* ch 0..15: the drawbars follow the channel, 0 upper, 1 lower, 2 pedal (16' = 70, 8' = 72) */
 {
     if (v > 127u) return;
@@ -464,6 +518,12 @@ static void organ_cc_ch(uint32_t ch, uint32_t cc, uint32_t v)   /* ch 0..15: the
     case 95: P.vup = v / 32u >= 2u; P.vlo = (v / 32u & 1u) != 0u; break;   /* vibrato routing: off, lower, upper, both */
     case 31: P.vup = v > 63u; break;                                    /* vibrato upper */
     case 30: P.vlo = v > 63u; break;                                    /* vibrato lower */
+    case 99: nrpn = (nrpn & 0x7Fu) | v << 7; break;                     /* NRPN number, MSB */
+    case 98: nrpn = (nrpn & 0x3F80u) | v; break;                        /* and LSB */
+    case 101: case 100: nrpn = 0x3FFFu; break;                          /* an RPN: not ours, data entry goes nowhere */
+    case 6:                                                             /* data entry (MSB) for the NRPN chosen */
+        if (nrpn == (1u << 7 | 0u)) P.chr = (uint8_t)v;                 /* 1/0: setBfree's overdrive.character 0..127 */
+        break;
     case 120: case 123: mk_lo = mk_hi = ml_lo = ml_hi = mp_k = 0; break;   /* all sound / notes off (MIDI's notes; the panel's stay) */
     default: break;
     }

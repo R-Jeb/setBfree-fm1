@@ -22,7 +22,7 @@ static int32_t od_t(int32_t x)               /* 1 / (1 + x^2) for x in Q15, resu
  * (Q15; 0.8795 is setBfree's default) follows it: the preamp is 10 to 30 dB quieter than the bare tone generator, so each step is raised until
  * five keys at swell 80 come out as loud as with the overdrive off (tools/od_drive_levels, the numbers are the measured ratios). */
 #define OD_DRIVE_MAX 16u
-#define OD_CHARACTER 16u                         /* setBfree's overdrive.character, fixed (a later editor page may set it) */
+#define OD_CHARACTER 16u                         /* setBfree's overdrive.character at start (P.chr; NRPN 1/0 sets it) */
 static const int32_t OD_GIN[17] = {3679, 4373, 5197, 6176, 7341, 8724, 10369, 12324, 14647, 17408, 20689, 24589, 29224, 34733, 41280, 49061, 58310};
 static const int32_t OD_GOUT[17] = {960667, 811831, 682938, 577555, 488475, 414676, 346811, 293184, 248021, 210827, 178895, 155113, 134296, 118796, 105684, 98027, 89531};
 static void od_run(int32_t *x, uint32_t n, uint32_t chr, uint32_t drv)   /* x: Q15 in and out; chr: setBfree's overdrive.character 0 .. 127; drv 0 .. 16 */
