@@ -54,6 +54,8 @@ programs. 3/0 setBfree's `osc.tuning` in 0.1 Hz (4400 = 440 Hz; rounded to whole
 | `02` read your programs | `42` + number, used (0/1), name (12 bytes, 0 = end), once for each of 112..127 |
 | `03` n name[12]: store the sound now as program n | when the flash is written (nothing sounding): `43` n status (0 saved, 1 not 112..127, 2 flash error), then `42` for n |
 | `04` n: delete program n | as `03` |
+| `05` n: read all of program n (a backup) | `45` + n, used, then 44 bytes: name 12, upper 9, lower 9, pedal 2 drawbars, vibrato type, upper on, lower on, percussion on, 3rd, fast, soft, Leslie, overdrive on, drive, character, reverb |
+| `06` n + the 44 bytes of `45`: write program n (a restore) | as `03`; status 3: a value out of range, nothing written |
 
 Regenerate the program table with `python3 tools/gen_programs.py` (reads `data/setbfree-default.pgm`).
 `tests/organ_test.c` checks programs and controllers against setBfree's source on a computer, and the level of every key and drawbar against setBfree's own tone generator (`tests/organ_ref.h`).

@@ -199,21 +199,23 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     </div>
   </section>
 
-  <!-- PROGRAMS -->
-  <section class="page" id="p-programs" hidden>
-    <div class="card">
-      <h2>Program</h2>
-      <div class="row">
-        <span class="lbl">Program change</span>
-        <input type="number" id="pgm" min="1" max="127" value="5" style="width:90px"> <span id="pgmname" class="chip"></span>
-        <button id="pgmsend" class="primary">Send</button>
+  <!-- BACKUP -->
+  <section class="page" id="p-backup" hidden>
+    <div class="grid">
+      <div class="card">
+        <h2>Save a backup</h2>
+        <p class="note">Reads your own programs 112 to 127 and the settings of the extended parameters (overdrive character, Leslie speeds and times, tuning, key click) from the FM-1 and saves them as a file on this computer.</p>
+        <div class="row" style="margin-top:12px"><button id="bksave" class="primary">Save backup file</button></div>
+        <p class="note" id="bksavemsg" style="margin-top:8px"></p>
       </div>
-      <p class="note" style="margin-top:10px">setBfree's <code>default.pgm</code>: 110 programs, and your own ones at 112 to 127 (firmware 0.5). The FM-1 takes them as program change n − 1. A setBfree program changes only what it names; your own ones set everything they hold.</p>
-    </div>
-    <div class="card">
-      <h2>Settings as text</h2>
-      <div class="row"><button id="copy">Copy</button><button id="paste">Load from box</button></div>
-      <textarea id="json" rows="6" style="width:100%;margin-top:10px;font:400 .85rem var(--mono);background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px" aria-label="settings"></textarea>
+      <div class="card">
+        <h2>Restore a backup</h2>
+        <p class="note">Puts a backup file back onto the FM-1 (this one or another): programs 112 to 127 become exactly those in the file (a program that is empty in the file is deleted on the FM-1), and the extended parameters take the file's values.</p>
+        <div class="row" style="margin-top:12px"><input type="file" id="bkfile" accept=".json,application/json" aria-label="Backup file"></div>
+        <div id="bkinfo" class="note" style="margin-top:10px"></div>
+        <div class="row" style="margin-top:12px"><button id="bkrestore" disabled>Restore to the FM-1</button></div>
+        <p class="note" id="bkrestmsg" style="margin-top:8px"></p>
+      </div>
     </div>
   </section>
 
@@ -249,7 +251,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   if (!S.lesp) S.lesp = [403, 4234, 360, 3573, 161, 321, 4127, 1371];
   if (!S.tonp) S.tonp = [4400, 500];
   S.tonp[0] = Math.max(4300, Math.min(4500, Math.round(S.tonp[0] / 10) * 10));   /* whole Hz, 430..450 */
-  function save() { try { localStorage.setItem("b3editor", JSON.stringify(S)); } catch (e) {} jsonbox(); }
+  function save() { try { localStorage.setItem("b3editor", JSON.stringify(S)); } catch (e) {} }
   function $(id) { return document.getElementById(id); }
 
   /* ---- MIDI out */
@@ -355,12 +357,22 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       $("fwchip").textContent = "FM-1 · firmware " + (v || "?");
       logline("in", "SysEx: the FM-1's sound" + (b[33] ? ", program " + b[33] : "") + ", firmware " + v);
       buildManuals(); save(); paint();
+      if (bk) { bk.firmware = v; bk.state = true; if (bk.got === 16) bkDone(); }
     } else if (cmd === 0x42 && b.length >= 14) {
       var n = b[0], name = String.fromCharCode.apply(null, b.slice(2, 14).filter(function (c) { return c; }));
       if (b[1]) USER[n] = name; else delete USER[n];
       programList();
+    } else if (cmd === 0x45 && b.length >= 46 && bk) {
+      if (b[1]) bk.programs[b[0]] = { name: String.fromCharCode.apply(null, b.slice(2, 14).filter(function (c) { return c; })), data: b.slice(2, 46) };
+      bk.got++;
+      if (bk.got === 16 && bk.state) bkDone();
     } else if (cmd === 0x43 && b.length >= 2) {
-      var msg = b[1] === 0 ? "saved on the FM-1" : b[1] === 1 ? "not a user program (112 to 127)" : "the flash could not be written";
+      var msg = b[1] === 0 ? "saved on the FM-1" : b[1] === 1 ? "not a user program (112 to 127)" : b[1] === 3 ? "refused: values out of range" : "the flash could not be written";
+      if (bkPend > 0) {
+        bkPend--;
+        if (b[1]) $("bkrestmsg").textContent = "Program " + b[0] + ": " + msg + ".";
+        if (!bkPend) { $("bkrestmsg").textContent = "Restored: programs 112 to 127 and the extended parameters are on the FM-1."; sx([0x02], "read your programs 112..127"); }
+      }
       logline("in", "SysEx: program " + b[0] + " " + msg);
       $("storemsg").textContent = "Program " + b[0] + ": " + msg + ".";
     }
@@ -495,13 +507,68 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 
   /* ---- program and settings text */
   function nameOf(n) { return n >= 112 ? (USER[n] || "") : PGM[n] ? PGM[n][0] : ""; }
-  function pgmName() { var n = +$("pgm").value; $("pgmname").textContent = nameOf(n) || "no program " + n; }
-  $("pgm").oninput = pgmName;
   function selectProgram(n) { S.pgm = n; pc(S.ch[0], n - 1); save(); paint(); if (sysexOk && out) setTimeout(function () { sx([0x01], "read the sound"); }, 150); }
-  $("pgmsend").onclick = function () { selectProgram(Math.max(1, Math.min(127, +$("pgm").value || 1))); };
-  function jsonbox() { $("json").value = JSON.stringify(S); }
-  $("copy").onclick = function () { var t = $("json"); t.select(); try { navigator.clipboard.writeText(t.value); } catch (e) { document.execCommand("copy"); } };
-  $("paste").onclick = function () { try { var o = JSON.parse($("json").value); if (o.up && o.lo && o.pd && o.ch) { S = o; save(); buildManuals(); buildSegs(); paint(); } } catch (e) { logline("dim", "That is not a settings text."); } };
+
+  /* ---- backup: the user's programs (SysEx 05 / 06, 44 bytes each) and the extended parameters, as a JSON file */
+  var bk = null, bkFile = null, bkArmed = false, bkPend = 0;
+  function needSx(el) { if (sysexOk && out) return true; $(el).textContent = "This needs the FM-1 connected with SysEx allowed, and firmware 0.5."; return false; }
+  $("bksave").onclick = function () {
+    if (!needSx("bksavemsg")) return;
+    bk = { type: "b3organ-backup", format: 1, date: new Date().toISOString().slice(0, 10), firmware: "", programs: {}, got: 0, state: false };
+    $("bksavemsg").textContent = "Reading the FM-1 …";
+    sx([0x01], "read the sound");
+    for (var n = 112; n <= 127; n++) sx([0x05, n], "read program " + n);
+    setTimeout(function () { if (bk && (bk.got < 16 || !bk.state)) { $("bksavemsg").textContent = "The FM-1 did not answer completely (" + bk.got + " of 16 programs). Is firmware 0.5 on it?"; bk = null; } }, 3000);
+  };
+  function bkDone() {
+    var o = { type: bk.type, format: bk.format, date: bk.date, firmware: bk.firmware, programs: bk.programs,
+      settings: { character: S.chr, leslie: S.lesp.slice(), tuning: S.tonp[0], keyclick: S.tonp[1] } };
+    var blob = new Blob([JSON.stringify(o, null, 1)], { type: "application/json" }), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "b3organ-backup-" + o.date + ".json"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+    var used = Object.keys(o.programs).length;
+    $("bksavemsg").textContent = "Saved " + a.download + ": " + used + " program" + (used === 1 ? "" : "s") + " and the extended parameters.";
+    logline("dim", "Backup saved: " + a.download);
+    bk = null;
+  }
+  function bkCheck(o) {                         /* a backup file: the programs' 44 bytes each, the settings in range */
+    if (!o || o.type !== "b3organ-backup" || o.format !== 1 || typeof o.programs !== "object" || !o.settings) return "This is not a B3 ORGAN backup file.";
+    for (var k in o.programs) {
+      var n = +k, d = o.programs[k].data;
+      if (!(n >= 112 && n <= 127) || !Array.isArray(d) || d.length !== 44 || d.some(function (x) { return !(x >= 0 && x <= 127); })) return "Program " + k + " in the file is damaged.";
+    }
+    var st = o.settings;
+    if (!(st.character >= 0 && st.character <= 127) || !Array.isArray(st.leslie) || st.leslie.length !== 8 || !(st.tuning >= 4300 && st.tuning <= 4500) || !(st.keyclick >= 0 && st.keyclick <= 1000)) return "The settings in the file are damaged.";
+    return "";
+  }
+  $("bkfile").onchange = function () {
+    var f = this.files[0]; bkFile = null; bkArmed = false; $("bkrestore").disabled = true; $("bkrestmsg").textContent = "";
+    if (!f) { $("bkinfo").textContent = ""; return; }
+    f.text().then(function (t) {
+      var o = null; try { o = JSON.parse(t); } catch (e) {}
+      var err = bkCheck(o);
+      if (err) { $("bkinfo").textContent = err; return; }
+      bkFile = o; $("bkrestore").disabled = false;
+      var names = Object.keys(o.programs).sort(function (a, b) { return a - b; }).map(function (k) { return k + " " + o.programs[k].name; });
+      $("bkinfo").textContent = "From " + (o.date || "?") + (o.firmware ? ", firmware " + o.firmware : "") + ". Programs: " + (names.length ? names.join(", ") : "none") +
+        ". Tuning " + Math.round(o.settings.tuning / 10) + " Hz, key click " + (o.settings.keyclick / 10) + " %, character " + o.settings.character + ".";
+    });
+  };
+  $("bkrestore").onclick = function () {
+    if (!bkFile || !needSx("bkrestmsg")) return;
+    if (!bkArmed) { bkArmed = true; $("bkrestmsg").textContent = "This replaces programs 112 to 127 on the FM-1. Press Restore again to go ahead."; setTimeout(function () { bkArmed = false; }, 5000); return; }
+    bkArmed = false;
+    var o = bkFile, c = S.ch[0];
+    bkPend = 16;
+    for (var n = 112; n <= 127; n++) {
+      var p = o.programs[n];
+      if (p) sx([0x06, n].concat(p.data), "restore program " + n + " '" + p.name + "'"); else sx([0x04, n], "delete program " + n);
+    }
+    S.chr = o.settings.character; S.lesp = o.settings.leslie.slice(); S.tonp = [o.settings.tuning, o.settings.keyclick];
+    nrpn(c, 1, 0, S.chr); S.lesp.forEach(function (v, i) { nrpn14(c, 2, i, v); }); S.tonp.forEach(function (v, i) { nrpn14(c, 3, i, v); });
+    save(); paint();
+    $("bkrestmsg").textContent = "Sent. The FM-1 writes the programs to its flash when nothing sounds …";
+  };
 
   /* ---- channels */
   [0, 1, 2].forEach(function (m) {
@@ -562,11 +629,10 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     $("tun").value = S.tonp[0]; $("tunv").textContent = Math.round(S.tonp[0] / 10) + " Hz";
     $("clk").value = S.tonp[1]; $("clkv").textContent = (S.tonp[1] / 10).toFixed(1) + " %";
     var ri = nearestRev(S.rev); $("rev").value = ri; $("revv").textContent = REVS[ri];
-    $("pgm").value = S.pgm; pgmName(); programList();
+    programList();
     [0, 1, 2].forEach(function (m) { $("ch" + m).value = S.ch[m]; });
-    jsonbox();
   }
-  var TABS = [["manuals", "Manuals"], ["odles", "Overdrive & Leslie"], ["tonerev", "Tone & Reverb"], ["programs", "Programs"], ["monitor", "Monitor"]];
+  var TABS = [["manuals", "Manuals"], ["odles", "Overdrive & Leslie"], ["tonerev", "Tone & Reverb"], ["backup", "Backup"], ["monitor", "Monitor"]];
   var tabs = $("tabs");
   TABS.forEach(function (t) {
     var b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "tab"); b.id = "t-" + t[0]; b.textContent = t[1];
@@ -576,6 +642,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   function show(n) {
     if (n === "overdrive" || n === "leslie") n = "odles";   /* the old pages */
     if (n === "reverb" || n === "tone") n = "tonerev";
+    if (n === "programs") n = "backup";
     if (!TABS.some(function (t) { return t[0] === n; })) n = "manuals";
     TABS.forEach(function (t) { $("p-" + t[0]).hidden = t[0] !== n; $("t-" + t[0]).setAttribute("aria-selected", String(t[0] === n)); });
     if (n === "manuals") paint();
