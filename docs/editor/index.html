@@ -129,9 +129,9 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     <div class="card">
       <h2>Preamp / overdrive</h2>
       <div class="row"><span class="lbl">Overdrive</span><div class="seg" id="od"></div></div>
-      <div class="slider" style="margin-top:12px"><span class="lbl">Character</span><input type="range" id="drv" min="0" max="8" step="1"><output id="drvv"></output></div>
+      <div class="slider" style="margin-top:12px"><span class="lbl">Drive</span><input type="range" id="drv" min="0" max="16" step="1"><output id="drvv"></output></div>
       <div class="ticksrow"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span></div>
-      <p class="note" style="margin-top:10px">CC 65 switches it on, CC 93 sets setBfree's <code>overdrive.character</code> in nine steps (0, 16 … 127), which sets the two bass filters' feedback.</p>
+      <p class="note" style="margin-top:10px">CC 65 switches it on, CC 93 sets the drive (0 to 16, as KNOB 3 on the FM-1): setBfree's <code>overdrive.inputgain</code> in steps of 1.5 dB, 12 is its default. The output follows the drive, so on and off are about equally loud. The character (<code>overdrive.character</code>) is fixed at 16 in firmware 0.4.</p>
     </div>
     <div class="card"><h2>Advanced · setBfree's names and defaults</h2><div class="banner">Not in the firmware yet. These are setBfree's own parameters; the sliders show its defaults and cannot be moved until the firmware can take them.</div><div class="params" id="adv-od" style="margin-top:12px"></div></div>
   </section>
@@ -202,10 +202,11 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 
   function defaults() {
     return { up: [8, 8, 8, 0, 0, 0, 0, 0, 0], lo: [8, 3, 8, 0, 0, 0, 0, 0, 0], pd: [8, 6], vtype: 0, vup: 0, vlo: 0,
-      perc: 0, third: 1, fast: 0, soft: 0, swell: 127, od: 0, drv: 3, les: 0, rev: 12, pgm: 5, ch: [1, 2, 3] };
+      perc: 0, third: 1, fast: 0, soft: 0, swell: 127, od: 0, drv: 12, v: 2, les: 0, rev: 12, pgm: 5, ch: [1, 2, 3] };
   }
   try { S = JSON.parse(localStorage.getItem("b3editor") || "null"); } catch (e) { S = null; }
   if (!S || !S.up || !S.ch) S = defaults();
+  if (!S.v) { S.drv = 12; S.v = 2; }   /* saved before firmware 0.4: drv was the character 0..8, now it is the drive 0..16 */
   function save() { try { localStorage.setItem("b3editor", JSON.stringify(S)); } catch (e) {} jsonbox(); }
   function $(id) { return document.getElementById(id); }
 
@@ -215,7 +216,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     while (l.childNodes.length > 200) l.removeChild(l.firstChild);
     l.scrollTop = l.scrollHeight;
   }
-  var NAMES = { 1: "rotary speed", 11: "swell", 30: "vibrato lower", 31: "vibrato upper", 64: "rotary toggle", 65: "overdrive", 66: "percussion", 80: "percussion", 81: "perc soft", 82: "perc fast", 83: "perc harmonic", 91: "reverb", 92: "vibrato knob", 93: "overdrive character", 95: "vibrato routing" };
+  var NAMES = { 1: "rotary speed", 11: "swell", 30: "vibrato lower", 31: "vibrato upper", 64: "rotary toggle", 65: "overdrive", 66: "percussion", 80: "percussion", 81: "perc soft", 82: "perc fast", 83: "perc harmonic", 91: "reverb", 92: "vibrato knob", 93: "overdrive drive", 95: "vibrato routing" };
   function cc(ch, n, v) {
     v = Math.max(0, Math.min(127, v | 0));
     var nm = n >= 70 && n <= 78 ? "drawbar " + FT[n - 70] + "'" : (NAMES[n] || "");
@@ -224,7 +225,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   }
   function pc(ch, n) { logline("out", "ch " + ch + "  PC " + n); if (out) try { out.send([0xC0 | (ch - 1), n]); } catch (e) {} }
   var dbv = function (d) { return 127 - Math.round(d * 127 / 8); };      /* setBfree: 127 is pushed in, 0 pulled out */
-  var dig = function (d) { return Math.round(d * 127 / 8); };
+  var dig = function (d) { return Math.round(d * 127 / 16); };   /* the firmware: drive = (16 v + 63) / 127 */
   function sendDb(m, i) {
     var arr = m === 0 ? S.up : m === 1 ? S.lo : S.pd;
     cc(S.ch[m], m === 2 ? (i === 0 ? 70 : 72) : 70 + i, dbv(arr[i]));
@@ -326,7 +327,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     r.oninput = function () { set(+r.value); o.textContent = fmt(+r.value); save(); };
   }
   bindRange("swell", "swellv", null, function (v) { S.swell = v; cc(S.ch[0], 11, v); }, function (v) { return v; });
-  bindRange("drv", "drvv", null, function (v) { S.drv = v; cc(S.ch[0], 93, dig(v)); }, function (v) { return v + " / 8"; });
+  bindRange("drv", "drvv", null, function (v) { S.drv = v; cc(S.ch[0], 93, dig(v)); }, function (v) { return v + " / 16"; });
   bindRange("rev", "revv", null, function (v) { S.rev = REVS[v]; cc(S.ch[0], 91, REVS[v]); }, function (v) { return REVS[v]; });
   function nearestRev(v) { var b = 0; REVS.forEach(function (x, i) { if (Math.abs(x - v) < Math.abs(REVS[b] - v)) b = i; }); return b; }
 
@@ -372,7 +373,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     manualCards.forEach(function (c) { c._paint(); });
     ["vtype", "vroute", "perc", "harm", "decay", "vol", "od", "les"].forEach(paintSeg);
     $("swell").value = S.swell; $("swellv").textContent = S.swell;
-    $("drv").value = S.drv; $("drvv").textContent = S.drv + " / 8";
+    $("drv").value = S.drv; $("drvv").textContent = S.drv + " / 16";
     var ri = nearestRev(S.rev); $("rev").value = ri; $("revv").textContent = REVS[ri];
     $("pgm").value = S.pgm; pgmName();
     [0, 1, 2].forEach(function (m) { $("ch" + m).value = S.ch[m]; });
