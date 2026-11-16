@@ -58,19 +58,29 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 /* drawbars */
 .bars { display: flex; gap: 6px; justify-content: space-between; }
 .bar { display: grid; justify-items: center; gap: 6px; width: 100%; max-width: 54px; }
+.bars.two { justify-content: flex-start; gap: 14px; }       /* the pedal: two bars as narrow as the manuals' (width set in paint) */
+.bars.two .bar { flex: 0 0 auto; }
 .bar .ft { font: 500 .95rem var(--font); }
 .bar .val { font: 500 .95rem var(--mono); }
 .track { position: relative; width: 100%; height: 190px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; touch-action: none; cursor: ns-resize; }
 .track::before { content: ""; position: absolute; left: 50%; top: 8px; bottom: 8px; width: 2px; margin-left: -1px; background: var(--line); }
 .ticks { position: absolute; inset: 8px 0; pointer-events: none; background: repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px calc(100% / 8)); opacity: .0; }
-.knob { position: absolute; left: 3px; right: 3px; height: 26px; margin-top: -13px; border-radius: 4px; border: 1px solid var(--db-edge); box-shadow: 0 1px 0 rgba(0,0,0,.25); pointer-events: none; }
-.knob.brown { background: var(--db-brown); } .knob.white { background: var(--db-white); } .knob.black { background: var(--db-black); }
-.manual-head { display: flex; flex-wrap: wrap; gap: 4px 8px; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.knob { position: absolute; left: 3px; right: 3px; height: 26px; margin-top: -13px; border-radius: 4px; border: 1px solid var(--db-edge); box-shadow: 0 1px 0 rgba(0,0,0,.25); pointer-events: none;
+  display: grid; place-items: center; font: 600 .9rem var(--mono); }
+.knob.brown { background: var(--db-brown); color: #f6efe4; } .knob.white { background: var(--db-white); color: #1d1c1a; } .knob.black { background: var(--db-black); color: #ece7d8; }
+.manual-head { display: flex; flex-wrap: nowrap; gap: 4px 8px; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 .manual-head h3 { margin: 0; font-size: 1.1rem; font-weight: 600; }
-.slider { display: grid; grid-template-columns: 88px 1fr 56px; gap: 10px; align-items: center; }
-.slider input[type=range] { width: 100%; accent-color: var(--accent); }
+/* a slider: label | range | value; the ticks below line up with the range's thumb (a 16 px thumb on every browser) */
+:root { --lw: 88px; --ow: 56px; }
+.slider { display: grid; grid-template-columns: var(--lw) 1fr var(--ow); gap: 10px; align-items: center; }
+.slider input[type=range] { width: 100%; margin: 0; height: 22px; background: none; -webkit-appearance: none; appearance: none; }
+.slider input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--line); }
+.slider input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--line); }
+.slider input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: var(--accent); border: 0; }
+.slider input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 0; }
 .slider output { font: 500 .9rem var(--mono); text-align: right; }
-.ticksrow { display: flex; justify-content: space-between; font: 400 .75rem var(--mono); color: var(--dim); padding: 0 2px; }
+.ticksrow { position: relative; height: 1.3em; margin: 2px calc(var(--ow) + 10px) 0 calc(var(--lw) + 10px); font: 400 .75rem var(--mono); color: var(--dim); }
+.ticksrow span { position: absolute; top: 0; transform: translateX(-50%); }
 .params { display: grid; gap: 8px; }
 .param { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(120px, 1.4fr) 110px; gap: 10px; align-items: center; opacity: .55; }
 .param code { font: 400 .8rem var(--mono); color: var(--dim); word-break: break-word; }
@@ -94,7 +104,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   .manuals .storerow { grid-template-columns: 1fr; }
 }
 .storebtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-@media (max-width: 560px) { .param { grid-template-columns: 1fr; } .param .range { text-align: left; } .slider { grid-template-columns: 70px 1fr 48px; } .track { height: 150px; } }
+@media (max-width: 560px) { .param { grid-template-columns: 1fr; } .param .range { text-align: left; } :root { --lw: 70px; --ow: 48px; } .track { height: 150px; } }
 @media (prefers-reduced-motion: no-preference) { .knob { transition: top .06s linear; } }
 </style>
 
@@ -146,9 +156,9 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       <h2>Preamp / overdrive</h2>
       <div class="row"><span class="lbl">Overdrive</span><div class="seg" id="od"></div></div>
       <div class="slider" style="margin-top:12px"><span class="lbl">Drive</span><input type="range" id="drv" min="0" max="16" step="1"><output id="drvv"></output></div>
-      <div class="ticksrow"><span>0</span><span>4</span><span>8</span><span>12</span><span>16</span></div>
+      <div class="ticksrow" data-max="16"><span>0</span><span>4</span><span>8</span><span>12</span><span>16</span></div>
       <div class="slider" style="margin-top:12px"><span class="lbl">Character</span><input type="range" id="chr" min="0" max="127" step="1"><output id="chrv"></output></div>
-      <div class="ticksrow"><span>0</span><span>32</span><span>64</span><span>96</span><span>127</span></div>
+      <div class="ticksrow" data-max="127"><span>0</span><span>32</span><span>64</span><span>96</span><span>127</span></div>
       <p class="note" style="margin-top:10px">CC 65 switches it on, CC 93 sets the drive (0 to 16, as KNOB 3 on the FM-1): setBfree's <code>overdrive.inputgain</code> in steps of 1.5 dB, 12 is its default. The output follows the drive, so on and off are about equally loud.</p>
       <p class="note" style="margin-top:6px">The character is setBfree's <code>overdrive.character</code> (0 to 127, 16 in firmware 0.4): it sets the two bass filters around the tube curve. It goes as NRPN 1/0 (CC 99 = 1, CC 98 = 0, CC 6 = value) and needs firmware 0.5. The output is matched to character 16: other values can be louder or quieter (in setBfree too: about −17 dB at 32, +6 dB at 127); the limiter keeps the peaks in.</p>
     </div>
@@ -170,7 +180,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     <div class="card">
       <h2>Reverb</h2>
       <div class="slider"><span class="lbl">Mix</span><input type="range" id="rev" min="0" max="8" step="1"><output id="revv"></output></div>
-      <div class="ticksrow"><span>0</span><span>1</span><span>2</span><span>4</span><span>8</span><span>16</span><span>32</span><span>64</span><span>127</span></div>
+      <div class="ticksrow" data-max="8" data-index="1"><span>0</span><span>1</span><span>2</span><span>4</span><span>8</span><span>16</span><span>32</span><span>64</span><span>127</span></div>
       <p class="note" style="margin-top:10px">CC 91, setBfree's <code>reverb.mix</code>. The steps double, like the knob on the FM-1; the first ones are fine.</p>
     </div>
     <div class="card"><h2>Advanced · setBfree's names and defaults</h2><div class="banner">Not in the firmware yet.</div><div class="params" id="adv-rev" style="margin-top:12px"></div></div>
@@ -267,9 +277,11 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     bin(c, 80, S.perc); cc(c, 83, S.third ? 0 : 127); bin(c, 82, S.fast); bin(c, 81, S.soft);
     cc(c, 11, S.swell); bin(c, 65, S.od); cc(c, 93, dig(S.drv)); nrpn(c, 1, 0, S.chr); cc(c, 1, [20, 64, 110][S.les === 0 ? 1 : S.les === 1 ? 0 : 2]); cc(c, 91, S.rev);
   }
+  /* the FM-1 calls itself "Felucca" on USB (the platform's name: the installer and the Firmware Hub look for it); here it is the organ */
+  function shown(name) { return /felucca/i.test(name) ? "B3 ORGAN" : name; }
   function setStatus() {
     var s = $("status");
-    if (out) { s.textContent = "connected: " + out.name; s.className = "chip on"; } else { s.textContent = midi ? "no output selected" : "no MIDI"; s.className = "chip off"; }
+    if (out) { s.textContent = "connected: " + shown(out.name); s.className = "chip on"; } else { s.textContent = midi ? "no output selected" : "no MIDI"; s.className = "chip off"; }
   }
   function useOutput(id) {
     out = null; if (!midi) return;
@@ -279,14 +291,14 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   function listPorts() {
     var sel = $("port"); sel.innerHTML = ""; var pick = null;
     midi.outputs.forEach(function (o) {
-      var op = document.createElement("option"); op.value = o.id; op.textContent = o.name; sel.appendChild(op);
-      if (!pick && /fm-?1|m-?vave/i.test(o.name)) pick = o.id;
+      var op = document.createElement("option"); op.value = o.id; op.textContent = shown(o.name); sel.appendChild(op);
+      if (!pick && /fm-?1|m-?vave|felucca/i.test(o.name)) pick = o.id;
     });
     if (!sel.options.length) { var e = document.createElement("option"); e.textContent = "no output"; sel.appendChild(e); sel.disabled = true; out = null; setStatus(); return; }
     sel.disabled = false; sel.value = pick || sel.options[0].value; useOutput(sel.value);
     if (inp) inp.onmidimessage = null;
     inp = null;
-    midi.inputs.forEach(function (i) { if (!inp && (!pick || /fm-?1|m-?vave/i.test(i.name))) inp = i; });
+    midi.inputs.forEach(function (i) { if (!inp && (!pick || /fm-?1|m-?vave|felucca/i.test(i.name))) inp = i; });
     if (inp) inp.onmidimessage = function (ev) {
       var d = ev.data; if (d.length < 2) return; var t = d[0] & 0xF0;
       if (d[0] === 0xF0) { fromFm(d); return; }
@@ -348,13 +360,14 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 
   function drawbars(m, n, label, arr) {
     var card = document.createElement("div"); card.className = "card";
-    card.innerHTML = '<div class="manual-head"><h3>' + label + '</h3><span class="chip">channel <b class="chn"></b></span></div><div class="bars"></div>';
+    card.innerHTML = '<div class="manual-head"><h3>' + label + '</h3><span class="chip" title="MIDI channel">ch <b class="chn"></b></span></div><div class="bars"></div>';
     var bars = card.querySelector(".bars"), nodes = [];
+    if (n === 2) bars.className = "bars two";
     for (var i = 0; i < n; i++) (function (i) {
       var w = document.createElement("div"); w.className = "bar";
       var ft = m === 2 ? (i === 0 ? "16" : "8") : FT[i], colr = m === 2 ? (i === 0 ? "brown" : "white") : COL[i];
-      w.innerHTML = '<span class="ft">' + ft + '</span><div class="track" role="slider" tabindex="0" aria-label="' + label + ' ' + ft + ' feet" aria-valuemin="0" aria-valuemax="8"><div class="knob ' + colr + '"></div></div><span class="val"></span>';
-      var tr = w.querySelector(".track"), kn = w.querySelector(".knob"), vl = w.querySelector(".val");
+      w.innerHTML = '<span class="ft">' + ft + '</span><div class="track" role="slider" tabindex="0" aria-label="' + label + ' ' + ft + ' feet" aria-valuemin="0" aria-valuemax="8"><div class="knob ' + colr + '"></div></div>';
+      var tr = w.querySelector(".track"), kn = w.querySelector(".knob"), vl = kn;
       function paintOne() { var v = arr[i]; kn.style.top = (8 + (tr.clientHeight - 16) * v / 8) + "px"; vl.textContent = v; tr.setAttribute("aria-valuenow", v); }
       function setv(v) { v = Math.max(0, Math.min(8, v)); if (v === arr[i]) return; arr[i] = v; paintOne(); sendDb(m, i); save(); }
       function fromY(ev) { var r = tr.getBoundingClientRect(); return Math.round((ev.clientY - r.top - 8) / (r.height - 16) * 8); }
@@ -451,7 +464,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     r.oninput = function () { set(+r.value); o.textContent = fmt(+r.value); save(); };
   }
   bindRange("swell", "swellv", null, function (v) { S.swell = v; cc(S.ch[0], 11, v); }, function (v) { return v; });
-  bindRange("drv", "drvv", null, function (v) { S.drv = v; cc(S.ch[0], 93, dig(v)); }, function (v) { return v + " / 16"; });
+  bindRange("drv", "drvv", null, function (v) { S.drv = v; cc(S.ch[0], 93, dig(v)); }, function (v) { return v; });
   bindRange("chr", "chrv", null, function (v) { S.chr = v; nrpn(S.ch[0], 1, 0, v); }, function (v) { return v; });
   bindRange("rev", "revv", null, function (v) { S.rev = REVS[v]; cc(S.ch[0], 91, REVS[v]); }, function (v) { return REVS[v]; });
   function nearestRev(v) { var b = 0; REVS.forEach(function (x, i) { if (Math.abs(x - v) < Math.abs(REVS[b] - v)) b = i; }); return b; }
@@ -495,12 +508,25 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     });
   });
 
+  /* ---- the ticks under a slider: each at its value (data-index: the n-th span is position n) */
+  Array.prototype.forEach.call(document.querySelectorAll(".ticksrow"), function (row) {
+    var max = +row.getAttribute("data-max"), byIndex = row.hasAttribute("data-index");
+    Array.prototype.forEach.call(row.children, function (sp, i) {
+      var v = byIndex ? i : +sp.textContent;
+      sp.style.left = "calc(8px + (100% - 16px) * " + (v / max) + ")";
+    });
+  });
+
   /* ---- paint and tabs */
   function paint() {
+    if (manualCards.length === 3) {             /* the pedal's bars as wide as the upper manual's */
+      var w = manualCards[0].querySelector(".bar").getBoundingClientRect().width;
+      Array.prototype.forEach.call(manualCards[2].querySelectorAll(".bar"), function (b) { b.style.width = w + "px"; });
+    }
     manualCards.forEach(function (c) { c._paint(); });
     ["vtype", "vroute", "perc", "harm", "decay", "vol", "od", "les"].forEach(paintSeg);
     $("swell").value = S.swell; $("swellv").textContent = S.swell;
-    $("drv").value = S.drv; $("drvv").textContent = S.drv + " / 16";
+    $("drv").value = S.drv; $("drvv").textContent = S.drv;
     $("chr").value = S.chr; $("chrv").textContent = S.chr;
     var ri = nearestRev(S.rev); $("rev").value = ri; $("revv").textContent = REVS[ri];
     $("pgm").value = S.pgm; pgmName(); programList();
