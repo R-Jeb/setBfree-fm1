@@ -194,6 +194,37 @@ int main(void)
     organ_cc(93, 127); CHECK("CC 93 drive 127 = 16", P.drv == 16);
     organ_cc(93, 0);   CHECK("CC 93 drive 0 = 0", P.drv == 0);
     mk_lo = 5; organ_cc(123, 0); CHECK("CC 123 releases MIDI notes", mk_lo == 0);
+    CHECK("character starts at 16", P.chr == 16);
+    organ_cc(99, 1); organ_cc(98, 0); organ_cc(6, 77); CHECK("NRPN 1/0 sets the character", P.chr == 77);
+    organ_cc(101, 0); organ_cc(6, 5); CHECK("  an RPN in between: data entry goes nowhere", P.chr == 77);
+    organ_cc(6, 9); CHECK("  and stays nowhere", P.chr == 77);
+    {
+        static const uint8_t nm[12] = "My Jazz";
+        organ_cc(71, 127); organ_cc(93, 127);
+        CHECK("program 112 empty: not a registration", !pgm_registration(112));
+        user_store(112, nm); CHECK("store into 112", UPGM[0].used == 1 && P.pgm == 112 && pgm_name(112)[0] == 'M');
+        organ_program(5); organ_cc(93, 0); P.chr = 16;
+        CHECK("program 5 sets the 5 1/3' back", P.db[1] == 8);
+        organ_program(112); CHECK("program 112 brings it all back", P.db[1] == 0 && P.drv == 16 && P.chr == 77 && P.pgm == 112);
+        CHECK("  and the PRESETS knob finds it", pgm_step(110, 1) == 112 && pgm_step(112, -1) == 110);
+        organ_pc(111); CHECK("program change 111 selects it", P.pgm == 112);
+        UPGM[0].used = 0; organ_program(5); P.chr = 16; P.drv = 0;
+    }
+    organ_cc(99, 2); organ_cc(98, 1); organ_cc(6, 6000 >> 7); organ_cc(38, 6000 & 127);
+    CHECK("NRPN 2/1 horn fast 600 rpm", les_p[1] == 6000 && ls_tgt[1] > 973000u && ls_tgt[1] < 974000u);
+    organ_cc(98, 6); organ_cc(6, 2000 >> 7); organ_cc(38, 2000 & 127);
+    CHECK("NRPN 2/6 drum up 2 s", les_p[6] == 2000 && ls_k[2] == 190);
+    organ_cc(98, 0); organ_cc(6, 127); organ_cc(38, 127); CHECK("  clamped to 150 rpm slow", les_p[0] == 1500);
+    les_set(0, 403); les_set(1, 4234); les_set(6, 4127);
+    CHECK("setBfree's values give its constants again", ls_tgt[0] == LES_HORN_SLOW && ls_tgt[1] == LES_HORN_FAST && ls_k[2] == LES_DRUM_ACC);
+    organ_cc(99, 3); organ_cc(98, 0); organ_cc(6, 4417 >> 7); organ_cc(38, 4417 & 127);   /* 441.7 Hz: rounded to 442 */
+    CHECK("NRPN 3/0 tuning 441.7 Hz -> 442 Hz (within 5 ppm)", ton_p[0] == 4420 && winc != WHEEL_INC &&
+          winc[57] > WHEEL_INC[57] + WHEEL_INC[57] / 220u - 400u && winc[57] < WHEEL_INC[57] + WHEEL_INC[57] / 220u + 400u);
+    organ_cc(6, 0); organ_cc(38, 0); CHECK("  clamped to 430 Hz", ton_p[0] == 4300);
+    organ_cc(6, 127); organ_cc(38, 127); CHECK("  clamped to 450 Hz", ton_p[0] == 4500);
+    organ_cc(98, 1); organ_cc(6, 0); organ_cc(38, 0); CHECK("NRPN 3/1 key click 0", ton_p[1] == 0 && atk_kd == 2048);
+    organ_cc(6, 1000 >> 7); organ_cc(38, 1000 & 127); CHECK("  key click 1.0", atk_kd == -2048);
+    ton_set(0, 4400); ton_set(1, 500); CHECK("setBfree's tuning and click again", winc == WHEEL_INC && atk_kd == 0);
     printf(bad ? "FAILED\n" : "all ok\n");
     check_levels();
     check_compression();

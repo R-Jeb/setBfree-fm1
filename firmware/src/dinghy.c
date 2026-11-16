@@ -291,7 +291,7 @@ static void band_ctrl(uint32_t scr, uint32_t r)
 static void band_preset(void)
 {
     char s[40], *p = s;
-    if (P.pgm && PGM[P.pgm].name) { p = su(p, P.pgm); p = sp(p, " "); p = sp(p, PGM[P.pgm].name); }
+    if (P.pgm && pgm_name(P.pgm)) { p = su(p, P.pgm); p = sp(p, " "); p = sp(p, pgm_name(P.pgm)); }
     *p = 0;
     while (p > s && text_w(&FONT_S, s) > 206) *--p = 0;     /* the corner is the battery's */
     draw_text_box(0, 222, 208, &FONT_S, s, C_ACC, 0);
@@ -305,8 +305,118 @@ static uint32_t state_key(int32_t oct, uint32_t *status)   /* what is worth savi
     for (i = 0; i < NB; i++) dbk = dbk * 9u + P.dbl[i];
     dbk = dbk * 9u + P.dbp[0]; dbk = dbk * 9u + P.dbp[1];
     dbk = dbk * 17u + P.drv;                    /* the drive 0..16 does not fit the bits above */
+    dbk = dbk * 128u + P.chr;
+    for (i = 0; i < LES_NP; i++) dbk = dbk * 31u + les_p[i];
+    for (i = 0; i < TON_NP; i++) dbk = dbk * 31u + ton_p[i];
     *status = k;
     return (k ^ dbk * 2654435761u) + (uint32_t)(oct + 2);
+}
+
+/* ---- the web editor's SysEx (docs/editor): F0 7D 42 33 CMD ... F7 ("B3"). README_ORGAN.md has the list. */
+static uint32_t up_pend, up_dirty, up_gen;     /* slots waiting for the flash (bit k: program 112 + k), anything to save, a count for the screen */
+static void ed_send(uint32_t cmd, const uint8_t *d, uint32_t n)
+{
+    uint8_t m[84];
+    uint32_t i, w = 0;
+    m[w++] = 0xF0; m[w++] = 0x7D; m[w++] = 0x42; m[w++] = 0x33; m[w++] = (uint8_t)cmd;
+    for (i = 0; i < n && w < sizeof m - 1u; i++) m[w++] = d[i] & 0x7Fu;
+    m[w++] = 0xF7;
+    sysex_send(m, w);
+}
+static void ed_state(void)                      /* 41: the sound now, then the version */
+{
+    uint8_t d[76];
+    uint32_t i, w = 0;
+    const char *v = APP_VER;
+    for (i = 0; i < NB; i++) d[w++] = P.db[i];
+    for (i = 0; i < NB; i++) d[w++] = P.dbl[i];
+    d[w++] = P.dbp[0]; d[w++] = P.dbp[1];
+    d[w++] = P.vtype; d[w++] = P.vup; d[w++] = P.vlo; d[w++] = P.perc; d[w++] = P.perc3; d[w++] = P.fast; d[w++] = P.soft;
+    d[w++] = P.les; d[w++] = P.od; d[w++] = P.drv; d[w++] = P.chr; d[w++] = P.rev; d[w++] = P.swell; d[w++] = P.pgm; d[w++] = P.keys;
+    for (i = 0; i < LES_NP; i++) { d[w++] = (uint8_t)(les_p[i] >> 7); d[w++] = (uint8_t)(les_p[i] & 127u); }   /* the Leslie's, 14 bits: MSB, LSB */
+    for (i = 0; i < TON_NP; i++) { d[w++] = (uint8_t)(ton_p[i] >> 7); d[w++] = (uint8_t)(ton_p[i] & 127u); }   /* tuning, key click */
+    while (*v && w < sizeof d) d[w++] = (uint8_t)*v++;
+    ed_send(0x41, d, w);
+}
+static void ed_slot(uint32_t n)                 /* 42: one of the user's programs: number, used, name (12 bytes) */
+{
+    uint8_t d[14];
+    const organ_user_t *u = user_pgm(n);
+    uint32_t i;
+    d[0] = (uint8_t)n; d[1] = u != 0;
+    for (i = 0; i < 12u; i++) d[2 + i] = u ? (uint8_t)u->name[i] : 0;
+    ed_send(0x42, d, 14);
+}
+#define UP_BYTES 44u                            /* a user program on the wire: name 12, db 9, dbl 9, dbp 2, then 12 switches and values */
+static void up_pack(const organ_user_t *u, uint8_t *d)
+{
+    uint32_t i, w = 0;
+    for (i = 0; i < 12u; i++) d[w++] = (uint8_t)u->name[i] & 0x7Fu;
+    for (i = 0; i < NB; i++) d[w++] = u->db[i];
+    for (i = 0; i < NB; i++) d[w++] = u->dbl[i];
+    d[w++] = u->dbp[0]; d[w++] = u->dbp[1];
+    d[w++] = u->vtype; d[w++] = u->vup; d[w++] = u->vlo; d[w++] = u->perc; d[w++] = u->perc3; d[w++] = u->fast; d[w++] = u->soft;
+    d[w++] = u->les; d[w++] = u->od; d[w++] = u->drv; d[w++] = u->chr; d[w++] = u->rev;
+}
+static void up_unpack(organ_user_t *u, const uint8_t *d)   /* the name made printable; user_ok checks the rest */
+{
+    uint32_t i, r = 0, end = 0;
+    u->used = 1;
+    for (i = 0; i < 12u; i++, r++) {
+        if (!d[r]) end = 1;
+        u->name[i] = end ? 0 : d[r] >= 32u && d[r] < 127u ? (char)d[r] : '?';
+    }
+    u->name[12] = 0;
+    for (i = 0; i < NB; i++) u->db[i] = d[r++];
+    for (i = 0; i < NB; i++) u->dbl[i] = d[r++];
+    u->dbp[0] = d[r++]; u->dbp[1] = d[r++];
+    u->vtype = d[r++]; u->vup = d[r++] & 1u; u->vlo = d[r++] & 1u; u->perc = d[r++] & 1u; u->perc3 = d[r++] & 1u; u->fast = d[r++] & 1u;
+    u->soft = d[r++] & 1u; u->les = d[r++]; u->od = d[r++] & 1u; u->drv = d[r++]; u->chr = d[r++]; u->rev = d[r++];
+    u->rsv[0] = u->rsv[1] = 0;
+    if (!u->name[0]) { u->name[0] = 'U'; u->name[1] = 'S'; u->name[2] = 'E'; u->name[3] = 'R'; }
+}
+static void ed_sysex(const uint8_t *p, uint32_t n)   /* p: the bytes between F0 and F7 */
+{
+    uint32_t k, slot;
+    if (n < 4u || p[0] != 0x7Du || p[1] != 0x42 || p[2] != 0x33) return;
+    slot = n > 4u ? p[4] : 0;
+    switch (p[3]) {
+    case 0x01: ed_state(); break;                                       /* 01: send the state */
+    case 0x02: for (k = UP_FIRST; k < UP_FIRST + UP_N; k++) ed_slot(k); break;   /* 02: send the user's programs */
+    case 0x05:                                                          /* 05 slot: send all of it (a backup): 45 slot used + UP_BYTES */
+        if (slot >= UP_FIRST && slot < UP_FIRST + UP_N) {
+            uint8_t d[2 + UP_BYTES];
+            d[0] = (uint8_t)slot; d[1] = user_pgm(slot) != 0;
+            up_pack(&UPGM[slot - UP_FIRST], d + 2);
+            if (!d[1]) for (k = 2; k < sizeof d; k++) d[k] = 0;
+            ed_send(0x45, d, sizeof d);
+        }
+        break;
+    case 0x06:                                                          /* 06 slot + UP_BYTES: write it (a restore); answer as 03 */
+        if (slot < UP_FIRST || slot >= UP_FIRST + UP_N || n < 5u + UP_BYTES) { uint8_t d[2] = {(uint8_t)slot, 1}; ed_send(0x43, d, 2); break; }
+        {
+            organ_user_t u;
+            up_unpack(&u, p + 5);
+            if (!user_ok(&u)) { uint8_t d[2] = {(uint8_t)slot, 3}; ed_send(0x43, d, 2); break; }   /* 3: out of range */
+            UPGM[slot - UP_FIRST] = u;
+        }
+        up_pend |= 1u << (slot - UP_FIRST); up_dirty = 1; up_gen++;
+        break;
+    case 0x03:                                                          /* 03 slot name[12]: store the sound now in it */
+    case 0x04:                                                          /* 04 slot: delete it */
+        if (slot < UP_FIRST || slot >= UP_FIRST + UP_N) { uint8_t d[2] = {(uint8_t)slot, 1}; ed_send(0x43, d, 2); break; }
+        if (p[3] == 0x03u) {
+            uint8_t name[12] = {0};
+            for (k = 0; k < 12u && 5u + k < n; k++) name[k] = p[5 + k];
+            user_store(slot, name);
+        } else {
+            UPGM[slot - UP_FIRST].used = 0;
+            if (P.pgm == slot) P.pgm = 0;
+        }
+        up_pend |= 1u << (slot - UP_FIRST); up_dirty = 1; up_gen++;   /* saved when nothing sounds (an erase stops the sound) */
+        break;
+    default: break;
+    }
 }
 
 static uint8_t clampu(int32_t v, int32_t hi) { return (uint8_t)(v < 0 ? 0 : v > hi ? hi : v); }
@@ -314,7 +424,7 @@ static uint8_t clampu(int32_t v, int32_t hi) { return (uint8_t)(v < 0 ? 0 : v > 
 static void app_main(void)
 {
     struct { uint8_t magic, db[NB], vtype, vup, perc, perc3, fast, soft, les, od, drv, pgm, rev; int8_t oct;
-             uint8_t dbl[NB], dbp[2], vlo, keys; } set;
+             uint8_t dbl[NB], dbp[2], vlo, keys, chr, lesp[2 * LES_NP], tonp[2 * TON_NP]; } set;   /* les: the Leslie's les_p, low byte first */
     uint32_t prev = 0, k, i, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
     uint32_t hash[22], drawn_screen = 99, drawn_batt = ~0u;
     uint8_t held[27], heldm[27];
@@ -326,13 +436,23 @@ static void app_main(void)
     for (i = 0; i < NW; i++) { seed = seed * 1664525u + 1013904223u; wph[i] = seed; }   /* the wheels start anywhere */
     for (i = 0; i < 27u; i++) { held[i] = 255; heldm[i] = 0; }
     sel[0] = sel[1] = 2; sel[2] = 0;
-    if (settings_load(&set, sizeof set) == 0 && set.magic == 0xB6 && set.oct >= -2 && set.oct <= 2 && set.vtype < 6u &&
+    set.chr = OD_CHARACTER;
+    if (data_load(UPGM, sizeof UPGM) == 0) user_check();
+    else for (i = 0; i < UP_N; i++) UPGM[i].used = 0;
+    for (i = 0; i < LES_NP; i++) { set.lesp[2 * i] = (uint8_t)LES_DEF[i]; set.lesp[2 * i + 1] = (uint8_t)(LES_DEF[i] >> 8); }
+    for (i = 0; i < TON_NP; i++) { set.tonp[2 * i] = (uint8_t)TON_DEF[i]; set.tonp[2 * i + 1] = (uint8_t)(TON_DEF[i] >> 8); }
+    if ((settings_load(&set, sizeof set) == 0 || settings_load(&set, sizeof set - 2u * TON_NP) == 0 ||   /* without the tuning, click */
+         settings_load(&set, sizeof set - 2u * TON_NP - 2u * LES_NP) == 0 ||                          /* without the Leslie's */
+         settings_load(&set, sizeof set - 2u * TON_NP - 2u * LES_NP - 1u) == 0) && set.chr < 128u && set.magic == 0xB6 && set.oct >= -2 && set.oct <= 2 && set.vtype < 6u &&
         set.les < 3u && set.drv < 17u && set.pgm < 128u && set.rev < 128u && set.keys < 3u) {
         for (i = 0; i < NB; i++) { P.db[i] = set.db[i] > 8u ? 8u : set.db[i]; P.dbl[i] = set.dbl[i] > 8u ? 8u : set.dbl[i]; }
         P.dbp[0] = set.dbp[0] > 8u ? 8u : set.dbp[0]; P.dbp[1] = set.dbp[1] > 8u ? 8u : set.dbp[1];
         P.vtype = set.vtype; P.vup = set.vup & 1u; P.vlo = set.vlo & 1u; P.perc = set.perc & 1u; P.perc3 = set.perc3 & 1u;
         P.fast = set.fast & 1u; P.soft = set.soft & 1u; P.les = set.les; P.od = set.od & 1u; P.drv = set.drv;
-        P.pgm = set.pgm; P.rev = set.rev; P.keys = set.keys; oct = set.oct;
+        P.pgm = set.pgm; P.rev = set.rev; P.keys = set.keys; P.chr = set.chr; oct = set.oct;
+        for (i = 0; i < LES_NP; i++) les_set(i, set.lesp[2 * i] | (uint32_t)set.lesp[2 * i + 1] << 8);
+        for (i = 0; i < TON_NP; i++) ton_set(i, set.tonp[2 * i] | (uint32_t)set.tonp[2 * i + 1] << 8);
+        if (P.pgm >= UP_FIRST && !user_pgm(P.pgm)) P.pgm = 0;
     } else
         organ_program(5u);                      /* Standard B, 88 8000 000 */
     last_key = saved_key = state_key(oct, &i);
@@ -408,6 +528,11 @@ static void app_main(void)
             else if (cmd == 0xB0u) organ_cc_ch(ch, d1, d2);     /* setBfree's controller numbers (organ_core.h) */
             else if (cmd == 0xC0u) organ_pc(d1);                /* program change: setBfree's default.pgm */
         }
+        {
+            const uint8_t *sx;
+            uint32_t sxn;
+            if (sysex_get(&sx, &sxn)) { ed_sysex(sx, sxn); sysex_done(); }
+        }
 
         for (k = 0; k < 27u; k++)
             fm1_led_key(KEY_LED(k), held[k] != 255);
@@ -466,7 +591,7 @@ static void app_main(void)
                     h = hmix(h, r);
                     if (h != hash[4 + r]) { hash[4 + r] = h; band_ctrl(screen, r); }
                 }
-                h = hmix(3, P.pgm);
+                h = hmix(hmix(3, P.pgm), up_gen);
                 if (h != hash[8]) { hash[8] = h; band_preset(); }
             }
         }
@@ -482,9 +607,19 @@ static void app_main(void)
             set.dbp[0] = P.dbp[0]; set.dbp[1] = P.dbp[1]; set.vlo = P.vlo; set.keys = P.keys;
             set.vtype = P.vtype; set.vup = P.vup; set.perc = P.perc; set.perc3 = P.perc3; set.fast = P.fast;
             set.soft = P.soft; set.les = P.les; set.od = P.od; set.drv = P.drv; set.pgm = P.pgm; set.rev = P.rev; set.oct = (int8_t)oct;
+            set.chr = P.chr;
+            for (i = 0; i < LES_NP; i++) { set.lesp[2 * i] = (uint8_t)les_p[i]; set.lesp[2 * i + 1] = (uint8_t)(les_p[i] >> 8); }
+            for (i = 0; i < TON_NP; i++) { set.tonp[2 * i] = (uint8_t)ton_p[i]; set.tonp[2 * i + 1] = (uint8_t)(ton_p[i] >> 8); }
             settings_save(&set, sizeof set);
             saved_key = last_key;
             dirty = 0;
+        }
+        if (up_dirty && quiet()) {                 /* the user's programs: when the editor stored or deleted one, and nothing sounds */
+            int rc = data_save(UPGM, sizeof UPGM);
+            up_dirty = 0;
+            for (k = 0; k < UP_N; k++)
+                if (up_pend >> k & 1u) { uint8_t d[2] = {(uint8_t)(UP_FIRST + k), rc ? 2u : 0u}; ed_send(0x43, d, 2); ed_slot(UP_FIRST + k); }
+            up_pend = 0;
         }
     }
 }

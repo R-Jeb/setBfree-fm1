@@ -1,6 +1,6 @@
 # B3 ORGAN for the M-VAVE FM-1 (on zvenson/dinghy)
 
-A fixed-point tonewheel organ modelled on setBfree. State: **0.4, tested on an FM-1 by one person and against a Raspberry Pi running setBfree (see README.md); the host tests run on every build.**
+A fixed-point tonewheel organ modelled on setBfree. State: **0.5, tested on an FM-1 by one person and against a Raspberry Pi running setBfree (see README.md); the host tests run on every build.**
 
 ## Build
 ```
@@ -12,8 +12,8 @@ tests/run_host.sh               # build/host/dinghy.wav + screen PNGs, no FM-1 n
 **Identity and version.** This firmware's package identity is `FM-1_953` (`IDENT` in `tools/build.py`), the same for every version: the
 FM-1 Firmware Hub takes the name and the version from this repository and its releases and only needs an identity no other firmware uses
 (Dinghy itself is `FM-1_99N`; the 95N family is used by other firmwares too, 951, 952 and 958: check the hub's list before you change it).
-The version is on the screen, top left: `B3 ORGAN v0.4` for a release (`./build.sh --release 0.4`,
-or a tag `v0.4` on GitHub: Actions builds `b3organ-0.4.fwsc` and attaches it to the release), `B3 ORGAN vd8362` for any other build:
+The version is on the screen, top left: `B3 ORGAN v0.5` for a release (`./build.sh --release 0.5`,
+or a tag `v0.5` on GitHub: Actions builds `b3organ-0.5.fwsc` and attaches it to the release), `B3 ORGAN vd8362` for any other build:
 `d` plus the first four hex digits of the commit it was built from (on GitHub: the commit of the run you downloaded it from).
 
 ## Controls
@@ -29,10 +29,33 @@ the upper one. Notes fold into C2..C7 (pedal: C1..G3, MIDI 24 to 55). The drawba
 programs of `default.pgm` are in; a program only changes what it names. Programs for the lower manual, pedals, key
 splits are kept but have no effect here (programs set the upper manual). **Controllers** as setBfree's defaults:
 1 Leslie slow/stop/fast (0..42 slow, 43..85 stop, 86..127 fast), 7 and 11 swell, 30 vibrato on (lower), 31 (upper), 95 routing (off, lower, upper, both), 64 rotary toggle, 65 overdrive on,
-66 and 80 percussion on, 81 soft, 82 fast, 83 2nd harmonic (64 and up), 92 vibrato knob, 93 overdrive amount, **91 reverb mix** (setBfree's `reverb.mix`, 0..127, default 12),
+66 and 80 percussion on, 81 soft, 82 fast, 83 2nd harmonic (64 and up), 92 vibrato knob, 93 overdrive drive (0..16), **91 reverb mix** (setBfree's `reverb.mix`, 0..127, default 12),
 70..78 drawbars **inverted as in setBfree** (127 = pushed in, 0 = fully out), 120 and 123 notes off.
 Not used: 94 convolution. As in setBfree, a program that sets the vibrato knob does not
 switch vibrato on by itself (FX button, CC 31 or program 50 do).
+
+**Your own programs 112 to 127.** The web editor (`docs/editor`) stores the whole sound of the FM-1 in one of them: the drawbars of all three
+manuals, vibrato type and switches, percussion, Leslie, overdrive (on, drive, character) and reverb, with a name of up to 12 letters. They are
+kept in their own flash sector (0xFD000), written when nothing sounds; the PRESETS knob steps through them after setBfree's, program change
+111 to 126 selects them, and they set everything they hold (setBfree's programs change only what they name). Program 111 stays free.
+
+**NRPN.** 1/0 (CC 99 = 1, CC 98 = 0, then CC 6 = 0..127): setBfree's `overdrive.character` (16 at start, as fixed until 0.4; saved with
+the settings). 2/0 to 2/7 with 14 bits (CC 6 = MSB, then CC 38 = LSB; the value counts when CC 38 arrives): the Leslie, setBfree's `whirl.*` values by
+default: 2/0 horn slow, 2/1 horn fast, 2/2 drum slow, 2/3 drum fast in 0.1 rpm (403, 4234, 360, 3573); 2/4 horn acceleration, 2/5 horn
+deceleration, 2/6 drum acceleration, 2/7 drum deceleration as the time constant in ms (161, 321, 4127, 1371). Saved with the settings, for all
+programs. 3/0 setBfree's `osc.tuning` in 0.1 Hz (4400 = 440 Hz; rounded to whole Hz, 4300..4500), 3/1 `osc.attack.click.level` (the key click) in 0.1 %
+(500 = 0.5), 14 bits as well, saved with the settings. An RPN (CC 101 / 100) in between makes data entry go nowhere.
+
+**SysEx (the web editor).** `F0 7D 42 33 CMD ... F7` (7D: the ID for non-commercial use, then "B3"), USB only:
+
+| To the FM-1 | Answer |
+| --- | --- |
+| `01` read the sound | `41` + upper 9, lower 9, pedal 2 drawbars, vibrato type, upper on, lower on, percussion on, 3rd, fast, soft, Leslie (0 stop, 1 slow, 2 fast), overdrive on, drive, character, reverb, swell, program, keys (0 upper, 1 lower, 2 pedal), the Leslie's 2/0..2/7 and the tuning and key click 3/0..3/1 (two bytes each, MSB first), then the version in ASCII |
+| `02` read your programs | `42` + number, used (0/1), name (12 bytes, 0 = end), once for each of 112..127 |
+| `03` n name[12]: store the sound now as program n | when the flash is written (nothing sounding): `43` n status (0 saved, 1 not 112..127, 2 flash error), then `42` for n |
+| `04` n: delete program n | as `03` |
+| `05` n: read all of program n (a backup) | `45` + n, used, then 44 bytes: name 12, upper 9, lower 9, pedal 2 drawbars, vibrato type, upper on, lower on, percussion on, 3rd, fast, soft, Leslie, overdrive on, drive, character, reverb |
+| `06` n + the 44 bytes of `45`: write program n (a restore) | as `03`; status 3: a value out of range, nothing written |
 
 Regenerate the program table with `python3 tools/gen_programs.py` (reads `data/setbfree-default.pgm`).
 `tests/organ_test.c` checks programs and controllers against setBfree's source on a computer, and the level of every key and drawbar against setBfree's own tone generator (`tests/organ_ref.h`).

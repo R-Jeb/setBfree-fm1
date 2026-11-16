@@ -71,6 +71,35 @@ static int settings_save(const void *p, uint32_t n)
     return 0;
 }
 
+static uint8_t host_data[1024 + 4];
+static int data_load(void *p, uint32_t n)
+{
+    if (host_data[0] != 1 || n > 1024u) return -1;
+    memcpy(p, host_data + 4, n);
+    return 0;
+}
+static int data_save(const void *p, uint32_t n)
+{
+    host_data[0] = 1;
+    memcpy(host_data + 4, p, n);
+    printf("%6u ms  data saved (%u B)\n", fm1_ms, n);
+    return 0;
+}
+
+/* SysEx: the script's "T sysex HEX" (the bytes between F0 and F7, e.g. 7D4233 01) waits here; what the app sends is printed */
+static uint8_t host_sx[256];
+static uint32_t host_sx_n, host_sx_ready;
+static int sysex_get(const uint8_t **p, uint32_t *n) { if (!host_sx_ready) return 0; *p = host_sx; *n = host_sx_n; return 1; }
+static void sysex_done(void) { host_sx_ready = 0; }
+static int sysex_send(const uint8_t *p, uint32_t n)
+{
+    uint32_t i;
+    printf("%6u ms  SysEx out", fm1_ms);
+    for (i = 0; i < n; i++) printf(" %02X", p[i]);
+    printf("\n");
+    return 0;
+}
+
 static uint8_t mq[64][3];
 static uint32_t mq_w, mq_r;
 static volatile uint8_t midi_in_overflow;       /* the real one is in usb.c */
@@ -88,7 +117,7 @@ static void app_main(void);
 
 /* the script: at t ms, keys down (bit k = key k, 0 = F3), a button edge, a MIDI message. A script file (the second
  * argument) replaces it, a line each: "T keys MASK" (hex or decimal), "T btn ID", "T midi ST D1 D2", "T enc ID DELTA", "T shot" (a screen as PNG-to-be), "T end" */
-typedef struct { uint32_t t, keys; int btn; uint8_t st, d1, d2; int enc, delta, shot; } host_ev_t;
+typedef struct { uint32_t t, keys; int btn; uint8_t st, d1, d2; int enc, delta, shot; uint8_t sx[64], sxn; } host_ev_t;
 static const host_ev_t SCRIPT0[] = {
     {200, 1u << 7, -1, 0, 0, 0, -1, 0, 0},                                /* C4 */
     {700, 1u << 7 | 1u << 11 | 1u << 14, -1, 0, 0, 0},          /* + E4 G4: a chord */
@@ -119,6 +148,17 @@ static void read_script(const char *path)
         else if (!strcmp(what, "btn")) { sscanf(line, "%*u %*s %d", &e.btn); }
         else if (!strcmp(what, "enc")) { sscanf(line, "%*u %*s %d %d", &e.enc, &e.delta); }
         else if (!strcmp(what, "shot")) { e.shot = 1; }
+        else if (!strcmp(what, "sysex")) {      /* hex pairs, spaces allowed */
+            const char *q = strstr(line, "sysex") + 5;
+            unsigned v;
+            while (*q && e.sxn < 64u) {
+                while (*q == ' ' || *q == '\t') q++;
+                if (sscanf(q, "%2x", &v) != 1) break;
+                e.sx[e.sxn++] = (uint8_t)v;
+                q += 2;
+            }
+            e.shot = 0;
+        }
         else if (!strcmp(what, "midi")) { sscanf(line, "%*u %*s %i %u %u", (int *)&a, &b, &c); e.st = (uint8_t)a; e.d1 = (uint8_t)b; e.d2 = (uint8_t)c; }
         else continue;
         ev[n++] = e;
@@ -179,7 +219,9 @@ static void platform_poll(void)                 /* one call = one millisecond */
     static int32_t blk[2u * HALF_FRAMES];
     fm1_ms++;
     while (step < script_n && script[step].t <= fm1_ms) {
-        if (script[step].st) {
+        if (script[step].sxn) {
+            memcpy(host_sx, script[step].sx, script[step].sxn); host_sx_n = script[step].sxn; host_sx_ready = 1;
+        } else if (script[step].st) {
             mq[mq_w % 64u][0] = script[step].st; mq[mq_w % 64u][1] = script[step].d1; mq[mq_w % 64u][2] = script[step].d2;
             mq_w++;
         } else if (script[step].btn >= 0)
