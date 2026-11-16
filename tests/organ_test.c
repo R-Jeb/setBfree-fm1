@@ -210,6 +210,13 @@ int main(void)
         organ_pc(111); CHECK("program change 111 selects it", P.pgm == 112);
         UPGM[0].used = 0; organ_program(5); P.chr = 16; P.drv = 0;
     }
+    organ_cc(99, 2); organ_cc(98, 1); organ_cc(6, 6000 >> 7); organ_cc(38, 6000 & 127);
+    CHECK("NRPN 2/1 horn fast 600 rpm", les_p[1] == 6000 && ls_tgt[1] > 973000u && ls_tgt[1] < 974000u);
+    organ_cc(98, 6); organ_cc(6, 2000 >> 7); organ_cc(38, 2000 & 127);
+    CHECK("NRPN 2/6 drum up 2 s", les_p[6] == 2000 && ls_k[2] == 190);
+    organ_cc(98, 0); organ_cc(6, 127); organ_cc(38, 127); CHECK("  clamped to 150 rpm slow", les_p[0] == 1500);
+    les_set(0, 403); les_set(1, 4234); les_set(6, 4127);
+    CHECK("setBfree's values give its constants again", ls_tgt[0] == LES_HORN_SLOW && ls_tgt[1] == LES_HORN_FAST && ls_k[2] == LES_DRUM_ACC);
     printf(bad ? "FAILED\n" : "all ok\n");
     check_levels();
     check_compression();

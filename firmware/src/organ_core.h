@@ -59,6 +59,29 @@ static uint32_t vwi, vph;
 static int32_t mono[256], lbuf[256], rbuf[256]; /* after the overdrive: mono, then through the reverb, then the Leslie makes the pair */
 #include "organ_fx.h"
 #include "organ_od.h"                         /* setBfree's preamp */
+
+/* ---- the Leslie's speeds and time constants (NRPN 2/0..7, the web editor): horn slow, horn fast, drum slow, drum fast in 0.1 rpm;
+ * horn acceleration, horn deceleration, drum acceleration, drum deceleration in ms (the time constant). setBfree's defaults. */
+#define LES_NP 8u
+static const uint16_t LES_DEF[LES_NP] = {403, 4234, 360, 3573, 161, 321, 4127, 1371};
+static const uint16_t LES_MIN[LES_NP] = {0, 600, 0, 600, 20, 20, 20, 20};
+static const uint16_t LES_MAX[LES_NP] = {1500, 9000, 1500, 9000, 10000, 10000, 10000, 10000};
+static uint16_t les_p[LES_NP] = {403, 4234, 360, 3573, 161, 321, 4127, 1371};
+static void les_set(uint32_t i, uint32_t v)     /* main loop only: clamps, then the speed or the time constant the Leslie uses */
+{
+    if (i >= LES_NP) return;
+    if (v < LES_MIN[i]) v = LES_MIN[i];
+    if (v > LES_MAX[i]) v = LES_MAX[i];
+    les_p[i] = (uint16_t)v;
+    if (i < 4u) {                               /* 0.1 rpm -> phase step per frame: v / 600 Hz * 2^32 / 44100 = v * 162.319 */
+        static const uint32_t DEF[4] = {LES_HORN_SLOW, LES_HORN_FAST, LES_DRUM_SLOW, LES_DRUM_FAST};
+        ls_tgt[i] = v == LES_DEF[i] ? DEF[i] : (uint32_t)(((uint64_t)v * 10637669u) >> 16);
+    } else {                                    /* ms -> 1 - exp(-x), x = 256 / (44100 * t): x - x^2/2 + x^3/6 in Q24, then Q16 */
+        static const int32_t DEF[4] = {LES_HORN_ACC, LES_HORN_DEC, LES_DRUM_ACC, LES_DRUM_DEC};
+        int32_t x = 97391549 / (int32_t)v, x2 = (int32_t)(((int64_t)x * x) >> 24), x3 = (int32_t)(((int64_t)x2 * x) >> 24);
+        ls_k[i - 4u] = v == LES_DEF[i] ? DEF[i - 4u] : (x - x2 / 2 + x3 / 6 + 128) >> 8;
+    }
+}
 static int32_t perc_env = 32767;                /* Q15 */
 
 static const uint8_t VIBMODE[6] = {1, 4, 2, 5, 3, 6};   /* knob position -> mode: 1..3 V1..V3, 4..6 C1..C3 */
@@ -491,7 +514,7 @@ static void organ_pc(uint32_t uc)               /* MIDI program change: setBfree
 
 /* MIDI controllers, as setBfree's defaults. The drawbars (70 to 78) and the notes follow the channel: 1 upper, 2 lower, 3 pedal (16' and 8'
  * only); everything else is accepted on any channel. Not used here, no such part: 94 convolution. */
-static uint32_t nrpn = 0x3FFFu;                 /* the NRPN chosen by CC 99 / 98 (MSB << 7 | LSB); 0x3FFF none */
+static uint32_t nrpn = 0x3FFFu, nrpn_msb;       /* the NRPN chosen by CC 99 / 98 (MSB << 7 | LSB); 0x3FFF none; the data entry's MSB */
 static void organ_cc_ch(uint32_t ch, uint32_t cc, uint32_t v)   /* ch 0..15: the drawbars follow the channel, 0 upper, 1 lower, 2 pedal (16' = 70, 8' = 72) */
 {
     if (v > 127u) return;
@@ -523,6 +546,10 @@ static void organ_cc_ch(uint32_t ch, uint32_t cc, uint32_t v)   /* ch 0..15: the
     case 101: case 100: nrpn = 0x3FFFu; break;                          /* an RPN: not ours, data entry goes nowhere */
     case 6:                                                             /* data entry (MSB) for the NRPN chosen */
         if (nrpn == (1u << 7 | 0u)) P.chr = (uint8_t)v;                 /* 1/0: setBfree's overdrive.character 0..127 */
+        nrpn_msb = v;
+        break;
+    case 38:                                                            /* data entry LSB: the 14-bit ones, MSB << 7 | LSB */
+        if (nrpn >= (2u << 7) && nrpn < (2u << 7) + LES_NP) les_set(nrpn - (2u << 7), nrpn_msb << 7 | v);   /* 2/0..7: the Leslie */
         break;
     case 120: case 123: mk_lo = mk_hi = ml_lo = ml_hi = mp_k = 0; break;   /* all sound / notes off (MIDI's notes; the panel's stay) */
     default: break;
