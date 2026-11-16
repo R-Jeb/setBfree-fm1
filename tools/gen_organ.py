@@ -50,21 +50,34 @@ out.append("};")
 # its gain moves from the old to the new value along one of eight random envelopes: zero until a random start,
 # then a burst of 16..80 samples at 1 - 0.5 * random, then unity, the whole thing through a two-point average.
 # Q12, 128 samples (setBfree's block). A fixed random draw (seed 3): the same eight clicks every time.
-rng = random.Random(3)
-atk = []
-for b in range(8):
-    burst = 16 + rng.randrange(64)
-    start = rng.randrange(128 - burst)
-    e = [0.0] * start + [1.0 - 0.5 * rng.random() for _ in range(burst)]
-    e += [1.0] * (128 - len(e))
+# The burst's depth is setBfree's osc.attack.click.level (0.5); ATK_DIP is the burst's random part, averaged the same way, so that
+# the firmware can make the click deeper or shallower: env(level) = ATK_ENV + (0.5 - level) * ATK_DIP.
+def avg(e):
     e[0] /= 2.0
     for i in range(1, 128):
         e[i] = (e[i - 1] + e[i]) / 2.0
-    atk.append([round(v * 4096) for v in e])
+    return e
+rng = random.Random(3)
+atk, dip = [], []
+for b in range(8):
+    burst = 16 + rng.randrange(64)
+    start = rng.randrange(128 - burst)
+    r = [rng.random() for _ in range(burst)]
+    e = [0.0] * start + [1.0 - 0.5 * x for x in r]
+    e += [1.0] * (128 - len(e))
+    d = [0.0] * start + r + [0.0] * (128 - start - burst)
+    atk.append([round(v * 4096) for v in avg(e)])
+    dip.append([round(v * 4096) for v in avg(d)])
 out.append("")
 out.append("/* key click: eight attack envelopes of 128 samples, Q12 (see tools/gen_organ.py) */")
 out.append("static const uint16_t ATK_ENV[8][128] = {")
 for row in atk:
+    out.append("    {" + ", ".join(str(v) for v in row) + "},")
+out.append("};")
+out.append("")
+out.append("/* the bursts' random part, averaged as the envelopes, Q12: the click level moves the envelope by (0.5 - level) * ATK_DIP */")
+out.append("static const uint16_t ATK_DIP[8][128] = {")
+for row in dip:
     out.append("    {" + ", ".join(str(v) for v in row) + "},")
 out.append("};")
 

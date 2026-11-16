@@ -307,6 +307,7 @@ static uint32_t state_key(int32_t oct, uint32_t *status)   /* what is worth savi
     dbk = dbk * 17u + P.drv;                    /* the drive 0..16 does not fit the bits above */
     dbk = dbk * 128u + P.chr;
     for (i = 0; i < LES_NP; i++) dbk = dbk * 31u + les_p[i];
+    for (i = 0; i < TON_NP; i++) dbk = dbk * 31u + ton_p[i];
     *status = k;
     return (k ^ dbk * 2654435761u) + (uint32_t)(oct + 2);
 }
@@ -315,7 +316,7 @@ static uint32_t state_key(int32_t oct, uint32_t *status)   /* what is worth savi
 static uint32_t up_pend, up_dirty, up_gen;     /* slots waiting for the flash (bit k: program 112 + k), anything to save, a count for the screen */
 static void ed_send(uint32_t cmd, const uint8_t *d, uint32_t n)
 {
-    uint8_t m[80];
+    uint8_t m[84];
     uint32_t i, w = 0;
     m[w++] = 0xF0; m[w++] = 0x7D; m[w++] = 0x42; m[w++] = 0x33; m[w++] = (uint8_t)cmd;
     for (i = 0; i < n && w < sizeof m - 1u; i++) m[w++] = d[i] & 0x7Fu;
@@ -324,7 +325,7 @@ static void ed_send(uint32_t cmd, const uint8_t *d, uint32_t n)
 }
 static void ed_state(void)                      /* 41: the sound now, then the version */
 {
-    uint8_t d[72];
+    uint8_t d[76];
     uint32_t i, w = 0;
     const char *v = APP_VER;
     for (i = 0; i < NB; i++) d[w++] = P.db[i];
@@ -333,6 +334,7 @@ static void ed_state(void)                      /* 41: the sound now, then the v
     d[w++] = P.vtype; d[w++] = P.vup; d[w++] = P.vlo; d[w++] = P.perc; d[w++] = P.perc3; d[w++] = P.fast; d[w++] = P.soft;
     d[w++] = P.les; d[w++] = P.od; d[w++] = P.drv; d[w++] = P.chr; d[w++] = P.rev; d[w++] = P.swell; d[w++] = P.pgm; d[w++] = P.keys;
     for (i = 0; i < LES_NP; i++) { d[w++] = (uint8_t)(les_p[i] >> 7); d[w++] = (uint8_t)(les_p[i] & 127u); }   /* the Leslie's, 14 bits: MSB, LSB */
+    for (i = 0; i < TON_NP; i++) { d[w++] = (uint8_t)(ton_p[i] >> 7); d[w++] = (uint8_t)(ton_p[i] & 127u); }   /* tuning, key click */
     while (*v && w < sizeof d) d[w++] = (uint8_t)*v++;
     ed_send(0x41, d, w);
 }
@@ -375,7 +377,7 @@ static uint8_t clampu(int32_t v, int32_t hi) { return (uint8_t)(v < 0 ? 0 : v > 
 static void app_main(void)
 {
     struct { uint8_t magic, db[NB], vtype, vup, perc, perc3, fast, soft, les, od, drv, pgm, rev; int8_t oct;
-             uint8_t dbl[NB], dbp[2], vlo, keys, chr, lesp[2 * LES_NP]; } set;   /* les: the Leslie's les_p, low byte first */
+             uint8_t dbl[NB], dbp[2], vlo, keys, chr, lesp[2 * LES_NP], tonp[2 * TON_NP]; } set;   /* les: the Leslie's les_p, low byte first */
     uint32_t prev = 0, k, i, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
     uint32_t hash[22], drawn_screen = 99, drawn_batt = ~0u;
     uint8_t held[27], heldm[27];
@@ -391,8 +393,10 @@ static void app_main(void)
     if (data_load(UPGM, sizeof UPGM) == 0) user_check();
     else for (i = 0; i < UP_N; i++) UPGM[i].used = 0;
     for (i = 0; i < LES_NP; i++) { set.lesp[2 * i] = (uint8_t)LES_DEF[i]; set.lesp[2 * i + 1] = (uint8_t)(LES_DEF[i] >> 8); }
-    if ((settings_load(&set, sizeof set) == 0 || settings_load(&set, sizeof set - 2u * LES_NP) == 0 ||   /* without the Leslie's */
-         settings_load(&set, sizeof set - 2u * LES_NP - 1u) == 0) && set.chr < 128u && set.magic == 0xB6 && set.oct >= -2 && set.oct <= 2 && set.vtype < 6u &&
+    for (i = 0; i < TON_NP; i++) { set.tonp[2 * i] = (uint8_t)TON_DEF[i]; set.tonp[2 * i + 1] = (uint8_t)(TON_DEF[i] >> 8); }
+    if ((settings_load(&set, sizeof set) == 0 || settings_load(&set, sizeof set - 2u * TON_NP) == 0 ||   /* without the tuning, click */
+         settings_load(&set, sizeof set - 2u * TON_NP - 2u * LES_NP) == 0 ||                          /* without the Leslie's */
+         settings_load(&set, sizeof set - 2u * TON_NP - 2u * LES_NP - 1u) == 0) && set.chr < 128u && set.magic == 0xB6 && set.oct >= -2 && set.oct <= 2 && set.vtype < 6u &&
         set.les < 3u && set.drv < 17u && set.pgm < 128u && set.rev < 128u && set.keys < 3u) {
         for (i = 0; i < NB; i++) { P.db[i] = set.db[i] > 8u ? 8u : set.db[i]; P.dbl[i] = set.dbl[i] > 8u ? 8u : set.dbl[i]; }
         P.dbp[0] = set.dbp[0] > 8u ? 8u : set.dbp[0]; P.dbp[1] = set.dbp[1] > 8u ? 8u : set.dbp[1];
@@ -400,6 +404,7 @@ static void app_main(void)
         P.fast = set.fast & 1u; P.soft = set.soft & 1u; P.les = set.les; P.od = set.od & 1u; P.drv = set.drv;
         P.pgm = set.pgm; P.rev = set.rev; P.keys = set.keys; P.chr = set.chr; oct = set.oct;
         for (i = 0; i < LES_NP; i++) les_set(i, set.lesp[2 * i] | (uint32_t)set.lesp[2 * i + 1] << 8);
+        for (i = 0; i < TON_NP; i++) ton_set(i, set.tonp[2 * i] | (uint32_t)set.tonp[2 * i + 1] << 8);
         if (P.pgm >= UP_FIRST && !user_pgm(P.pgm)) P.pgm = 0;
     } else
         organ_program(5u);                      /* Standard B, 88 8000 000 */
@@ -557,6 +562,7 @@ static void app_main(void)
             set.soft = P.soft; set.les = P.les; set.od = P.od; set.drv = P.drv; set.pgm = P.pgm; set.rev = P.rev; set.oct = (int8_t)oct;
             set.chr = P.chr;
             for (i = 0; i < LES_NP; i++) { set.lesp[2 * i] = (uint8_t)les_p[i]; set.lesp[2 * i + 1] = (uint8_t)(les_p[i] >> 8); }
+            for (i = 0; i < TON_NP; i++) { set.tonp[2 * i] = (uint8_t)ton_p[i]; set.tonp[2 * i + 1] = (uint8_t)(ton_p[i] >> 8); }
             settings_save(&set, sizeof set);
             saved_key = last_key;
             dirty = 0;

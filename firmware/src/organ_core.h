@@ -86,6 +86,33 @@ static int32_t perc_env = 32767;                /* Q15 */
 
 static const uint8_t VIBMODE[6] = {1, 4, 2, 5, 3, 6};   /* knob position -> mode: 1..3 V1..V3, 4..6 C1..C3 */
 
+/* ---- the tone generator's tuning and key click (NRPN 3/0, 3/1, the web editor), 14 bits: 3/0 setBfree's osc.tuning in 0.1 Hz (4400:
+ * A = 440 Hz, 4000..4800), 3/1 osc.attack.click.level in 0.1 % (500: 0.5, 0..1000). setBfree's values by default. */
+#define TON_NP 2u
+static const uint16_t TON_DEF[TON_NP] = {4400, 500};
+static uint16_t ton_p[TON_NP] = {4400, 500};
+static const uint32_t *winc = WHEEL_INC;        /* the wheels' phase steps: the table at 440 Hz, else wheel_inc_t */
+static uint32_t wheel_inc_t[NW];
+static int32_t atk_kd;                          /* (0.5 - click level) in Q12: the envelope moves by atk_kd * ATK_DIP */
+static void ton_set(uint32_t i, uint32_t v)     /* main loop only */
+{
+    uint32_t w, m;
+    if (i >= TON_NP) return;
+    if (i == 0u) {
+        if (v < 4000u) v = 4000u;
+        if (v > 4800u) v = 4800u;
+        ton_p[0] = (uint16_t)v;
+        if (v == 4400u) { winc = WHEEL_INC; return; }
+        m = (v << 18) / 4400u;                  /* the ratio, Q18 */
+        for (w = 0; w < NW; w++) wheel_inc_t[w] = (uint32_t)(((uint64_t)WHEEL_INC[w] * m) >> 18);
+        winc = wheel_inc_t;                     /* the other core reads it: one word, the table is ready before */
+    } else {
+        if (v > 1000u) v = 1000u;
+        ton_p[1] = (uint16_t)v;
+        atk_kd = 2048 - (int32_t)((v * 4096u + 500u) / 1000u);
+    }
+}
+
 /* The tonewheels w0, w0 + ws, ... of one block into the buses ac (direct) and acv (vibrato): the part of the sound that costs the time. Every wheel
  * is its own (phase, levels), so two calls with the even and the odd wheels, one on each core (organ_c1_job), add to exactly the sum of one call
  * with all of them. *act counts the wheels sounding, *vany says one of them reaches the scanner. */
@@ -95,7 +122,7 @@ static void wheels_render(uint32_t w0, uint32_t ws, uint32_t n, int32_t *acc, in
     for (i = 0; i < n; i++) acc[i] = accv[i] = 0;
     for (w = w0; w < NW; w += ws) {
         int32_t c = wcur[w], t = wtgt[w], cv = wcurv[w], tv = wtgtv[w];
-        uint32_t ph = wph[w], inc = WHEEL_INC[w];
+        uint32_t ph = wph[w], inc = winc[w];
         if (!c && !t && !cv && !tv) { wph[w] = ph + inc * n; wpc[w] = wpt[w]; continue; }   /* silent: costs nothing, the wheel turns on */
         {
             act++;
@@ -137,7 +164,8 @@ static void wheels_render(uint32_t w0, uint32_t ws, uint32_t n, int32_t *acc, in
                     }
                 }
             } else {                            /* a level changes: setBfree's key click (an attack envelope; the release is a ramp) */
-                const uint16_t *env = ATK_ENV[w & 7u];
+                const uint16_t *env = ATK_ENV[w & 7u], *dip = ATK_DIP[w & 7u];
+                int32_t kd = atk_kd;
                 int32_t d = t - c, dv = tv - cv, pd = wpt[w] - wpc[w], sp = 0, ep = 0;
                 if (pd) {                       /* setBfree differentiates the percussion bus, envelope and all: d(e s) = e ds + s de, and de is the click */
                     uint32_t i0 = ph >> 24;
@@ -151,11 +179,11 @@ static void wheels_render(uint32_t w0, uint32_t ws, uint32_t n, int32_t *acc, in
                     s0 = SINE_TAB[idx];
                     s1 = SINE_TAB[idx + 1u];
                     s = s0 + (((s1 - s0) * (int32_t)((ph >> 8) & 0xFFFFu)) >> 16);
-                    e = i >= 128u ? 4096 : t ? (int32_t)env[i] : (int32_t)i << 5;
+                    e = i >= 128u ? 4096 : t ? (int32_t)env[i] + (kd ? (kd * (int32_t)dip[i] + 2048) >> 12 : 0) : (int32_t)i << 5;
                     a = c + ((d * e) >> 12);
                     acc[i] += (s >> 2) * a;
                     if (cv | tv) {
-                        int32_t ev = i >= 128u ? 4096 : tv ? (int32_t)env[i] : (int32_t)i << 5;
+                        int32_t ev = i >= 128u ? 4096 : tv ? (int32_t)env[i] + (kd ? (kd * (int32_t)dip[i] + 2048) >> 12 : 0) : (int32_t)i << 5;
                         accv[i] += (s >> 2) * (cv + ((dv * ev) >> 12));
                     }
                     if (pd) {
@@ -550,6 +578,7 @@ static void organ_cc_ch(uint32_t ch, uint32_t cc, uint32_t v)   /* ch 0..15: the
         break;
     case 38:                                                            /* data entry LSB: the 14-bit ones, MSB << 7 | LSB */
         if (nrpn >= (2u << 7) && nrpn < (2u << 7) + LES_NP) les_set(nrpn - (2u << 7), nrpn_msb << 7 | v);   /* 2/0..7: the Leslie */
+        if (nrpn >= (3u << 7) && nrpn < (3u << 7) + TON_NP) ton_set(nrpn - (3u << 7), nrpn_msb << 7 | v);   /* 3/0..1: tuning, key click */
         break;
     case 120: case 123: mk_lo = mk_hi = ml_lo = ml_hi = mp_k = 0; break;   /* all sound / notes off (MIDI's notes; the panel's stay) */
     default: break;
