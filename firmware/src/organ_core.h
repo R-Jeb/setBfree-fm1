@@ -482,16 +482,17 @@ static void user_store(uint32_t n, const uint8_t *name)   /* the sound now into 
     u->used = 1;
     P.pgm = (uint8_t)n;
 }
+static int user_ok(const organ_user_t *u)       /* 1: a used slot with everything in range */
+{
+    uint32_t i, ok = u->used == 1u && u->name[12] == 0 && u->vtype < 6u && u->les < 3u && u->drv < 17u && u->chr < 128u && u->rev < 128u;
+    for (i = 0; ok && i < NB; i++) ok = u->db[i] < 9u && u->dbl[i] < 9u;
+    return ok && u->dbp[0] < 9u && u->dbp[1] < 9u;
+}
 static void user_check(void)                    /* after loading: anything out of range makes the slot empty */
 {
-    uint32_t k, i, ok;
-    for (k = 0; k < UP_N; k++) {
-        organ_user_t *u = &UPGM[k];
-        ok = u->used == 1u && u->name[12] == 0 && u->vtype < 6u && u->les < 3u && u->drv < 17u && u->chr < 128u && u->rev < 128u;
-        for (i = 0; ok && i < NB; i++) ok = u->db[i] < 9u && u->dbl[i] < 9u;
-        ok = ok && u->dbp[0] < 9u && u->dbp[1] < 9u;
-        if (!ok) u->used = 0;
-    }
+    uint32_t k;
+    for (k = 0; k < UP_N; k++)
+        if (!user_ok(&UPGM[k])) UPGM[k].used = 0;
 }
 
 static int pgm_registration(uint32_t n)         /* a program that sets the drawbars: what the PRESETS knob steps through */

@@ -347,6 +347,34 @@ static void ed_slot(uint32_t n)                 /* 42: one of the user's program
     for (i = 0; i < 12u; i++) d[2 + i] = u ? (uint8_t)u->name[i] : 0;
     ed_send(0x42, d, 14);
 }
+#define UP_BYTES 44u                            /* a user program on the wire: name 12, db 9, dbl 9, dbp 2, then 12 switches and values */
+static void up_pack(const organ_user_t *u, uint8_t *d)
+{
+    uint32_t i, w = 0;
+    for (i = 0; i < 12u; i++) d[w++] = (uint8_t)u->name[i] & 0x7Fu;
+    for (i = 0; i < NB; i++) d[w++] = u->db[i];
+    for (i = 0; i < NB; i++) d[w++] = u->dbl[i];
+    d[w++] = u->dbp[0]; d[w++] = u->dbp[1];
+    d[w++] = u->vtype; d[w++] = u->vup; d[w++] = u->vlo; d[w++] = u->perc; d[w++] = u->perc3; d[w++] = u->fast; d[w++] = u->soft;
+    d[w++] = u->les; d[w++] = u->od; d[w++] = u->drv; d[w++] = u->chr; d[w++] = u->rev;
+}
+static void up_unpack(organ_user_t *u, const uint8_t *d)   /* the name made printable; user_ok checks the rest */
+{
+    uint32_t i, r = 0, end = 0;
+    u->used = 1;
+    for (i = 0; i < 12u; i++, r++) {
+        if (!d[r]) end = 1;
+        u->name[i] = end ? 0 : d[r] >= 32u && d[r] < 127u ? (char)d[r] : '?';
+    }
+    u->name[12] = 0;
+    for (i = 0; i < NB; i++) u->db[i] = d[r++];
+    for (i = 0; i < NB; i++) u->dbl[i] = d[r++];
+    u->dbp[0] = d[r++]; u->dbp[1] = d[r++];
+    u->vtype = d[r++]; u->vup = d[r++] & 1u; u->vlo = d[r++] & 1u; u->perc = d[r++] & 1u; u->perc3 = d[r++] & 1u; u->fast = d[r++] & 1u;
+    u->soft = d[r++] & 1u; u->les = d[r++]; u->od = d[r++] & 1u; u->drv = d[r++]; u->chr = d[r++]; u->rev = d[r++];
+    u->rsv[0] = u->rsv[1] = 0;
+    if (!u->name[0]) { u->name[0] = 'U'; u->name[1] = 'S'; u->name[2] = 'E'; u->name[3] = 'R'; }
+}
 static void ed_sysex(const uint8_t *p, uint32_t n)   /* p: the bytes between F0 and F7 */
 {
     uint32_t k, slot;
@@ -355,6 +383,25 @@ static void ed_sysex(const uint8_t *p, uint32_t n)   /* p: the bytes between F0 
     switch (p[3]) {
     case 0x01: ed_state(); break;                                       /* 01: send the state */
     case 0x02: for (k = UP_FIRST; k < UP_FIRST + UP_N; k++) ed_slot(k); break;   /* 02: send the user's programs */
+    case 0x05:                                                          /* 05 slot: send all of it (a backup): 45 slot used + UP_BYTES */
+        if (slot >= UP_FIRST && slot < UP_FIRST + UP_N) {
+            uint8_t d[2 + UP_BYTES];
+            d[0] = (uint8_t)slot; d[1] = user_pgm(slot) != 0;
+            up_pack(&UPGM[slot - UP_FIRST], d + 2);
+            if (!d[1]) for (k = 2; k < sizeof d; k++) d[k] = 0;
+            ed_send(0x45, d, sizeof d);
+        }
+        break;
+    case 0x06:                                                          /* 06 slot + UP_BYTES: write it (a restore); answer as 03 */
+        if (slot < UP_FIRST || slot >= UP_FIRST + UP_N || n < 5u + UP_BYTES) { uint8_t d[2] = {(uint8_t)slot, 1}; ed_send(0x43, d, 2); break; }
+        {
+            organ_user_t u;
+            up_unpack(&u, p + 5);
+            if (!user_ok(&u)) { uint8_t d[2] = {(uint8_t)slot, 3}; ed_send(0x43, d, 2); break; }   /* 3: out of range */
+            UPGM[slot - UP_FIRST] = u;
+        }
+        up_pend |= 1u << (slot - UP_FIRST); up_dirty = 1; up_gen++;
+        break;
     case 0x03:                                                          /* 03 slot name[12]: store the sound now in it */
     case 0x04:                                                          /* 04 slot: delete it */
         if (slot < UP_FIRST || slot >= UP_FIRST + UP_N) { uint8_t d[2] = {(uint8_t)slot, 1}; ed_send(0x43, d, 2); break; }
