@@ -12,7 +12,7 @@ Leslie, its factory programs (`default.pgm`) and its MIDI controller numbers. Wh
 the real thing (setBfree on a computer, or a recording of its LV2 plug-in), it was; the host tests check them on every
 build.
 
-**Try it in the browser:** [r-jeb.github.io/setBfree-fm1/play](https://r-jeb.github.io/setBfree-fm1/play/), the same engine as WebAssembly (`web/`, rebuilt with `web/build.sh`; `docs/play/index.html` is a copy of `web/index.html`).
+**Try it in the browser:** [r-jeb.github.io/setBfree-fm1/play](https://r-jeb.github.io/setBfree-fm1/play/), the same engine as WebAssembly (`web/`, rebuilt with `web/build.sh`; `docs/play/index.html` is a copy of `web/index.html`). A first impression only: the browser computes the organ between its other work, so with many keys it can crackle on a busy computer, which the FM-1 does not.
 
 **Edit it from the browser:** [r-jeb.github.io/setBfree-fm1/editor](https://r-jeb.github.io/setBfree-fm1/editor/) (Chrome or Edge, the FM-1 on USB): drawbars, vibrato, percussion, overdrive with its character, Leslie, reverb, and your own programs 112 to 127. Reading the FM-1, storing programs, the extended parameters and the backup need firmware 0.5.
 

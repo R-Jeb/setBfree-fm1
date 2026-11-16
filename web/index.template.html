@@ -167,6 +167,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
     </div>
     <div class="kb" id="kb"></div>
     <p class="hint">Computer keyboard: the middle row plays the white keys, the row above the black keys, starting with A at the left C. Z and X (the bottom left keys: Y and X on a German keyboard) change the octave. USB MIDI keyboards are picked up if the browser allows it. setBfree's default controllers apply (CC 1, 7, 11, 31, 64 to 66, 70 to 78, 80 to 83, 92, 93, 95) and program change.</p>
+    <p class="hint">This page is for a first impression, not for judging the FM-1's sound under load. The browser computes the organ between its other work: on a busy or slower computer, with many keys, it can crackle or drop out, which sounds like distortion. On the FM-1 the organ has its own two cores and plays many keys cleanly.</p>
   </section>
 
   <section class="panel" aria-label="Signal">
@@ -361,11 +362,11 @@ async function ensureAudio() {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100, latencyHint: "interactive" });
     gainNode = ctx.createGain(); gainNode.gain.value = (vol / 100) * (vol / 100);
     analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
-    const node = ctx.createScriptProcessor(512, 0, 2);
+    const node = ctx.createScriptProcessor(1024, 0, 2);   /* 23 ms: room for a busy page */
     node.onaudioprocess = (e) => {
       const L = e.outputBuffer.getChannelData(0), R = e.outputBuffer.getChannelData(1);
       const m = new Int32Array(ex.memory.buffer), o = ex.organ_buffer() >> 2;
-      for (let h = 0; h < 2; h++) {
+      for (let h = 0; h < 4; h++) {
         ex.organ_render();
         for (let i = 0; i < 256; i++) { L[h * 256 + i] = m[o + 2 * i] / 32768; R[h * 256 + i] = m[o + 2 * i + 1] / 32768; }
       }
