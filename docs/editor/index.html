@@ -333,16 +333,42 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   $("readfm").onclick = readFm;
 
   /* ---- what the FM-1 says (firmware 0.5): 41 the state, 42 a user program, 43 a store or delete done */
+  /* The FM-1 holds one SysEx at a time: a request goes only when the one before has its answer (or timed out, after one more try) */
+  var sxq = [], sxCur = null;
+  function ask(bytes, what, want, ms, fail) {   /* want(cmd, b): true when this reply is the request's last */
+    sxq.push({ bytes: bytes, what: what, want: want, ms: ms || 600, tries: 0, fail: fail });
+    if (!sxCur) sxNext();
+  }
+  function sxNext() {
+    sxCur = sxq.shift() || null;
+    if (!sxCur) return;
+    sxCur.tries++;
+    sx(sxCur.bytes, sxCur.what + (sxCur.tries > 1 ? " (again)" : ""));
+    var me = sxCur;
+    me.timer = setTimeout(function () {
+      if (sxCur !== me) return;
+      if (me.tries < 2) { sxq.unshift(me); sxCur = null; sxNext(); return; }
+      logline("dim", "No answer to: " + me.what);
+      if (me.fail) me.fail();
+      sxNext();
+    }, me.ms);
+  }
+  function sxReplied(cmd, b) {
+    if (sxCur && sxCur.want(cmd, b)) { clearTimeout(sxCur.timer); sxNext(); }
+  }
+  function sxClear() { if (sxCur) clearTimeout(sxCur.timer); sxq = []; sxCur = null; }
   function readFm() {
     if (!out) return;
     answered = false;
-    sx([0x01], "read the sound"); sx([0x02], "read your programs 112..127");
+    ask([0x01], "read the sound", function (c) { return c === 0x41; });
+    ask([0x02], "read your programs 112..127", function (c, b) { return c === 0x42 && b[0] === 127; });
     setTimeout(function () { if (!answered) { logline("dim", "No answer from the FM-1: a firmware before 0.5 cannot be read (the editor still sends)."); $("fwchip").textContent = "for the FM-1 · no answer"; } }, 1500);
   }
   function fromFm(d) {
     if (d.length < 6 || d[1] !== 0x7D || d[2] !== 0x42 || d[3] !== 0x33) return;
     var b = Array.prototype.slice.call(d, 5, d.length - 1), cmd = d[4];
     answered = true;
+    setTimeout(function () { sxReplied(cmd, b); }, 0);   /* after this reply is handled */
     if (cmd === 0x41 && b.length >= 35) {
       S.up = b.slice(0, 9); S.lo = b.slice(9, 18); S.pd = b.slice(18, 20);
       S.vtype = b[20]; S.vup = b[21]; S.vlo = b[22]; S.perc = b[23]; S.third = b[24]; S.fast = b[25]; S.soft = b[26];
@@ -371,7 +397,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       if (bkPend > 0) {
         bkPend--;
         if (b[1]) $("bkrestmsg").textContent = "Program " + b[0] + ": " + msg + ".";
-        if (!bkPend) { $("bkrestmsg").textContent = "Restored: programs 112 to 127 and the extended parameters are on the FM-1."; sx([0x02], "read your programs 112..127"); }
+        if (!bkPend) { $("bkrestmsg").textContent = "Restored: programs 112 to 127 and the extended parameters are on the FM-1."; ask([0x02], "read your programs 112..127", function (c, b) { return c === 0x42 && b[0] === 127; }); }
       }
       logline("in", "SysEx: program " + b[0] + " " + msg);
       $("storemsg").textContent = "Program " + b[0] + ": " + msg + ".";
@@ -441,14 +467,14 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       if (!sysexOk || !out) { c.querySelector("#storemsg").textContent = "Storing needs a connection with SysEx (and firmware 0.5)."; return; }
       if (USER[n] && !confirmOver(n)) return;
       for (var i = 0; i < 12; i++) bytes.push(i < name.length ? name.charCodeAt(i) : 0);
-      sx(bytes, "store as program " + n + " '" + name + "'");
+      ask(bytes, "store as program " + n + " '" + name + "'", function (c, b) { return c === 0x43 && b[0] === n; }, 6000);
       USER[n] = name || "USER"; S.pgm = n; save(); programList(); paint();
       c.querySelector("#storemsg").textContent = "Program " + n + ": stored, the FM-1 writes it to its flash when nothing sounds.";
     };
     c.querySelector("#del").onclick = function () {
       var n = +sl.value;
       if (!sysexOk || !out || !USER[n]) return;
-      sx([0x04, n], "delete program " + n);
+      ask([0x04, n], "delete program " + n, function (c, b) { return c === 0x43 && b[0] === n; }, 6000);
       delete USER[n]; programList();
     };
     return c;
@@ -507,7 +533,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 
   /* ---- program and settings text */
   function nameOf(n) { return n >= 112 ? (USER[n] || "") : PGM[n] ? PGM[n][0] : ""; }
-  function selectProgram(n) { S.pgm = n; pc(S.ch[0], n - 1); save(); paint(); if (sysexOk && out) setTimeout(function () { sx([0x01], "read the sound"); }, 150); }
+  function selectProgram(n) { S.pgm = n; pc(S.ch[0], n - 1); save(); paint(); if (sysexOk && out) setTimeout(function () { ask([0x01], "read the sound", function (c) { return c === 0x41; }); }, 150); }
 
   /* ---- backup: the user's programs (SysEx 05 / 06, 44 bytes each) and the extended parameters, as a JSON file */
   var bk = null, bkFile = null, bkArmed = false, bkPend = 0;
@@ -516,9 +542,9 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     if (!needSx("bksavemsg")) return;
     bk = { type: "b3organ-backup", format: 1, date: new Date().toISOString().slice(0, 10), firmware: "", programs: {}, got: 0, state: false };
     $("bksavemsg").textContent = "Reading the FM-1 …";
-    sx([0x01], "read the sound");
-    for (var n = 112; n <= 127; n++) sx([0x05, n], "read program " + n);
-    setTimeout(function () { if (bk && (bk.got < 16 || !bk.state)) { $("bksavemsg").textContent = "The FM-1 did not answer completely (" + bk.got + " of 16 programs). Is firmware 0.5 on it?"; bk = null; } }, 3000);
+    function failed() { if (bk) { $("bksavemsg").textContent = "The FM-1 did not answer completely (" + bk.got + " of 16 programs): no file written. Is firmware 0.5 on it?"; bk = null; sxClear(); } }
+    ask([0x01], "read the sound", function (c) { return c === 0x41; }, 800, failed);
+    for (var n = 112; n <= 127; n++) (function (n) { ask([0x05, n], "read program " + n, function (c, b) { return c === 0x45 && b[0] === n; }, 800, failed); })(n);
   };
   function bkDone() {
     var o = { type: bk.type, format: bk.format, date: bk.date, firmware: bk.firmware, programs: bk.programs,
@@ -560,10 +586,12 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     bkArmed = false;
     var o = bkFile, c = S.ch[0];
     bkPend = 16;
-    for (var n = 112; n <= 127; n++) {
-      var p = o.programs[n];
-      if (p) sx([0x06, n].concat(p.data), "restore program " + n + " '" + p.name + "'"); else sx([0x04, n], "delete program " + n);
-    }
+    function failed() { bkPend = 0; sxClear(); $("bkrestmsg").textContent = "The FM-1 did not confirm every program: please check them and restore again. (It writes only when nothing sounds.)"; }
+    for (var n = 112; n <= 127; n++) (function (n) {   /* one at a time: the FM-1 confirms each after writing its flash (when nothing sounds) */
+      var p = o.programs[n], done = function (c, b) { return c === 0x43 && b[0] === n; };
+      if (p) ask([0x06, n].concat(p.data), "restore program " + n + " '" + p.name + "'", done, 6000, failed);
+      else ask([0x04, n], "delete program " + n, done, 6000, failed);
+    })(n);
     S.chr = o.settings.character; S.lesp = o.settings.leslie.slice(); S.tonp = [o.settings.tuning, o.settings.keyclick];
     nrpn(c, 1, 0, S.chr); S.lesp.forEach(function (v, i) { nrpn14(c, 2, i, v); }); S.tonp.forEach(function (v, i) { nrpn14(c, 3, i, v); });
     save(); paint();
