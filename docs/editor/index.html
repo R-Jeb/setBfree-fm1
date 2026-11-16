@@ -81,10 +81,6 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 .slider output { font: 500 .9rem var(--mono); text-align: right; }
 .ticksrow { position: relative; height: 1.3em; margin: 2px calc(var(--ow) + 10px) 0 calc(var(--lw) + 10px); font: 400 .75rem var(--mono); color: var(--dim); }
 .ticksrow span { position: absolute; top: 0; transform: translateX(-50%); }
-.params { display: grid; gap: 8px; }
-.param { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(120px, 1.4fr) 110px; gap: 10px; align-items: center; opacity: .55; }
-.param code { font: 400 .8rem var(--mono); color: var(--dim); word-break: break-word; }
-.param .range { font: 400 .8rem var(--mono); color: var(--dim); text-align: right; }
 .banner { border: 1px dashed var(--warn); color: var(--warn); border-radius: 8px; padding: 10px 14px; font-size: .92rem; }
 .log { font: 400 .82rem/1.5 var(--mono); height: 320px; overflow: auto; background: var(--panel2); border-radius: 8px; padding: 10px; }
 .log .out { color: var(--accent); } .log .in { color: var(--ok); } .log .dim { color: var(--dim); }
@@ -104,7 +100,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   .manuals .storerow { grid-template-columns: 1fr; }
 }
 .storebtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-@media (max-width: 560px) { .param { grid-template-columns: 1fr; } .param .range { text-align: left; } :root { --lw: 70px; --ow: 48px; } .track { height: 150px; } }
+@media (max-width: 560px) { :root { --lw: 70px; --ow: 48px; } .track { height: 150px; } }
 @media (prefers-reduced-motion: no-preference) { .knob { transition: top .06s linear; } }
 </style>
 
@@ -177,20 +173,30 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     </div>
   </section>
 
-  <!-- REVERB -->
-  <section class="page" id="p-reverb" hidden>
-    <div class="card">
+  <!-- TONE AND REVERB -->
+  <section class="page" id="p-tonerev" hidden>
+    <div class="grid">
+      <div class="card">
+        <h2>Tone generator</h2>
+        <div class="slider" style="--ow:84px"><span class="lbl">Tuning</span><input type="range" id="tun" min="4000" max="4800" step="1"><output id="tunv"></output></div>
+        <div class="ticksrow" style="--ow:84px" data-max="800" data-off="4000"><span>400</span><span>420</span><span>440</span><span>460</span><span>480</span></div>
+        <div class="row" style="margin-top:10px"><button id="tundef">440 Hz</button><button id="tundn" title="−0.1 Hz">−0.1</button><button id="tunup" title="+0.1 Hz">+0.1</button></div>
+        <p class="note" style="margin-top:10px">setBfree's <code>osc.tuning</code>: the pitch of A, 400 to 480 Hz in steps of 0.1 Hz; all wheels follow (the gears stay). NRPN 3/0 with 14 bits (CC 99 = 3, CC 98 = 0, CC 6 and CC 38: 0.1 Hz), firmware 0.5. Kept with the settings.</p>
+        <div class="row" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)"><span class="lbl">Extended parameters</span><div class="seg" id="tonx"></div></div>
+        <div id="tonxbox" hidden>
+          <div class="slider" style="margin-top:14px;--ow:84px"><span class="lbl">Key click</span><input type="range" id="clk" min="0" max="1000" step="5"><output id="clkv"></output></div>
+          <div class="ticksrow" style="--ow:84px" data-max="100"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+          <div class="row" style="margin-top:10px"><button id="clkdef">setBfree's value</button></div>
+          <p class="note" style="margin-top:10px">setBfree's <code>osc.attack.click.level</code>: how deep the short burst goes when a key closes (0 to 100 %, setBfree's 0.5 = 50 %). NRPN 3/1 with 14 bits (CC 6 and CC 38: 0.1 %), firmware 0.5. Kept with the settings.</p>
+        </div>
+      </div>
+      <div class="card">
       <h2>Reverb</h2>
       <div class="slider"><span class="lbl">Mix</span><input type="range" id="rev" min="0" max="8" step="1"><output id="revv"></output></div>
       <div class="ticksrow" data-max="8" data-index="1"><span>0</span><span>1</span><span>2</span><span>4</span><span>8</span><span>16</span><span>32</span><span>64</span><span>127</span></div>
       <p class="note" style="margin-top:10px">CC 91, setBfree's <code>reverb.mix</code>. The steps double, like the knob on the FM-1; the first ones are fine.</p>
     </div>
-    <div class="card"><h2>Advanced · setBfree's names and defaults</h2><div class="banner">Not in the firmware yet.</div><div class="params" id="adv-rev" style="margin-top:12px"></div></div>
-  </section>
-
-  <!-- TONE -->
-  <section class="page" id="p-tone" hidden>
-    <div class="card"><h2>Tone generator, percussion, scanner · setBfree's names and defaults</h2><div class="banner">Not in the firmware yet.</div><div class="params" id="adv-tone" style="margin-top:12px"></div></div>
+    </div>
   </section>
 
   <!-- PROGRAMS -->
@@ -234,13 +240,14 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 
   function defaults() {
     return { up: [8, 8, 8, 0, 0, 0, 0, 0, 0], lo: [8, 3, 8, 0, 0, 0, 0, 0, 0], pd: [8, 6], vtype: 0, vup: 0, vlo: 0,
-      perc: 0, third: 1, fast: 0, soft: 0, swell: 127, od: 0, drv: 12, chr: 16, lesp: [403, 4234, 360, 3573, 161, 321, 4127, 1371], v: 2, les: 0, rev: 12, pgm: 5, ch: [1, 2, 3] };
+      perc: 0, third: 1, fast: 0, soft: 0, swell: 127, od: 0, drv: 12, chr: 16, lesp: [403, 4234, 360, 3573, 161, 321, 4127, 1371], tonp: [4400, 500], v: 2, les: 0, rev: 12, pgm: 5, ch: [1, 2, 3] };
   }
   try { S = JSON.parse(localStorage.getItem("b3editor") || "null"); } catch (e) { S = null; }
   if (!S || !S.up || !S.ch) S = defaults();
   if (!S.v) { S.drv = 12; S.v = 2; }   /* saved before firmware 0.4: drv was the character 0..8, now it is the drive 0..16 */
   if (S.chr === undefined) S.chr = 16;
   if (!S.lesp) S.lesp = [403, 4234, 360, 3573, 161, 321, 4127, 1371];
+  if (!S.tonp) S.tonp = [4400, 500];
   function save() { try { localStorage.setItem("b3editor", JSON.stringify(S)); } catch (e) {} jsonbox(); }
   function $(id) { return document.getElementById(id); }
 
@@ -283,7 +290,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     var c = S.ch[0];
     cc(c, 92, VTCC[S.vtype]); bin(c, 31, S.vup); bin(c, 30, S.vlo);
     bin(c, 80, S.perc); cc(c, 83, S.third ? 0 : 127); bin(c, 82, S.fast); bin(c, 81, S.soft);
-    cc(c, 11, S.swell); bin(c, 65, S.od); cc(c, 93, dig(S.drv)); nrpn(c, 1, 0, S.chr); S.lesp.forEach(function (v, i) { nrpn14(c, 2, i, v); }); cc(c, 1, [20, 64, 110][S.les === 0 ? 1 : S.les === 1 ? 0 : 2]); cc(c, 91, S.rev);
+    cc(c, 11, S.swell); bin(c, 65, S.od); cc(c, 93, dig(S.drv)); nrpn(c, 1, 0, S.chr); S.lesp.forEach(function (v, i) { nrpn14(c, 2, i, v); }); S.tonp.forEach(function (v, i) { nrpn14(c, 3, i, v); }); cc(c, 1, [20, 64, 110][S.les === 0 ? 1 : S.les === 1 ? 0 : 2]); cc(c, 91, S.rev);
   }
   /* the FM-1 calls itself "Felucca" on USB (the platform's name: the installer and the Firmware Hub look for it); here it is the organ */
   function shown(name) { return /felucca/i.test(name) ? "B3 ORGAN" : name; }
@@ -339,6 +346,10 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       S.les = b[27]; S.od = b[28]; S.drv = b[29]; S.chr = b[30]; S.rev = b[31]; S.swell = b[32]; S.pgm = b[33] || S.pgm;
       var vs = 35;
       if (b.length >= 51 && b[35] < 0x20) { for (var k = 0; k < 8; k++) S.lesp[k] = b[35 + 2 * k] << 7 | b[36 + 2 * k]; vs = 51; }   /* the Leslie's (MSBs are < 0x20; a version starts with a digit or d) */
+      if (vs === 51 && b.length >= 55) {           /* tuning and key click */
+        var tu = b[51] << 7 | b[52], ck = b[53] << 7 | b[54];
+        if (tu >= 4000 && tu <= 4800 && ck <= 1000) { S.tonp = [tu, ck]; vs = 55; }
+      }
       var v = String.fromCharCode.apply(null, b.slice(vs));
       $("fwchip").textContent = "FM-1 · firmware " + (v || "?");
       logline("in", "SysEx: the FM-1's sound" + (b[33] ? ", program " + b[33] : "") + ", firmware " + v);
@@ -467,6 +478,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     seg("decay", ["Slow", "Fast"], function () { return S.fast; }, function (i) { S.fast = i; bin(S.ch[0], 82, i); });
     seg("vol", ["Normal", "Soft"], function () { return S.soft; }, function (i) { S.soft = i; bin(S.ch[0], 81, i); });
     seg("od", ["Off", "On"], function () { return S.od; }, function (i) { S.od = i; bin(S.ch[0], 65, i); });
+    seg("tonx", ["Off", "On"], function () { return tonExt; }, function (i) { tonExt = i; $("tonxbox").hidden = !i; });
     seg("lesx", ["Off", "On"], function () { return lesExt; }, function (i) { lesExt = i; $("lesxbox").hidden = !i; });   /* shown only when switched on, off at every start */
     seg("les", ["Stop", "Slow", "Fast"], function () { return S.les; }, function (i) { S.les = i; cc(S.ch[0], 1, [64, 20, 110][i]); });
   }
@@ -496,22 +508,6 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     s.onchange = function () { S.ch[m] = +s.value; save(); paint(); };
   });
 
-  /* ---- advanced (setBfree's names; shown, not yet sendable) */
-  var ADV = {
-    rev: [["reverb.mix", 0.1, 0, 1], ["reverb.inputgain", 0.1, 0, 1], ["reverb.outputgain", 1, 0, 2]],
-    tone: [["osc.tuning", 440, 400, 480, "Hz"], ["osc.perc.fast", 1, 0.2, 4, "s"], ["osc.perc.slow", 4, 1, 8, "s"], ["osc.perc.soft", 0.5012, 0, 1], ["osc.perc.gain", 11, 0, 20],
-      ["osc.attack.click.level", 0.5, 0, 1], ["osc.release.click.level", 0.25, 0, 1], ["scanner.hz", 7.25, 4, 10, "Hz"],
-      ["scanner.modulation.v1", 3, 0, 12], ["scanner.modulation.v2", 6, 0, 12], ["scanner.modulation.v3", 9, 0, 12]]
-  };
-  Object.keys(ADV).forEach(function (k) {
-    var host = $("adv-" + k);
-    ADV[k].forEach(function (p) {
-      var d = document.createElement("div"); d.className = "param";
-      d.innerHTML = '<code>' + p[0] + '</code><input type="range" disabled min="' + p[2] + '" max="' + p[3] + '" step="any" value="' + p[1] + '" aria-label="' + p[0] + '"><span class="range">' + p[1] + (p[4] ? " " + p[4] : "") + '</span>';
-      host.appendChild(d);
-    });
-  });
-
   /* ---- the Leslie's speeds and times (NRPN 2/0..7): stored in 0.1 rpm and ms, shown in rpm and s */
   var LESP = [["Horn slow", 0, 1500, 5, "rpm"], ["Horn fast", 600, 9000, 10, "rpm"], ["Drum slow", 0, 1500, 5, "rpm"], ["Drum fast", 600, 9000, 10, "rpm"],
     ["Horn speed-up", 20, 2000, 1, "s"], ["Horn slow-down", 20, 2000, 1, "s"], ["Drum speed-up", 200, 10000, 10, "s"], ["Drum slow-down", 200, 10000, 10, "s"]];
@@ -530,11 +526,22 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   });
   $("lesdef").onclick = function () { LESDEF.forEach(function (v, i) { S.lesp[i] = v; nrpn14(S.ch[0], 2, i, v); }); save(); paint(); };
 
+  /* ---- tuning and key click (NRPN 3/0, 3/1): 0.1 Hz and 0.1 % */
+  var tonTimer = {}, tonExt = 0;
+  function tonSend(i) { clearTimeout(tonTimer[i]); tonTimer[i] = setTimeout(function () { nrpn14(S.ch[0], 3, i, S.tonp[i]); }, 40); }
+  function tonTo(i, v) { S.tonp[i] = v; save(); paint(); tonSend(i); }
+  $("tun").oninput = function () { S.tonp[0] = +this.value; save(); paint(); tonSend(0); };
+  $("clk").oninput = function () { S.tonp[1] = +this.value; save(); paint(); tonSend(1); };
+  $("tundef").onclick = function () { tonTo(0, 4400); };
+  $("tundn").onclick = function () { tonTo(0, Math.max(4000, S.tonp[0] - 1)); };
+  $("tunup").onclick = function () { tonTo(0, Math.min(4800, S.tonp[0] + 1)); };
+  $("clkdef").onclick = function () { tonTo(1, 500); };
+
   /* ---- the ticks under a slider: each at its value (data-index: the n-th span is position n) */
   Array.prototype.forEach.call(document.querySelectorAll(".ticksrow"), function (row) {
     var max = +row.getAttribute("data-max"), byIndex = row.hasAttribute("data-index");
     Array.prototype.forEach.call(row.children, function (sp, i) {
-      var v = byIndex ? i : +sp.textContent;
+      var off = +(row.getAttribute("data-off") || 0), v = byIndex ? i : +sp.textContent * (off ? 10 : 1) - off;
       sp.style.left = "calc(8px + (100% - 16px) * " + (v / max) + ")";
     });
   });
@@ -546,17 +553,19 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       Array.prototype.forEach.call(manualCards[2].querySelectorAll(".bar"), function (b) { b.style.width = w + "px"; });
     }
     manualCards.forEach(function (c) { c._paint(); });
-    ["vtype", "vroute", "perc", "harm", "decay", "vol", "od", "les", "lesx"].forEach(paintSeg);
+    ["vtype", "vroute", "perc", "harm", "decay", "vol", "od", "les", "lesx", "tonx"].forEach(paintSeg);
     $("swell").value = S.swell; $("swellv").textContent = S.swell;
     $("drv").value = S.drv; $("drvv").textContent = S.drv;
     $("chr").value = S.chr; $("chrv").textContent = S.chr;
     S.lesp.forEach(function (v, i) { $("lp" + i).value = v; $("lpv" + i).textContent = lesFmt(i, v); });
+    $("tun").value = S.tonp[0]; $("tunv").textContent = (S.tonp[0] / 10).toFixed(1) + " Hz";
+    $("clk").value = S.tonp[1]; $("clkv").textContent = (S.tonp[1] / 10).toFixed(1) + " %";
     var ri = nearestRev(S.rev); $("rev").value = ri; $("revv").textContent = REVS[ri];
     $("pgm").value = S.pgm; pgmName(); programList();
     [0, 1, 2].forEach(function (m) { $("ch" + m).value = S.ch[m]; });
     jsonbox();
   }
-  var TABS = [["manuals", "Manuals"], ["odles", "Overdrive & Leslie"], ["reverb", "Reverb"], ["tone", "Tone"], ["programs", "Programs"], ["monitor", "Monitor"]];
+  var TABS = [["manuals", "Manuals"], ["odles", "Overdrive & Leslie"], ["tonerev", "Tone & Reverb"], ["programs", "Programs"], ["monitor", "Monitor"]];
   var tabs = $("tabs");
   TABS.forEach(function (t) {
     var b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "tab"); b.id = "t-" + t[0]; b.textContent = t[1];
@@ -565,6 +574,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   });
   function show(n) {
     if (n === "overdrive" || n === "leslie") n = "odles";   /* the old pages */
+    if (n === "reverb" || n === "tone") n = "tonerev";
     if (!TABS.some(function (t) { return t[0] === n; })) n = "manuals";
     TABS.forEach(function (t) { $("p-" + t[0]).hidden = t[0] !== n; $("t-" + t[0]).setAttribute("aria-selected", String(t[0] === n)); });
     if (n === "manuals") paint();
