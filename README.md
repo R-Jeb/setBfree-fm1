@@ -14,6 +14,8 @@ build.
 
 **Try it in the browser:** [r-jeb.github.io/setBfree-fm1/play](https://r-jeb.github.io/setBfree-fm1/play/), the same engine as WebAssembly (`web/`, rebuilt with `web/build.sh`; `docs/play/index.html` is a copy of `web/index.html`).
 
+**Edit it from the browser:** [r-jeb.github.io/setBfree-fm1/editor](https://r-jeb.github.io/setBfree-fm1/editor/) (Chrome or Edge, the FM-1 on USB): drawbars, vibrato, percussion, overdrive with its character, Leslie, reverb, and your own programs 112 to 127. Reading the FM-1 and storing programs need firmware 0.5.
+
 > **Status:** 0.4, tested by one person on an FM-1 with the older flash chip (Puya P25Q80) and on one with the newer one (UC25HQ80). Please report what sounds different from setBfree.
 
 ## What you get
@@ -29,7 +31,7 @@ build.
 | **Battery** | A four-bar cell at the bottom right of the screen; a bolt instead when a USB host has the FM-1. |
 | **Reverb** | setBfree's reverb (combs and all-passes), amount on KNOB 4 or CC 91; impulse response within -45 dB of setBfree's. |
 | **Leslie** | setBfree's rotary model: horn and drum with Doppler, horn directivity, reflections, stop / slow / fast with acceleration and braking; the stopped state matches setBfree's to about -40 dB. |
-| **Programs** | All 110 programs of setBfree's `default.pgm` (registrations and switch settings), by the PRESETS knob or MIDI program change. |
+| **Programs** | All 110 programs of setBfree's `default.pgm` (registrations and switch settings), by the PRESETS knob or MIDI program change; 16 of your own (112 to 127), stored with the web editor. |
 | **Manuals** | Upper (MIDI channel 1, with percussion), lower (channel 2, its own drawbars and vibrato switch) and pedal (channel 3, 16' and 8' only, no vibrato or percussion); setBfree's wiring and tapering for all three. |
 | **MIDI** | USB and the TRS jack, channels 1 to 3 as above (other channels play the upper manual), setBfree's default controller numbers (drawbars 70 to 78 follow the channel, swell 7 / 11, Leslie 1 / 64, vibrato 31 / 92, percussion 66 / 80 to 83, overdrive 65 / 93, reverb 91). |
 | **USB audio, updates, rescue** | The platform underneath (Felucca, SLOOP, Dinghy): updates over USB through the [FM-1 Firmware Hub](https://fm1.designburgapps.com), a USB rescue (hold **OCT-** while switching on), a crash screen, and the FM-1 as a stereo USB audio input for recording. |
@@ -62,7 +64,7 @@ recording to recording by up to 10 dB or more, and the Raspberry Pi has more ene
 | **REC** | The FM-1's own keys play the upper manual, the lower manual or the pedal (shown as `KEYS UPPER` and so on on every screen) |
 | **KNOB 1** | Screen: 1 upper, 2 lower, 3 pedal, 4 test values (load of each stage, level of the wheels, limiter, output, MIDI) |
 | **SELECT** knob / **ALGORITHM** knob | Choose a drawbar / set its level 0 to 8, on the manual of the screen (the pedal has two: 16' and 8') |
-| **PRESETS** knob | Step through setBfree's registrations (e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith); they set the upper manual |
+| **PRESETS** knob | Step through setBfree's registrations (e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith; they set the upper manual), then your own 112 to 127 (all three manuals and the effects) |
 | **KNOB 2** | Vibrato / chorus type V1, C1, V2, C2, V3, C3 |
 | **KNOB 3** | Overdrive drive (0 to 16) |
 | **KNOB 4** | Reverb amount (0 to 127), in doubling steps: 0, 1, 2, 4, 8, 16, 32, 64, 127 |

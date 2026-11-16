@@ -151,7 +151,12 @@ USB-MIDI, class compliant, cable 0.
 | `midi_send(status, d1, d2)` | send one message (from the main loop only) |
 
 `status` includes the channel: `0x90` note on channel 1, `0x93` channel 4; a note on with velocity 0 is a
-note off. SysEx is the platform's (the updater): it does not reach the app.
+note off. SysEx goes to the platform (the updater), except frames that start with `7D` (the ID for non-commercial use):
+
+| | |
+| --- | --- |
+| `sysex_get(&p, &n)` | 1: a frame that starts with `7D` is waiting; `p` points at the bytes between F0 and F7. Then call `sysex_done()` |
+| `sysex_send(p, n)` | send a whole SysEx, F0 .. F7 included (USB; from the main loop) |
 
 ## Settings
 
@@ -162,6 +167,13 @@ static int settings_save(const void *p, uint32_t n);   /* 0 = saved */
 
 Up to 256 bytes, kept with their length and a CRC32 in one 4 KiB flash sector (`SETTINGS_AT`, 0xFC000). A
 change of size or a broken save reads as "nothing saved": start from your defaults then.
+
+```c
+static int data_load(void *p, uint32_t n);             /* the next sector (DATA_AT, 0xFD000): up to 1 KiB */
+static int data_save(const void *p, uint32_t n);
+```
+
+The same for a second, bigger block of your own (B3 ORGAN keeps its user programs there).
 
 **Save when nothing sounds.** Erasing the sector holds the interrupts off for tens of milliseconds: the sound
 drops out. `dinghy.c` saves 2 s after the last change, once all voices are silent. Flash wears out after about
@@ -179,7 +191,7 @@ drops out. `dinghy.c` saves 2 s after the last change, once all voices are silen
 The build prints what you use and fails above the limits.
 
 Flash (1 MiB) as Dinghy uses it: the app, the update staging area (0xE0000, the platform's) and the settings
-sector (0xFC000). The other firmwares of the family keep their data in 0x97000..0xFBFFF; a new firmware simply
+sectors (0xFC000, 0xFD000). The other firmwares of the family keep their data in 0x97000..0xFBFFF; a new firmware simply
 finds its own magic missing and starts fresh. To store more (samples, patterns), widen `FL_RANGE_OK` in
 platform.c to the range you pick: it is the guard that keeps a bug from erasing anything else.
 
