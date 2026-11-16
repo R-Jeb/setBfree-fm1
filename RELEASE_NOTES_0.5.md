@@ -8,8 +8,8 @@ What is new since 0.4:
   percussion, Leslie, overdrive, reverb, swell, the program and the firmware's version) and sends every change at once. Five pages:
   Manuals (with the presets beside the pedal), Overdrive & Leslie, Tone & Reverb, Backup and a MIDI monitor.
 - **Your own programs 112 to 127.** The editor stores the FM-1's whole sound in one of them, with a name of up to 12 letters: the drawbars
-  of all three manuals, vibrato, percussion, Leslie, overdrive (on, drive, character) and reverb. They are in their own flash sector, kept
-  through power off and through firmware updates. The PRESETS knob steps through them after setBfree's programs, program change 111 to
+  of all three manuals, vibrato, percussion, Leslie, overdrive (on, drive, character) and reverb. They are in their own flash sector and stay
+  through power off; save a backup before you flash another firmware. The PRESETS knob steps through them after setBfree's programs, program change 111 to
   126 selects them, and the screen shows their names. setBfree's programs still change only what they name; yours set everything.
 - **Overdrive character.** setBfree's `overdrive.character` (0 to 127, 16 as before) next to the drive: in the editor, or NRPN 1/0.
 - **Leslie, extended parameters:** the horn's and the drum's slow and fast speeds and how fast each speeds up and slows down
