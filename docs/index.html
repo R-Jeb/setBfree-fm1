@@ -1,0 +1,326 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     B3 ORGAN for the M-VAVE FM-1: the site (install, screens, controls). The installer's update protocol is Felucca's
+     (js/fm1ota.js, js/fm1pkg.js: Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments, GPL-3.0-only).
+     A new release: tools/make_site.py VERSION PACKAGE.fwsc (copies the package and sets META below). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B3 ORGAN for the FM-1</title>
+<meta name="description" content="A B3 tonewheel organ for the M-VAVE FM-1, after setBfree: install it from the browser.">
+<link rel="icon" href="logo.png">
+<style>
+  :root { --bg: #2e231b; --panel: #3a2c22; --panel2: #443428; --line: #5b4636; --fg: #f4eee2; --dim: #c4b4a2;
+          --amber: #e0893a; --amber-fg: #1a0f05; --brown: #6e3a1e; --ok: #8fc46a; --bad: #ff6b5b;
+          --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 var(--font); }
+  a { color: var(--amber); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header.hero { background: radial-gradient(120% 90% at 70% 0%, #4a3626 0%, var(--bg) 65%); border-bottom: 1px solid var(--line); }
+  .hero .wrap { display: grid; grid-template-columns: 300px 1fr; gap: 40px; align-items: center; padding-top: 48px; padding-bottom: 48px; }
+  .hero img { width: 300px; height: 300px; image-rendering: pixelated; border-radius: 14px; border: 8px solid #050403; box-shadow: 0 18px 50px rgba(0,0,0,.6), 0 0 0 1px var(--line); }
+  .kicker { font: 600 .8rem var(--font); letter-spacing: .14em; text-transform: uppercase; color: var(--amber); margin: 0 0 10px; }
+  h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); line-height: 1.05; margin: 0 0 14px; letter-spacing: -.01em; }
+  .lead { color: var(--dim); font-size: 1.1rem; margin: 0 0 24px; max-width: 34em; }
+  .btns { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn { display: inline-block; text-decoration: none; font: 600 .95rem var(--font); padding: 11px 18px; border-radius: 8px; border: 1px solid var(--line); color: var(--fg); background: var(--panel2); cursor: pointer; }
+  .btn.primary { background: var(--amber); color: var(--amber-fg); border-color: var(--amber); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .chip { display: inline-block; font: 500 .8rem var(--mono); color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; margin-left: 6px; vertical-align: middle; }
+  section { padding: 56px 0; border-bottom: 1px solid var(--line); }
+  h2 { font-size: 1.7rem; margin: 0 0 8px; }
+  h2 + .sub { color: var(--dim); margin: 0 0 28px; max-width: 46em; }
+  h3 { font-size: 1.1rem; margin: 0 0 6px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  /* install */
+  .install { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; }
+  ol.steps { margin: 0; padding-left: 1.3em; } ol.steps li { margin: 0 0 8px; }
+  .go { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  progress { width: 100%; height: 10px; margin-top: 16px; accent-color: var(--amber); }
+  #status { font: 500 .95rem var(--mono); margin-top: 10px; min-height: 1.5em; }
+  .warn { border-left: 4px solid var(--amber); background: var(--panel2); padding: 10px 14px; border-radius: 0 8px 8px 0; color: var(--dim); font-size: .92rem; }
+  details { margin-top: 14px; } summary { cursor: pointer; color: var(--dim); }
+  pre#log { font: .78rem/1.4 var(--mono); color: var(--dim); background: #221a14; border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; }
+  .small { color: var(--dim); font-size: .9rem; }
+  /* screens */
+  .screens { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+  .screen img { display: block; width: 100%; max-width: 360px; margin: 0 auto 14px; image-rendering: pixelated; border-radius: 8px; border: 6px solid #050403; box-shadow: 0 0 0 1px var(--line); }
+  .screen ul { margin: 0; padding-left: 1.1em; color: var(--dim); font-size: .93rem; } .screen li { margin-bottom: 4px; }
+  .screen b, .screen code { color: var(--fg); }
+  .nr { font: 700 .8rem var(--mono); color: var(--amber-fg); background: var(--amber); border-radius: 4px; padding: 1px 7px; margin-right: 8px; }
+  /* controls */
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 500; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; }
+  td:first-child { white-space: nowrap; font-weight: 600; }
+  .feat { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+  .feat p { margin: 0; color: var(--dim); font-size: .93rem; }
+  footer { padding: 32px 0 48px; color: var(--dim); font-size: .85rem; }
+  @media (max-width: 760px) {
+    .hero .wrap { grid-template-columns: 1fr; gap: 24px; padding-top: 28px; padding-bottom: 32px; }
+    .hero img { width: 220px; height: 220px; }
+    .install { grid-template-columns: 1fr; }
+    td:first-child { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <img src="logo@2.png" width="300" height="300" alt="The B3 ORGAN start screen: drawbars at an angle over the name">
+    <div>
+      <p class="kicker">Tonewheel organ firmware for the M-VAVE FM-1</p>
+      <h1>B3 ORGAN <span class="chip" id="ver">0.5</span></h1>
+      <p class="lead">91 tonewheels, drawbars for the upper and lower manual and the pedal, key click, vibrato and chorus, percussion, overdrive, reverb and a Leslie, computed from setBfree's own data on both cores of the FM-1.</p>
+      <div class="btns">
+        <a class="btn primary" href="#install">Install</a>
+        <a class="btn" href="play/">Play in the browser</a>
+        <a class="btn" href="editor/">Editor</a>
+        <a class="btn" href="https://github.com/R-Jeb/setBfree-fm1">Source</a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+<section id="install">
+  <div class="wrap">
+    <h2>Install</h2>
+    <p class="sub">From this page, over USB, in Chrome or Edge. Back to the official firmware or to another one at any time.</p>
+    <div class="install">
+      <div class="card">
+        <ol class="steps">
+          <li>Connect the FM-1 to the computer with a USB <b>data</b> cable, directly (no hub), and switch it on.</li>
+          <li>Close other programs and browser tabs that use MIDI.</li>
+          <li>Press <b>Install</b> and allow MIDI (with SysEx) when the browser asks.</li>
+          <li>Wait until it says <b>Done</b>: the FM-1 restarts with the logo. Do not unplug the cable while it writes.</li>
+        </ol>
+        <div class="go">
+          <button class="btn primary" id="go" disabled>Install B3 ORGAN</button>
+          <a class="small" id="dl" href="#">Download the .fwsc</a>
+        </div>
+        <progress id="bar" max="100" value="0"></progress>
+        <div id="status">Loading …</div>
+        <details><summary>Details</summary><pre id="log"></pre></details>
+      </div>
+      <div>
+        <p class="warn">Custom firmware, no warranty: use it at your own risk. Your own programs (112 to 127) stay through an update of B3 ORGAN; before you install another firmware, save a <a href="editor/#backup">backup</a> with the editor.</p>
+        <p class="small">Other ways: the <a href="https://thefirmwarehub.com/">Firmware Hub</a>, <code>tools/fm1_install.py</code> from the repository, or M-VAVE's own updater M-UPGRADE with the .fwsc from the <a href="https://github.com/R-Jeb/setBfree-fm1/releases">Releases</a>.</p>
+        <p class="small">If an install is cut off, the FM-1 stays in update mode: press Install again and it finishes. USB rescue: hold <b>OCT−</b> while switching on.</p>
+        <details>
+          <summary>Back to the official firmware</summary>
+          <p class="small">Download the official FM-1 firmware (V16 or V15) from <a href="https://www.m-vave.com/download">M-VAVE</a> and choose its <code>FM-1.fwsc</code>, unchanged. It is checked here in the browser and sent nowhere.</p>
+          <p class="small"><label><input type="file" id="stock-file" accept=".fwsc"></label></p>
+          <p><button class="btn" id="stock-go" disabled>Install the official firmware</button></p>
+        </details>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="screens">
+  <div class="wrap">
+    <h2>The screens</h2>
+    <p class="sub"><b>KNOB 1</b> turns the pages. Each manual's page shows its drawbars as bars and the other two manuals' values as numbers; the switches, the knob values, the program and the battery are on every page.</p>
+    <div class="screens">
+      <div class="card screen">
+        <img src="logo@2.png" width="480" height="480" alt="The start screen with the logo" loading="lazy">
+        <h3><span class="nr">0</span>Start and screen saver</h3>
+        <ul>
+          <li>After switching on, and again after a minute without a knob, a button or a key.</li>
+          <li>The first knob or button only brings back page 1 (it changes nothing); a key plays at once.</li>
+        </ul>
+      </div>
+      <div class="card screen">
+        <img src="site/screen-upper.png" width="480" height="480" alt="Page 1: the upper manual's drawbars" loading="lazy">
+        <h3><span class="nr">1</span>Upper manual</h3>
+        <ul>
+          <li><b>SELECT</b> chooses a drawbar (16' … 1'), <b>ALGORITHM</b> sets it 0 to 8.</li>
+          <li><b>FX</b>: vibrato / chorus on the upper manual. <b>ENV ARP SEQ PLAY</b>: percussion on, 2nd / 3rd, fast / slow, soft / normal.</li>
+          <li>Below: <code>V/C</code> type (KNOB 2), Leslie, overdrive, which manual the keys play, <code>DRIVE</code> (KNOB 3), <code>REVERB</code> (KNOB 4), the program.</li>
+        </ul>
+      </div>
+      <div class="card screen">
+        <img src="site/screen-lower.png" width="480" height="480" alt="Page 2: the lower manual's drawbars" loading="lazy">
+        <h3><span class="nr">2</span>Lower manual</h3>
+        <ul>
+          <li>The same for the lower manual (MIDI channel 2, or the FM-1's keys after <b>REC</b>).</li>
+          <li><b>FX</b>: vibrato / chorus on the lower manual. The percussion belongs to the upper manual only.</li>
+        </ul>
+      </div>
+      <div class="card screen">
+        <img src="site/screen-pedal.png" width="480" height="480" alt="Page 3: the pedal's two drawbars and the load" loading="lazy">
+        <h3><span class="nr">3</span>Pedal</h3>
+        <ul>
+          <li>Two drawbars, 16' and 8' (MIDI channel 3).</li>
+          <li>Top right: the load of the audio block, <code>W</code> wheels sounding and µs (it must stay under 5800 µs), <code>C2</code> when both cores work.</li>
+          <li>The last MIDI message received.</li>
+        </ul>
+      </div>
+      <div class="card screen">
+        <img src="site/screen-test.png" width="480" height="480" alt="Page 4: test values" loading="lazy">
+        <h3><span class="nr">4</span>Test values</h3>
+        <ul>
+          <li>The load of each stage (organ, preamp, reverb, Leslie) and of both cores.</li>
+          <li>The sum of the wheels and the output, each with its limiter's gain: 100 % means the limiter does nothing.</li>
+          <li>MIDI messages and errors.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="controls">
+  <div class="wrap">
+    <h2>The controls</h2>
+    <p class="sub">Everything also goes over MIDI (USB or the TRS jack) with setBfree's controller numbers: the list is in <a href="https://github.com/R-Jeb/setBfree-fm1/blob/main/README_ORGAN.md">README_ORGAN.md</a>.</p>
+    <div class="card" style="padding:4px 8px; overflow-x:auto">
+      <table>
+        <tr><th>Control</th><th>What it does</th></tr>
+        <tr><td>Keys, OCT− / OCT+</td><td>Play the manual REC chose (F3 to G5), shift the octave</td></tr>
+        <tr><td>REC</td><td>The FM-1's keys play the upper manual, the lower manual or the pedal</td></tr>
+        <tr><td>KNOB 1</td><td>The page: 1 upper, 2 lower, 3 pedal, 4 test values</td></tr>
+        <tr><td>SELECT / ALGORITHM</td><td>Choose a drawbar / set it 0 to 8, on the page's manual</td></tr>
+        <tr><td>PRESETS</td><td>setBfree's registrations (5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith …), then your own 112 to 127</td></tr>
+        <tr><td>KNOB 2</td><td>Vibrato / chorus type V1, C1, V2, C2, V3, C3</td></tr>
+        <tr><td>KNOB 3</td><td>Overdrive drive 0 to 16</td></tr>
+        <tr><td>KNOB 4</td><td>Reverb 0 to 127, in doubling steps</td></tr>
+        <tr><td>FX</td><td>Vibrato / chorus on or off for the page's manual</td></tr>
+        <tr><td>LFO</td><td>Leslie: stop, slow, fast</td></tr>
+        <tr><td>SEL</td><td>Overdrive on / off</td></tr>
+        <tr><td>ENV, ARP, SEQ, PLAY</td><td>Percussion on / off, 2nd / 3rd, fast / slow, soft / normal (page 1)</td></tr>
+        <tr><td>EDIT, SAVE</td><td>Free: the settings are saved by themselves when nothing sounds</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="more">
+  <div class="wrap">
+    <h2>More</h2>
+    <div class="feat">
+      <div class="card"><h3>Editor</h3><p>Drawbars of all three manuals, presets, your own programs 112 to 127, overdrive character, Leslie speeds, tuning and key click, and a backup to a file. <a href="editor/">Open it</a>.</p></div>
+      <div class="card"><h3>Play in the browser</h3><p>The same organ engine in the browser, with the computer keyboard or a MIDI keyboard: a first impression. <a href="play/">Play</a>.</p></div>
+      <div class="card"><h3>setBfree</h3><p>The tonewheels, the preamp, the vibrato scanner and the Leslie follow setBfree's model and data, in integers and measured against it.</p></div>
+      <div class="card"><h3>Releases</h3><p>What changed in each version: the <a href="https://github.com/R-Jeb/setBfree-fm1/releases">release notes</a>. Please report what sounds different from setBfree.</p></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>B3 ORGAN by R-Jeb, after <a href="https://github.com/pantherb/setBfree">setBfree</a> (Fredrik Kilander, Will Panther, Robin Gareus and others), on <a href="https://github.com/zvenson/dinghy">Dinghy</a> (zvenson), <a href="https://github.com/isod89/sloop-fm1">SLOOP</a> (isod89) and <a href="https://github.com/hugelton/Felucca">Felucca</a> by Leo Kuroshita (@kurogedelic), Hügelton Instruments, whose update protocol this installer uses. GPL-3.0, no warranty: <a href="https://github.com/R-Jeb/setBfree-fm1">source</a>.</p>
+    <p>M-VAVE and FM-1 are trademarks of their owners; this firmware is not affiliated with them.</p>
+  </div>
+</footer>
+
+<script type="module">
+import { Updater, OUR_LOADER } from "./js/fm1ota.js";
+import { productOf, logicalImage, validateStockPackage } from "./js/fm1pkg.js";
+
+const META = /*META*/{"version": "0.5", "pkg": "firmware/b3organ-0.5.fwsc", "product": "FM-1_953", "sha256": "e1e4c8a580a26c8883d805740d93037a69cdca2a760de580a366eeb4c494ff4a"}/*/META*/;
+const $ = (id) => document.getElementById(id);
+const TEXT = {
+  nomidi: "This browser cannot do it: open the page in Chrome or Edge (on a computer).",
+  loadfail: "Could not load the firmware: ", badpkg: "The firmware file is damaged: reload the page.",
+  ready: "B3 ORGAN " + META.version + ": ready to install.",
+  start: "Starting …", verify: "Checking …", loader: "Switching to update mode …", write: "Writing … (do not unplug)",
+  reboot: "Restarting …", done: "Done: B3 ORGAN " + META.version + " is on the FM-1.", stopped: "Stopped. Replug the USB cable and press Install again.",
+  error: "Error: ", denied: "MIDI (SysEx) was not allowed. Allow MIDI in the site settings (the icon in the address bar) and press Install again.",
+  notfound: "FM-1 not found. Check the cable (a data cable, directly), close other programs that use MIDI, and press Install again.",
+  model: "The device found is not an FM-1.", lost: "The USB connection was lost. Replug it and press Install again.",
+  noloader: "The FM-1 in update mode was not found. Replug the cable and press Install again (it stays in update mode until it is finished).",
+  noreturn: "The FM-1 did not come back: switch it off and on.", mismatch: "Written, but the FM-1 reports another firmware: ",
+  foreign: "The FM-1 is in the update mode of another firmware. Finish that with its own updater, then press Install again: ",
+  leave: "Writing: do not close the page.",
+  stockValid: "The official firmware is checked: ready.", stockBad: "Not the official firmware (V16 / V15): ",
+  stockConfirm: "Install the official firmware? Your own programs stay in the FM-1's flash only as long as no other firmware overwrites them: save a backup with the editor first.",
+  stockFinish: "The FM-1 is in B3 ORGAN's update mode: press Install B3 ORGAN to finish that first.",
+};
+const log = (t) => { $("log").textContent += t + "\n"; };
+const say = (k, arg = "") => { $("status").textContent = (TEXT[k] || k) + arg; };
+let image = null, stock = null, writing = false;
+$("ver").textContent = META.version;
+$("dl").href = META.pkg; $("dl").textContent = "Download b3organ-" + META.version + ".fwsc";
+const lock = (on) => { writing = on; $("go").disabled = on || !image; $("stock-go").disabled = on || !stock; $("stock-file").disabled = on; };
+window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = TEXT.leave; } });
+
+(async () => {
+  if (!navigator.requestMIDIAccess) { say("nomidi"); return; }
+  try {
+    const r = await fetch(META.pkg);
+    if (!r.ok) throw new Error(META.pkg + ": HTTP " + r.status);
+    const pkg = new Uint8Array(await r.arrayBuffer());
+    if (productOf(pkg) !== META.product) { say("badpkg"); return; }
+    if (META.sha256 && self.crypto && crypto.subtle) {     /* a damaged download is never offered */
+      const h = [...new Uint8Array(await crypto.subtle.digest("SHA-256", pkg))].map((b) => b.toString(16).padStart(2, "0")).join("");
+      if (h !== META.sha256) { say("badpkg"); log("sha256 " + h + ", expected " + META.sha256); return; }
+    }
+    image = logicalImage(pkg);
+    say("ready");
+    lock(false);
+  } catch (e) { say("loadfail", e.message); }
+})();
+
+const total = () => 74 + Math.ceil((image ? image.length : 600000) / 512);   /* the reads of step 1 and step 2, for the bar */
+const step = (k, a) => {
+  log(k + " " + (a ?? ""));
+  if (k === "start") say("start");
+  if (k === "verify") { say("verify"); $("bar").value = Math.min(100, a / total() * 100); }
+  if (k === "loader") say("loader");
+  if (k === "write") { say("write"); $("bar").value = Math.min(100, (74 + a) / total() * 100); }
+  if (k === "reboot") say("reboot");
+  if (k === "done") { $("bar").value = 100; say("done"); }
+};
+const failed = (e) => { if (e && e.code && TEXT[e.code]) say(e.code, e.detail || ""); else say("error", e && e.message); log(String(e && e.stack || e)); };
+async function access() {
+  try { return await navigator.requestMIDIAccess({ sysex: true }); } catch (e) { say("denied"); return null; }
+}
+
+$("go").addEventListener("click", async () => {
+  if (writing || !image) return;
+  lock(true);
+  const midi = await access();
+  if (midi) {
+    try {
+      const up = new Updater(midi, log);
+      const ota = await up.find((id) => /^ota-/i.test(id.model));   /* left in update mode: finish it */
+      if (ota) { ota.link.close(); say((await up.resume(image, step)) ? "done" : "stopped"); }
+      else await up.install(image, META.product, step);
+    } catch (e) { failed(e); }
+  }
+  lock(false);
+});
+
+/* back to the official firmware: only M-VAVE's unchanged FM-1.fwsc (V16 / V15, checked by its SHA-256) */
+$("stock-file").addEventListener("change", async () => {
+  const f = $("stock-file").files[0];
+  stock = null; lock(writing);
+  if (!f) return;
+  try { stock = await validateStockPackage(new Uint8Array(await f.arrayBuffer())); say("stockValid"); }
+  catch (e) { say("stockBad", e.message); }
+  lock(writing);
+});
+$("stock-go").addEventListener("click", async () => {
+  if (writing || !stock || !confirm(TEXT.stockConfirm)) return;
+  lock(true);
+  const midi = await access();
+  if (midi) {
+    try {
+      const up = new Updater(midi, log);
+      const ota = await up.find((id) => /^ota-/i.test(id.model));
+      if (ota) {
+        ota.link.close();
+        if (OUR_LOADER(ota.id)) say("stockFinish");
+        else say((await up.resume(stock.image, step, { product: stock.product })) ? "done" : "stopped");
+      } else await up.install(stock.image, stock.product, step);
+    } catch (e) { failed(e); }
+  }
+  lock(false);
+});
+</script>
+</body>
+</html>

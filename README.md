@@ -14,6 +14,8 @@ build.
 
 **Try it in the browser:** [r-jeb.github.io/setBfree-fm1/play](https://r-jeb.github.io/setBfree-fm1/play/), the same engine as WebAssembly (`web/`, rebuilt with `web/build.sh`; `docs/play/index.html` is a copy of `web/index.html`).
 
+**Install it from the browser:** [r-jeb.github.io/setBfree-fm1](https://r-jeb.github.io/setBfree-fm1/) (Chrome or Edge, the FM-1 on USB), with the screens and the controls explained.
+
 **Edit it from the browser:** [r-jeb.github.io/setBfree-fm1/editor](https://r-jeb.github.io/setBfree-fm1/editor/) (Chrome or Edge, the FM-1 on USB): drawbars, vibrato, percussion, overdrive with its character, Leslie, reverb, and your own programs 112 to 127. Reading the FM-1, storing programs, the extended parameters and the backup need firmware 0.5.
 
 > **Status:** 0.5, tested by one person on an FM-1 (0.4 on one with the older flash chip, Puya P25Q80, and on one with the newer one, UC25HQ80). Please report what sounds different from setBfree.

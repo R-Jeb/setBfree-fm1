@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-only
 """The B3 ORGAN logo: a row of drawbars seen at an angle, some pulled out (brown, white and black knobs, the numbers on the
 shafts), over the wordmark. Drawn here (no photo), 240 x 240 like the FM-1's screen.
 
@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parent.parent
 S = 4                                            # drawn 4x, then scaled down (smooth edges)
 W = 240 * S
-BG = (14, 11, 9)
+BG = (62, 45, 32)                                 # a warm brown, not black
 KNOB = {"b": ((110, 58, 30), (160, 96, 56), (60, 30, 14)),        # body, the lit top, the shadow
         "w": ((232, 226, 210), (255, 252, 240), (150, 144, 130)),
         "k": ((30, 28, 27), (120, 116, 110), (6, 6, 6))}
@@ -42,8 +42,8 @@ def bars():
     c = Image.new("RGBA", (2400, 2000), (0, 0, 0, 0))
     d = ImageDraw.Draw(c)
     py, pitch, sw, kw, step = 300, 200, 64, 150, 70
-    d.rectangle([0, 0, 2400, py], fill=(40, 33, 28))
-    d.line([0, py - 4, 2400, py - 4], fill=(120, 102, 84), width=8)
+    d.rectangle([0, 0, 2400, py], fill=(26, 20, 16))
+    d.line([0, py - 4, 2400, py - 4], fill=(150, 124, 96), width=8)
     nf = font(BOLD, 50)
     for i, (col, p) in enumerate(zip(COLS, PULL)):
         x = 250 + i * pitch
@@ -57,6 +57,7 @@ def bars():
                     d.text((x, y), str(n), font=nf, fill=NUM, anchor="mm")
         base, hi, lo = KNOB[col]
         k0, k1 = ky, ky + 230
+        d.rounded_rectangle([x - kw // 2 - 8, k0 - 8, x + kw // 2 + 8, k1 + 8], radius=32, fill=(18, 12, 8))   # a dark edge: apart from the brown
         d.rounded_rectangle([x - kw // 2, k0, x + kw // 2, k1], radius=26, fill=base)
         d.rounded_rectangle([x - kw // 2 + 8, k0 + 8, x + kw // 2 - 8, k0 + 70], radius=18, fill=hi)
         d.rounded_rectangle([x - kw // 2 + 14, k0 + 90, x + kw // 2 - 14, k1 - 20], radius=16, fill=base)
@@ -95,7 +96,7 @@ def main():
         out.append(c << 3 | (r - 1))
         i += r
     rgb = lambda k: ((pal[3 * k] >> 3) << 11) | ((pal[3 * k + 1] >> 2) << 5) | (pal[3 * k + 2] >> 3)
-    lines = ["/* SPDX-License-Identifier: GPL-3.0-or-later */",
+    lines = ["/* SPDX-License-Identifier: GPL-3.0-only */",
              "/* The B3 ORGAN logo, 240 x 240 (tools/gen_logo.py: do not edit): 32 colours (RGB565), then runs: colour << 3 | (run - 1) */",
              "#define LOGO_W 240u", "#define LOGO_H 240u",
              "static const uint16_t LOGO_PAL[32] = {" + ", ".join("0x%04X" % rgb(k) for k in range(32)) + "};",
