@@ -31,6 +31,7 @@ static uint32_t fm1_ticks(void) { return 0; }
 
 #define ORGAN_POOL __attribute__((section(".pool")))   /* the reverb and Leslie delay lines: zeroed at boot */
 #include "organ_core.h"
+#include "organ_logo.h"                        /* the logo (tools/gen_logo.py) */
 
 /* ---- the screen */
 #define C_ACC RGB(255, 190, 90)                 /* tungsten */
@@ -288,6 +289,26 @@ static void band_ctrl(uint32_t scr, uint32_t r)
     }
     cv_blit(0, Y_CTRL + 18u * r);
 }
+/* ---- the logo: at the start, and again after LOGO_IDLE_MS without a key, a knob or a button (a screen saver) */
+#define LOGO_IDLE_MS 60000u
+static void draw_logo(void)                     /* in two strips of 120 rows (the canvas holds 124) */
+{
+    uint32_t r0, i = 0, left = 0, c = 0;
+    for (r0 = 0; r0 < LOGO_H; r0 += 120u) {
+        uint32_t p = 0, n = 240u * 120u;
+        cv_begin(240, 120, C_BLACK);
+        while (p < n) {
+            if (!left) {
+                if (i >= sizeof LOGO_RLE) break;
+                c = LOGO_RLE[i] >> 3; left = (LOGO_RLE[i] & 7u) + 1u; i++;
+            }
+            for (; left && p < n; left--) cv_px[p++] = swap16(LOGO_PAL[c]);
+        }
+        if (r0 == 0) cv_text(6, 4, &FONT_S, "v" APP_VER, RGB(150, 128, 104));
+        cv_blit(0, r0);
+    }
+}
+
 static void band_preset(void)
 {
     char s[40], *p = s;
@@ -426,7 +447,7 @@ static void app_main(void)
     struct { uint8_t magic, db[NB], vtype, vup, perc, perc3, fast, soft, les, od, drv, pgm, rev; int8_t oct;
              uint8_t dbl[NB], dbp[2], vlo, keys, chr, lesp[2 * LES_NP], tonp[2 * TON_NP]; } set;   /* les: the Leslie's les_p, low byte first */
     uint32_t prev = 0, k, i, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
-    uint32_t hash[22], drawn_screen = 99, drawn_batt = ~0u;
+    uint32_t hash[22], drawn_screen = 99, drawn_batt = ~0u, logo_on = 1, logo_drawn = 0, t_input = 0;
     uint8_t held[27], heldm[27];
 #ifdef DINGHY_HOST
     if (getenv("ORGAN_ONE")) organ_two = 0;          /* tests: all the wheels in one call, to compare with the two halves */
@@ -459,7 +480,7 @@ static void app_main(void)
 
     for (;;) {
         uint32_t keys, down, up, rel, b;
-        int32_t e;
+        int32_t e, t_enc;
         uint8_t st, d1, d2;
         platform_poll();
 
@@ -477,6 +498,12 @@ static void app_main(void)
         }
 
         b = fm1_input_edges(&rel);
+        if (keys || b) t_input = fm1_ms;
+        if (logo_on) {                          /* the logo: the first knob or button only brings the controls back; a key plays */
+            uint32_t any = keys != 0 || b != 0;
+            for (k = 0; k < 7u; k++) if (fm1_enc_take(k) != 0) any = 1;
+            if (any) { logo_on = 0; logo_drawn = 0; screen = 0; drawn_screen = 99; t_input = fm1_ms; b = 0; }
+        } else if (fm1_ms - t_input > LOGO_IDLE_MS) { logo_on = 1; logo_drawn = 0; }
         if (b & (1u << BTN_OCT_DOWN) && oct > -2) { oct--; dirty = 1; t_change = fm1_ms; }
         if (b & (1u << BTN_OCT_UP) && oct < 2) { oct++; dirty = 1; t_change = fm1_ms; }
         if (b & (1u << BTN_FX)) { if (screen == 0) P.vup ^= 1u; else if (screen == 1) P.vlo ^= 1u; }   /* vibrato / chorus on the manual of the screen */
@@ -490,21 +517,22 @@ static void app_main(void)
             if (b & (1u << BTN_PLAY)) P.soft ^= 1u;
         }
 
-        if ((e = fm1_enc_take(ENC_KNOB1)) != 0) screen = clampu((int32_t)screen + e, 3);
-        if ((e = fm1_enc_take(ENC_SELECT)) != 0) if (screen < 3u) sel[screen] = clampu((int32_t)sel[screen] + e, screen == 2 ? 1 : 8);
-        if ((e = fm1_enc_take(ENC_ALGORITHM)) != 0 && screen < 3u) {
+#define enc_in(id) (t_enc = fm1_enc_take(id), t_enc ? (t_input = fm1_ms, t_enc) : 0)
+        if ((e = enc_in(ENC_KNOB1)) != 0) screen = clampu((int32_t)screen + e, 3);
+        if ((e = enc_in(ENC_SELECT)) != 0) if (screen < 3u) sel[screen] = clampu((int32_t)sel[screen] + e, screen == 2 ? 1 : 8);
+        if ((e = enc_in(ENC_ALGORITHM)) != 0 && screen < 3u) {
             volatile uint8_t *db = screen == 0 ? P.db : screen == 1 ? P.dbl : P.dbp;
             db[sel[screen]] = clampu((int32_t)db[sel[screen]] + e, 8);
         }
-        if ((e = fm1_enc_take(ENC_PRESETS)) != 0) {             /* setBfree's registrations, one after the other (the upper manual's) */
+        if ((e = enc_in(ENC_PRESETS)) != 0) {             /* setBfree's registrations, one after the other (the upper manual's) */
             uint32_t n = P.pgm ? P.pgm : 5u;
             for (; e > 0; e--) n = pgm_step(n, 1);
             for (; e < 0; e++) n = pgm_step(n, -1);
             organ_program(n);
         }
-        if ((e = fm1_enc_take(ENC_KNOB2)) != 0) P.vtype = clampu((int32_t)P.vtype + e, 5);
-        if ((e = fm1_enc_take(ENC_KNOB3)) != 0) P.drv = clampu((int32_t)P.drv + e, 16);
-        if ((e = fm1_enc_take(ENC_KNOB4)) != 0) {               /* reverb mix, like CC 91: a doubling a step, fine at the bottom */
+        if ((e = enc_in(ENC_KNOB2)) != 0) P.vtype = clampu((int32_t)P.vtype + e, 5);
+        if ((e = enc_in(ENC_KNOB3)) != 0) P.drv = clampu((int32_t)P.drv + e, 16);
+        if ((e = enc_in(ENC_KNOB4)) != 0) {               /* reverb mix, like CC 91: a doubling a step, fine at the bottom */
             static const uint8_t REVS[9] = {0, 1, 2, 4, 8, 16, 32, 64, 127};
             int32_t j = 0;
             while (j < 8 && REVS[j + 1] <= P.rev) j++;                      /* the step at or below the value (CC 91 may sit between) */
@@ -555,13 +583,15 @@ static void app_main(void)
             load_us = load_org = load_od = load_rv = load_le = 0;
         }
 
-        if (screen != drawn_screen) {           /* a new screen: clear, and draw every band */
+        if (logo_on) {
+            if (!logo_drawn) { logo_drawn = 1; draw_logo(); }
+        } else if (screen != drawn_screen) {    /* a new screen: clear, and draw every band */
             drawn_screen = screen;
             lcd_fill(0, 0, 240, 240, C_BLACK);
             for (i = 0; i < 22u; i++) hash[i] = 0xFFFFFFFFu;
             drawn_batt = ~0u;
         }
-        {
+        if (!logo_on) {
             uint32_t h, m, r;
             h = hmix(0, screen);
             if (h != hash[0]) { hash[0] = h; band_header(screen); }
@@ -597,7 +627,7 @@ static void app_main(void)
         }
         {
             uint32_t bs = battery_state(), sk, key = state_key(oct, &sk);
-            if (bs != drawn_batt) { drawn_batt = bs; draw_battery(bs); }
+            if (bs != drawn_batt && !logo_on) { drawn_batt = bs; draw_battery(bs); }
             if (key != last_key) { last_key = key; dirty = key != saved_key; t_change = fm1_ms; }
         }
 
