@@ -1,10 +1,12 @@
 {
-  "what": "A B3 tonewheel organ: 91 wheels, nine drawbars, key click, vibrato and chorus, percussion, overdrive, reverb and a Leslie, computed from setBfree's own data and measured against it. All 110 setBfree programs and its default MIDI controllers.",
+  "what": "A B3 tonewheel organ computed from setBfree's own data: 91 wheels, drawbars for three manuals, key click, vibrato and chorus, percussion, overdrive, reverb and a Leslie. All 110 setBfree programs, 16 of your own, and a web editor that reads and stores the FM-1's sound.",
   "author": "R-Jeb",
   "kinds": [
     "synth"
   ],
   "play": "https://r-jeb.github.io/setBfree-fm1/play/",
+  "editor": "https://r-jeb.github.io/setBfree-fm1/editor/",
   "cheat": "https://github.com/R-Jeb/setBfree-fm1#controls",
-  "image": "docs/screen.png"
+  "image": "docs/screen.png",
+  "color": "#E0893A"
 }
