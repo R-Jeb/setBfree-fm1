@@ -162,19 +162,20 @@ static void band_header(uint32_t scr)
 }
 static void band_block(uint32_t scr, uint32_t m)
 {
-    uint32_t h = block_h(scr, m), act = m == scr;
-    int32_t y0 = 0;
+    uint32_t act = m == scr, y = block_y(scr, m);
     const uint8_t *v = m == 0 ? (const uint8_t *)P.db : m == 1 ? (const uint8_t *)P.dbl : (const uint8_t *)P.dbp;
     uint32_t cnt = m == 2 ? 2u : NB;
-    cv_begin(240, h, C_BLACK);
-    if (m) {
+    if (m) {                                    /* the manual's name: its own strip (the canvas holds 64 rows on the FM-1: */
+        cv_begin(240, 16, C_BLACK);             /* name and bars together, 78, lost the footage row) */
         cv_text(4, 0, &FONT_S, MAN[m], act ? C_ACC : C_OFF);
         if (!act) cv_text(4 + 8 * 6, 0, &FONT_S, "INFO", C_OFF);
-        y0 = 16;
+        cv_blit(0, y);
+        y += 16u;
     }
-    if (act) draw_bars(y0 + 1, v, m == 2 ? PEDID : 0, cnt, sel[m]);
-    else draw_digits(y0, v, m == 2 ? PEDID : 0, cnt);
-    cv_blit(0, block_y(scr, m));
+    cv_begin(240, act ? BLK_BARS : 16u, C_BLACK);
+    if (act) draw_bars(1, v, m == 2 ? PEDID : 0, cnt, sel[m]);
+    else draw_digits(0, v, m == 2 ? PEDID : 0, cnt);
+    cv_blit(0, y);
 }
 static const char *const VIB[6] = {"V1", "C1", "V2", "C2", "V3", "C3"};
 static const char *const LES[3] = {"STOP", "SLOW", "FAST"};
