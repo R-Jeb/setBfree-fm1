@@ -265,12 +265,14 @@ static void band_ctrl(uint32_t scr, uint32_t r)
 }
 /* ---- the logo: at the start, and again after LOGO_IDLE_MS without a key, a knob or a button (a screen saver) */
 #define LOGO_IDLE_MS 60000u
-static void draw_logo(void)                     /* in two strips of 120 rows (the canvas holds 124) */
+static void draw_logo(void)                     /* in strips as high as the canvas holds (CV_MAX: 64 rows on the FM-1, more on the PC) */
 {
     uint32_t r0, i = 0, left = 0, c = 0;
-    for (r0 = 0; r0 < LOGO_H; r0 += 120u) {
-        uint32_t p = 0, n = 240u * 120u;
-        cv_begin(240, 120, C_BLACK);
+    for (r0 = 0; r0 < LOGO_H; r0 += cv_h) {
+        uint32_t p = 0, n, h = LOGO_H - r0;
+        if (h > CV_MAX / 240u) h = CV_MAX / 240u;
+        cv_begin(240, h, C_BLACK);
+        n = 240u * cv_h;                        /* (never more than the canvas: cv_begin clamps cv_h) */
         while (p < n) {
             if (!left) {
                 if (i >= sizeof LOGO_RLE) break;
