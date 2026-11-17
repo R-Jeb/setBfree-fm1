@@ -54,8 +54,8 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
             }
 }
 #ifndef CV_MAX
-#define CV_MAX (240u * 124u)
-#endif                  /* as the firmware's graph strip */
+#define CV_MAX (240u * 64u)                   /* as the firmware (platform.c): what the canvas holds; more hid a cut band */
+#endif
 #include "gfx.c"
 
 static uint8_t host_store[256 + 4];
