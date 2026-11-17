@@ -54,6 +54,11 @@ jobs:
           cc -O1 -Wall -Wno-unused-function -Wno-unused-variable -Ifirmware/src -Ifirmware/hal \
              -o build/midi_uart_test tests/midi_uart_test.c
           build/midi_uart_test
+      - name: The update loader's screen (logo, progress)
+        run: |
+          mkdir -p build
+          cc -O1 -Wall -Wno-unused-function -Ifirmware/src -o build/ldr_screen tests/ldr_screen_host.c
+          build/ldr_screen build/ldr
       - name: Web emulator (WebAssembly)
         run: web/build.sh
       - uses: actions/upload-artifact@v4

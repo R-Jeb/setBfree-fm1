@@ -14,9 +14,11 @@ build.
 
 **Try it in the browser:** [r-jeb.github.io/setBfree-fm1/play](https://r-jeb.github.io/setBfree-fm1/play/), the same engine as WebAssembly (`web/`, rebuilt with `web/build.sh`; `docs/play/index.html` is a copy of `web/index.html`).
 
+**Install it from the browser:** [r-jeb.github.io/setBfree-fm1](https://r-jeb.github.io/setBfree-fm1/) (Chrome or Edge, the FM-1 on USB), with the screens and the controls explained.
+
 **Edit it from the browser:** [r-jeb.github.io/setBfree-fm1/editor](https://r-jeb.github.io/setBfree-fm1/editor/) (Chrome or Edge, the FM-1 on USB): drawbars, vibrato, percussion, overdrive with its character, Leslie, reverb, and your own programs 112 to 127. Reading the FM-1, storing programs, the extended parameters and the backup need firmware 0.5.
 
-> **Status:** 0.5, tested by one person on an FM-1 (0.4 on one with the older flash chip, Puya P25Q80, and on one with the newer one, UC25HQ80). Please report what sounds different from setBfree.
+> **Status:** 0.5.1, tested by one person on an FM-1 (0.4 on one with the older flash chip, Puya P25Q80, and on one with the newer one, UC25HQ80). Please report what sounds different from setBfree.
 
 ## What you get
 
@@ -75,8 +77,9 @@ recording to recording by up to 10 dB or more, and the Raspberry Pi has more ene
 | **EDIT**, **SAVE** | Free |
 
 The screen has three pages, each with the drawbars of its manual as bars and the other two manuals' values above and below; the switches, the
-knob values, the program and the battery are on all three. The load of the audio block (`W` wheels sounding, µs now, and the peak since
-switching on) is on page 3. Vibrato / chorus is on the upper manual, the lower manual or both, through one scanner as in setBfree; the
+knob values, the program and the battery are on all three. Page 4 has the test values: the load of the audio block and of each stage, the
+cores, the limiters, MIDI. After switching on, and after a minute without input, the logo shows (a screen saver: the first knob or button
+only brings back page 1); during an install it shows the progress under the logo. Vibrato / chorus is on the upper manual, the lower manual or both, through one scanner as in setBfree; the
 pedal and the percussion never go through it.
 
 **Battery:** the cell at the bottom right of the screen has four bars (the factory firmware's three steps, 531 / 561 / 591 on the 10-bit
@@ -84,8 +87,7 @@ reading of the battery divider, and a fourth at 621; about 3.4 / 3.6 / 3.8 / 4.0
 place means a USB host has the FM-1 (a charger alone cannot be told from the battery: the FM-1 has no charger line). It is read every 2 s
 and smoothed over about 8 s; a bar comes back only 3 counts above its step.
 
-The top right of the screen shows `W <wheels sounding>  <peak µs>`: the load of the audio block. It must stay under
-5800 µs; with everything on it is around 4000 µs on an FM-1. The whole list of MIDI controllers, programs and the details
+Page 4 shows the load of the audio block: it must stay under 5800 µs; with everything on it is around 4000 µs on an FM-1. The whole list of MIDI controllers, programs and the details
 of each part are in **[README_ORGAN.md](README_ORGAN.md)**.
 
 ## Install
@@ -95,7 +97,7 @@ of each part are in **[README_ORGAN.md](README_ORGAN.md)**.
 2. Install it over USB with `python3 tools/fm1_install.py b3organ-<version>.fwsc`, or with the
    [FM-1 Firmware Hub](https://fm1.designburgapps.com) in Chrome or Edge. Back to the official firmware or to another
    one from the hub at any time.
-3. The version shows top left (`B3 ORGAN v0.5`; builds that are not releases show `d` and four digits of the commit).
+3. The version shows top left (`B3 ORGAN v0.5.1`; builds that are not releases show `d` and four digits of the commit).
 
 Installing firmware is at your own risk. If something goes wrong, hold **OCT-** while switching on: the USB rescue.
 
