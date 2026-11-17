@@ -18,7 +18,7 @@ build.
 
 **Edit it from the browser:** [r-jeb.github.io/setBfree-fm1/editor](https://r-jeb.github.io/setBfree-fm1/editor/) (Chrome or Edge, the FM-1 on USB): drawbars, vibrato, percussion, overdrive with its character, Leslie, reverb, and your own programs 112 to 127. Reading the FM-1, storing programs, the extended parameters and the backup need firmware 0.5.
 
-> **Status:** 0.5, tested by one person on an FM-1 (0.4 on one with the older flash chip, Puya P25Q80, and on one with the newer one, UC25HQ80). Please report what sounds different from setBfree.
+> **Status:** 0.5.1, tested by one person on an FM-1 (0.4 on one with the older flash chip, Puya P25Q80, and on one with the newer one, UC25HQ80). Please report what sounds different from setBfree.
 
 ## What you get
 
@@ -97,7 +97,7 @@ of each part are in **[README_ORGAN.md](README_ORGAN.md)**.
 2. Install it over USB with `python3 tools/fm1_install.py b3organ-<version>.fwsc`, or with the
    [FM-1 Firmware Hub](https://fm1.designburgapps.com) in Chrome or Edge. Back to the official firmware or to another
    one from the hub at any time.
-3. The version shows top left (`B3 ORGAN v0.5`; builds that are not releases show `d` and four digits of the commit).
+3. The version shows top left (`B3 ORGAN v0.5.1`; builds that are not releases show `d` and four digits of the commit).
 
 Installing firmware is at your own risk. If something goes wrong, hold **OCT-** while switching on: the USB rescue.
 
