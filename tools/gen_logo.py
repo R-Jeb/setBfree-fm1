@@ -3,7 +3,9 @@
 """The B3 ORGAN logo: a row of drawbars seen at an angle, some pulled out (brown, white and black knobs, the numbers on the
 shafts), over the wordmark. Drawn here (no photo), 240 x 240 like the FM-1's screen.
 
-  python3 tools/gen_logo.py            firmware/src/organ_logo.h (32 colours, RLE) and docs/logo.png, docs/logo@2.png
+  python3 tools/gen_logo.py            firmware/src/organ_logo.h (16 colours, RLE) and docs/logo.png, docs/logo@2.png
+
+The app draws it at the start and as a screen saver (dinghy.c), the update loader under its progress bar (loader/ldr_screen.c).
 
 The font is Poppins (SIL Open Font License; fonts-poppins / Google Fonts); DejaVu Sans Bold if it is missing.
 """
@@ -84,22 +86,22 @@ def logo():
 
 def main():
     im = logo()
-    q = im.quantize(colors=32, method=Image.FASTOCTREE, dither=Image.Dither.NONE, kmeans=4)
-    pal = q.getpalette()[:96]
+    q = im.quantize(colors=16, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE, kmeans=4)
+    pal = q.getpalette()[:48]
     px = list(q.tobytes())
     out = bytearray()
     i = 0
-    while i < len(px):                                   # a byte: colour << 3 | (run - 1), runs of 1 to 8
+    while i < len(px):                                   # a byte: colour << 4 | (run - 1), runs of 1 to 16
         c, r = px[i], 1
-        while i + r < len(px) and px[i + r] == c and r < 8:
+        while i + r < len(px) and px[i + r] == c and r < 16:
             r += 1
-        out.append(c << 3 | (r - 1))
+        out.append(c << 4 | (r - 1))
         i += r
     rgb = lambda k: ((pal[3 * k] >> 3) << 11) | ((pal[3 * k + 1] >> 2) << 5) | (pal[3 * k + 2] >> 3)
     lines = ["/* SPDX-License-Identifier: GPL-3.0-only */",
-             "/* The B3 ORGAN logo, 240 x 240 (tools/gen_logo.py: do not edit): 32 colours (RGB565), then runs: colour << 3 | (run - 1) */",
+             "/* The B3 ORGAN logo, 240 x 240 (tools/gen_logo.py: do not edit): 16 colours (RGB565), then runs: colour << 4 | (run - 1) */",
              "#define LOGO_W 240u", "#define LOGO_H 240u",
-             "static const uint16_t LOGO_PAL[32] = {" + ", ".join("0x%04X" % rgb(k) for k in range(32)) + "};",
+             "static const uint16_t LOGO_PAL[16] = {" + ", ".join("0x%04X" % rgb(k) for k in range(16)) + "};",
              "static const uint8_t LOGO_RLE[%d] = {" % len(out)]
     for j in range(0, len(out), 24):
         lines.append("    " + ", ".join(str(v) for v in out[j:j + 24]) + ",")

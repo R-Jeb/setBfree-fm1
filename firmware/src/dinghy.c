@@ -168,34 +168,8 @@ static void band_block(uint32_t scr, uint32_t m)
     uint32_t cnt = m == 2 ? 2u : NB;
     cv_begin(240, h, C_BLACK);
     if (m) {
-        char t[16];
         cv_text(4, 0, &FONT_S, MAN[m], act ? C_ACC : C_OFF);
         if (!act) cv_text(4 + 8 * 6, 0, &FONT_S, "INFO", C_OFF);
-        if (m == 2 && act) {                    /* the free area of the pedal screen: the load of the audio block */
-            char *q;
-            q = su(sp(t, "LOAD "), load_now); *q = 0;          /* the peaks since the screen last looked, in us: all, organ, preamp, reverb, Leslie */
-            cv_text(104, 0, &FONT_S, t, C_BAR);
-            cv_text(176, 0, &FONT_S, CORES() == 2u ? "C2" : "C1", CORES() == 2u ? C_BAR : C_ACC);   /* cores working: C1 = one (the second did not answer) */
-            q = su(sp(su(sp(t, "ORG "), ld_org), " W"), load_wheels); *q = 0;
-            cv_text(104, 16, &FONT_S, t, C_BAR);
-            q = su(sp(su(sp(t, "OD "), ld_od), " RV "), ld_rv); *q = 0;
-            cv_text(104, 32, &FONT_S, t, C_OFF);
-            q = su(sp(t, "LES "), ld_le); *q = 0;
-            cv_text(104, 48, &FONT_S, t, C_OFF);
-            {                                   /* MIDI in: the channel of the last message (bright for a second), and how many came */
-                static const char *const KN[6] = {"--", "ON", "OFF", "CC", "PC", "?"};
-                uint16_t mc = midi_kind && fm1_ms - midi_t < 1000u ? C_ACC : C_OFF;
-                cv_text(200, 0, &FONT_S, "MIDI", C_OFF);
-                q = midi_kind ? su(sp(t, "CH "), midi_ch) : sp(t, "CH -"); *q = 0;
-                cv_text(200, 16, &FONT_S, t, mc);
-                q = sp(t, KN[midi_kind]);                       /* a controller or program change shows its number: "CC 64" */
-                if (midi_kind == 3u || midi_kind == 4u) q = su(sp(q, " "), midi_d1);
-                *q = 0;
-                cv_text(200, 32, &FONT_S, t, mc);
-                q = su(t, midi_cnt % 10000u); *q = 0;
-                cv_text(200, 48, &FONT_S, t, C_OFF);
-            }
-        }
         y0 = 16;
     }
     if (act) draw_bars(y0 + 1, v, m == 2 ? PEDID : 0, cnt, sel[m]);
@@ -300,7 +274,7 @@ static void draw_logo(void)                     /* in two strips of 120 rows (th
         while (p < n) {
             if (!left) {
                 if (i >= sizeof LOGO_RLE) break;
-                c = LOGO_RLE[i] >> 3; left = (LOGO_RLE[i] & 7u) + 1u; i++;
+                c = LOGO_RLE[i] >> 4; left = (LOGO_RLE[i] & 15u) + 1u; i++;
             }
             for (; left && p < n; left--) cv_px[p++] = swap16(LOGO_PAL[c]);
         }
@@ -609,7 +583,6 @@ static void app_main(void)
                     h = hmix(hmix(1, screen), m);
                     for (i = 0; i < cnt; i++) h = hmix(h, v[i]);
                     h = hmix(h, sel[m]);
-                    if (m == 2u && screen == 2u) h = hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(hmix(h, CORES()), load_now), ld_org), ld_od), ld_rv), ld_le), load_peak), load_wheels), midi_ch * 8u + midi_kind + midi_cnt * 64u + midi_d1 * 4096u), midi_kind && fm1_ms - midi_t < 1000u);
                     if (h != hash[1 + m]) { hash[1 + m] = h; band_block(screen, m); }
                 }
                 for (r = 0; r < 4u; r++) {

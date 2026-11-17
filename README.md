@@ -77,8 +77,9 @@ recording to recording by up to 10 dB or more, and the Raspberry Pi has more ene
 | **EDIT**, **SAVE** | Free |
 
 The screen has three pages, each with the drawbars of its manual as bars and the other two manuals' values above and below; the switches, the
-knob values, the program and the battery are on all three. The load of the audio block (`W` wheels sounding, µs now, and the peak since
-switching on) is on page 3. Vibrato / chorus is on the upper manual, the lower manual or both, through one scanner as in setBfree; the
+knob values, the program and the battery are on all three. Page 4 has the test values: the load of the audio block and of each stage, the
+cores, the limiters, MIDI. After switching on, and after a minute without input, the logo shows (a screen saver: the first knob or button
+only brings back page 1); during an install it shows the progress under the logo. Vibrato / chorus is on the upper manual, the lower manual or both, through one scanner as in setBfree; the
 pedal and the percussion never go through it.
 
 **Battery:** the cell at the bottom right of the screen has four bars (the factory firmware's three steps, 531 / 561 / 591 on the 10-bit
@@ -86,8 +87,7 @@ reading of the battery divider, and a fourth at 621; about 3.4 / 3.6 / 3.8 / 4.0
 place means a USB host has the FM-1 (a charger alone cannot be told from the battery: the FM-1 has no charger line). It is read every 2 s
 and smoothed over about 8 s; a bar comes back only 3 counts above its step.
 
-The top right of the screen shows `W <wheels sounding>  <peak µs>`: the load of the audio block. It must stay under
-5800 µs; with everything on it is around 4000 µs on an FM-1. The whole list of MIDI controllers, programs and the details
+Page 4 shows the load of the audio block: it must stay under 5800 µs; with everything on it is around 4000 µs on an FM-1. The whole list of MIDI controllers, programs and the details
 of each part are in **[README_ORGAN.md](README_ORGAN.md)**.
 
 ## Install

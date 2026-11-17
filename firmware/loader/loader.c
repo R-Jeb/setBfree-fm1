@@ -21,6 +21,10 @@
 #include "fm1_flash.h"
 #include "../src/libc.c"
 #include "../src/usb.c"
+/* the screen: the logo, UPDATE MODE, WRITING with its progress (ldr_screen.c; the draw after rdpno-fm1 and Dinghy) */
+#include "fm1_lcd_hw.h"
+#include "../src/lcd.c"
+#include "ldr_screen.c"
 
 static uint32_t ldr_ms(void)   /* monotonic ms; survives the TIMER4 wrap (178.9 s) */
 {
@@ -72,7 +76,11 @@ static void ldr_record_clear(void)
     fm1_updata_parm_clear();                        /* CRC 0: the SPL ignores it on a warm reset */
 }
 static int ldr_flash_known(void) { return FL_JEDEC_OK(fl_jedec_ram()); }   /* as the app (project.c) */
-static void ldr_progress(uint32_t done, uint32_t total) { (void)done; (void)total; ldr_poll(); }
+static void ldr_progress(uint32_t done, uint32_t total)
+{
+    ldr_bar(done, total);
+    ldr_poll();
+}
 #include "ldr_core.c"
 
 extern uint32_t _bss_start[], _bss_end[];
@@ -80,11 +88,14 @@ extern uint32_t _bss_start[], _bss_end[];
 void ldr_main(void)
 {
     fm1_wdt_arm(0x0D);                              /* ~8 s, fed by ldr_poll */
+    ldr_screen();                                   /* before USB (Skiff): the panel's ~0.3 s init, then USB */
+    fm1_wdt_feed();
     fm1_time_init();
     usb_start();
     for (;;) {
         ldr_poll();
         usb_retry(ldr_ms());
+        ldr_anim(ldr_ms());                         /* the waiting light (ldr_screen.c) */
         if (usb.uboot_req) {                        /* soft key: mask-ROM UBOOT, as in Felucca */
             usb_detach();
             fm1_delay_ms(30);
@@ -101,6 +112,7 @@ void ldr_main(void)
                 fm1_delay_ms(30);
                 fm1_core_reset();                   /* the SPL boots the new app */
             }
+            ldr_failed();                           /* (the host may try again) */
         }
     }
 }

@@ -46,7 +46,7 @@
   .small { color: var(--dim); font-size: .9rem; }
   /* screens */
   .screens { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-  .screen img { display: block; width: 100%; max-width: 360px; margin: 0 auto 14px; image-rendering: pixelated; border-radius: 8px; border: 6px solid #050403; box-shadow: 0 0 0 1px var(--line); }
+  .screen img { display: block; width: 100%; height: auto; aspect-ratio: 1; max-width: 360px; margin: 0 auto 14px; image-rendering: pixelated; border-radius: 8px; border: 6px solid #050403; box-shadow: 0 0 0 1px var(--line); }
   .screen ul { margin: 0; padding-left: 1.1em; color: var(--dim); font-size: .93rem; } .screen li { margin-bottom: 4px; }
   .screen b, .screen code { color: var(--fg); }
   .nr { font: 700 .8rem var(--mono); color: var(--amber-fg); background: var(--amber); border-radius: 4px; padding: 1px 7px; margin-right: 8px; }
@@ -129,7 +129,7 @@
         <img src="logo@2.png" width="480" height="480" alt="The start screen with the logo" loading="lazy">
         <h3><span class="nr">0</span>Start and screen saver</h3>
         <ul>
-          <li>After switching on, and again after a minute without a knob, a button or a key.</li>
+          <li>After switching on, and again after a minute without a knob, a button or a key. While an install writes, it shows the progress under the logo.</li>
           <li>The first knob or button only brings back page 1 (it changes nothing); a key plays at once.</li>
         </ul>
       </div>
@@ -155,17 +155,15 @@
         <h3><span class="nr">3</span>Pedal</h3>
         <ul>
           <li>Two drawbars, 16' and 8' (MIDI channel 3).</li>
-          <li>Top right: the load of the audio block, <code>W</code> wheels sounding and µs (it must stay under 5800 µs), <code>C2</code> when both cores work.</li>
-          <li>The last MIDI message received.</li>
         </ul>
       </div>
       <div class="card screen">
         <img src="site/screen-test.png" width="480" height="480" alt="Page 4: test values" loading="lazy">
         <h3><span class="nr">4</span>Test values</h3>
         <ul>
-          <li>The load of each stage (organ, preamp, reverb, Leslie) and of both cores.</li>
+          <li>The load of the audio block in µs (it must stay under 5800 µs) and of each stage (organ, preamp, reverb, Leslie); <code>CORES 2</code> when both work.</li>
           <li>The sum of the wheels and the output, each with its limiter's gain: 100 % means the limiter does nothing.</li>
-          <li>MIDI messages and errors.</li>
+          <li>The last MIDI message, how many came, and errors.</li>
         </ul>
       </div>
     </div>
