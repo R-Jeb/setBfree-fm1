@@ -221,6 +221,10 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 
   <!-- MONITOR -->
   <section class="page" id="p-monitor" hidden>
+    <div class="card"><h2>MIDI file player</h2>
+      <div class="row"><input type="file" id="smf" accept=".mid,.midi,audio/midi" aria-label="MIDI file"></div>
+      <div class="row" style="margin-top:10px"><button id="smfplay" class="primary" disabled>Play</button><button id="smfstop" disabled>Stop</button><span class="note" id="smfinfo"></span></div>
+      <p class="note" style="margin-top:10px">Plays a standard MIDI file (type 0 or 1) to the FM-1 as it is: its channels, notes, controllers and program changes, at the file's tempo. SysEx and text in the file are left out. Stop releases every note.</p></div>
     <div class="card"><h2>MIDI monitor</h2><div class="log" id="log" aria-live="off"></div>
     <p class="note" style="margin-top:10px">Orange: sent by the editor. Green: arrives from the FM-1 or a keyboard on the selected input. With firmware 0.5 the editor reads the FM-1's sound when you connect and when you press Read from FM-1 (SysEx); with an older firmware it shows what it last sent.</p></div>
     <div class="card"><h2>Channels</h2>
@@ -298,6 +302,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   /* the FM-1 calls itself "Felucca" on USB (the platform's name: the installer and the Firmware Hub look for it); here it is the organ */
   function shown(name) { return /felucca/i.test(name) ? "B3 ORGAN" : name; }
   function setStatus() {
+    if (typeof smf !== "undefined" && smf && !smfRun) $("smfplay").disabled = !out;
     var s = $("status");
     if (out) { s.textContent = "connected: " + shown(out.name); s.className = "chip on"; } else { s.textContent = midi ? "no output selected" : "no MIDI"; s.className = "chip off"; }
   }
@@ -632,6 +637,75 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   $("tundn").onclick = function () { tonTo(0, Math.max(4300, S.tonp[0] - 10)); };
   $("tunup").onclick = function () { tonTo(0, Math.min(4500, S.tonp[0] + 10)); };
   $("clkdef").onclick = function () { tonTo(1, 500); };
+
+  /* ---- a MIDI file to the FM-1: parsed into [ms, bytes], sent with time stamps a little ahead (Web MIDI keeps the timing) */
+  var smf = null, smfRun = null;
+  function smfParse(buf) {
+    var d = new Uint8Array(buf), p = 0;
+    function u32() { var v = d[p] << 24 | d[p + 1] << 16 | d[p + 2] << 8 | d[p + 3]; p += 4; return v >>> 0; }
+    function u16() { var v = d[p] << 8 | d[p + 1]; p += 2; return v; }
+    function vlq() { var v = 0, b; do { b = d[p++]; v = v * 128 + (b & 127); } while (b & 128 && p < d.length); return v; }
+    if (String.fromCharCode(d[0], d[1], d[2], d[3]) !== "MThd") throw new Error("not a MIDI file");
+    p = 4; var hl = u32(), fmt = u16(), ntr = u16(), div = u16(); p = 8 + hl;
+    if (div & 0x8000) throw new Error("SMPTE time is not supported");
+    var ev = [], tempo = [];                 /* ev: [tick, order, bytes]; tempo: [tick, us per quarter] */
+    for (var t = 0; t < ntr && p < d.length; t++) {
+      if (String.fromCharCode(d[p], d[p + 1], d[p + 2], d[p + 3]) !== "MTrk") throw new Error("track " + t + " damaged");
+      p += 4; var len = u32(), end = p + len, tick = 0, run = 0, k = 0;
+      while (p < end) {
+        tick += vlq();
+        var st = d[p];
+        if (st === 0xFF) { var ty = d[p + 1]; p += 2; var ml = vlq(); if (ty === 0x51 && ml === 3) tempo.push([tick, d[p] << 16 | d[p + 1] << 8 | d[p + 2]]); p += ml; continue; }
+        if (st === 0xF0 || st === 0xF7) { p++; p += vlq(); continue; }
+        if (st & 0x80) { run = st; p++; } else if (!run) throw new Error("track " + t + ": data without status");
+        var n = (run & 0xF0) === 0xC0 || (run & 0xF0) === 0xD0 ? 1 : 2, m = [run];
+        for (var i = 0; i < n; i++) m.push(d[p++] & 127);
+        ev.push([tick, k++ + t * 1e7, m]);
+      }
+      p = end;
+    }
+    ev.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+    tempo.sort(function (a, b) { return a[0] - b[0]; });
+    var out = [], ti = 0, us = 500000, lastTick = 0, ms = 0;
+    ev.forEach(function (e) {                /* ticks to ms through the tempo changes */
+      while (ti < tempo.length && tempo[ti][0] <= e[0]) { ms += (tempo[ti][0] - lastTick) * us / div / 1000; lastTick = tempo[ti][0]; us = tempo[ti][1]; ti++; }
+      out.push([ms + (e[0] - lastTick) * us / div / 1000, e[2]]);
+    });
+    return { ev: out, len: out.length ? out[out.length - 1][0] : 0, fmt: fmt };
+  }
+  function smfOff() {                         /* every note off, on every channel */
+    if (!out) return;
+    for (var c = 0; c < 16; c++) try { out.send([0xB0 | c, 123, 0, 0xB0 | c, 64, 0]); } catch (e) {}
+  }
+  function smfStop(msg) {
+    if (smfRun) { clearInterval(smfRun.timer); smfRun = null; try { out && out.clear && out.clear(); } catch (e) {} smfOff(); }
+    $("smfplay").disabled = !smf || !out; $("smfstop").disabled = true;
+    if (msg) $("smfinfo").textContent = msg;
+  }
+  $("smf").onchange = function () {
+    var f = this.files[0]; smfStop(); smf = null; $("smfplay").disabled = true;
+    if (!f) { $("smfinfo").textContent = ""; return; }
+    f.arrayBuffer().then(function (b) {
+      try { smf = smfParse(b); } catch (e) { $("smfinfo").textContent = f.name + ": " + e.message; return; }
+      smf.name = f.name;
+      $("smfinfo").textContent = f.name + ": " + smf.ev.length + " events, " + (smf.len / 1000).toFixed(1) + " s" + (out ? "" : " (connect first)");
+      $("smfplay").disabled = !out;
+    });
+  };
+  $("smfplay").onclick = function () {
+    if (!smf || !out) return;
+    smfStop();
+    var t0 = performance.now() + 300, i = 0;
+    logline("out", "MIDI file " + smf.name + ": playing");
+    smfRun = { timer: setInterval(function () {
+      var now = performance.now();
+      for (; i < smf.ev.length && t0 + smf.ev[i][0] < now + 400; i++) try { out.send(smf.ev[i][1], t0 + smf.ev[i][0]); } catch (e) {}
+      $("smfinfo").textContent = smf.name + ": " + Math.max(0, (now - t0) / 1000).toFixed(1) + " / " + (smf.len / 1000).toFixed(1) + " s";
+      if (i >= smf.ev.length && now > t0 + smf.len + 500) { clearInterval(smfRun.timer); smfRun = null; logline("out", "MIDI file: done"); smfStop(smf.name + ": done"); }
+    }, 50) };
+    $("smfplay").disabled = true; $("smfstop").disabled = false;
+  };
+  $("smfstop").onclick = function () { logline("out", "MIDI file: stopped"); smfStop(smf ? smf.name + ": stopped" : ""); };
 
   /* ---- the ticks under a slider: each at its value (data-index: the n-th span is position n) */
   Array.prototype.forEach.call(document.querySelectorAll(".ticksrow"), function (row) {
