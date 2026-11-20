@@ -208,6 +208,10 @@ int main(void)
         organ_program(112); CHECK("program 112 brings it all back", P.db[1] == 0 && P.drv == 20 && P.chr == 77 && P.pgm == 112);
         CHECK("  and the PRESETS knob finds it", pgm_step(110, 1) == 112 && pgm_step(112, -1) == 110);
         organ_pc(111); CHECK("program change 111 selects it", P.pgm == 112);
+        UPGM[0].rsv[0] = 0; UPGM[0].drv = 8; user_check();   /* stored before 0.6: drive 8 then is 12 now */
+        CHECK("a program from before 0.6: its drive 8 becomes 12, once", UPGM[0].drv == 12 && UPGM[0].rsv[0] == UP_DRV_NEW && (user_check(), UPGM[0].drv == 12));
+        UPGM[0].rsv[0] = 0; UPGM[0].drv = 16; user_check();
+        CHECK("a program from before 0.6: drive 16 becomes 20", UPGM[0].drv == 20 && UPGM[0].used == 1);
         UPGM[0].used = 0; organ_program(5); P.chr = 16; P.drv = 0;
     }
     organ_cc(99, 2); organ_cc(98, 1); organ_cc(6, 6000 >> 7); organ_cc(38, 6000 & 127);

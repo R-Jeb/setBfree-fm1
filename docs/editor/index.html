@@ -202,7 +202,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
         <div style="position:relative;height:1.2em;font:400 .75rem var(--mono);color:var(--dim)"><span style="position:absolute;left:0">20</span><span style="position:absolute;left:23.3%;transform:translateX(-50%)">100</span><span style="position:absolute;left:56.6%;transform:translateX(-50%)">1k</span><span style="position:absolute;left:90%;transform:translateX(-50%)">10k</span><span style="position:absolute;right:0">20k Hz</span></div>
         <div id="eqrows" style="display:grid;gap:10px;margin-top:14px;--lw:112px;--ow:84px"></div>
         <div class="row" style="margin-top:12px"><button id="eqflat">Flat</button><span class="note" id="eqmsg"></span></div>
-        <p class="note" style="margin-top:10px">After the Leslie and the reverb, before the limiter: a bass shelf (20 to 200 Hz), a middle peak (250 Hz to 3.1 kHz, about an octave wide) and a treble shelf (4 to 8 kHz), each ±9 dB in steps of 0.5 dB. A band at 0 dB costs nothing. The three levels can also be set on the FM-1: on the pedal screen, SELECT goes past the two drawbars to Bass, Mid and Treb, ALGORITHM sets them (Read from FM-1 brings them here). The frequencies are set only here. Sent as SysEx 07, so it needs the FM-1 connected with SysEx allowed, and firmware 0.5.2. Kept with the settings.</p>
+        <p class="note" style="margin-top:10px">After the Leslie and the reverb, before the limiter: a bass shelf (20 to 200 Hz), a middle peak (250 Hz to 3.1 kHz, about an octave wide) and a treble shelf (4 to 8 kHz), each ±9 dB in steps of 0.5 dB. A band at 0 dB costs nothing. The three levels can also be set on the FM-1: on the pedal screen, SELECT goes past the two drawbars to Bass, Mid and Treb, ALGORITHM sets them (Read from FM-1 brings them here). The frequencies are set only here. Sent as SysEx 07, so it needs the FM-1 connected with SysEx allowed, and firmware 0.6. Kept with the settings.</p>
       </div>
     </div>
   </section>
@@ -258,7 +258,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   }
   try { S = JSON.parse(localStorage.getItem("b3editor") || "null"); } catch (e) { S = null; }
   if (!S || !S.up || !S.ch) S = defaults();
-  if (!S.v) { S.drv = 12; S.v = 2; }   /* saved before firmware 0.4: drv was the character 0..8, now it is the drive (0..20 since 0.5.2) */
+  if (!S.v) { S.drv = 12; S.v = 2; }   /* saved before firmware 0.4: drv was the character 0..8, now it is the drive (0..20 since 0.6) */
   if (S.chr === undefined) S.chr = 16;
   if (!S.lesp) S.lesp = [403, 4234, 360, 3573, 161, 321, 4127, 1371];
   if (!S.tonp) S.tonp = [4400, 500];
@@ -393,7 +393,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
         var tu = b[51] << 7 | b[52], ck = b[53] << 7 | b[54];
         if (tu >= 4000 && tu <= 4800 && ck <= 1000) { S.tonp = [Math.max(4300, Math.min(4500, Math.round(tu / 10) * 10)), ck]; vs = 55; }
       }
-      if (vs === 55 && b.length >= 67 && b[55] === 0) {   /* the equalizer (firmware 0.5.2): the bass gain's MSB is 0, a version starts with a digit or d */
+      if (vs === 55 && b.length >= 67 && b[55] === 0) {   /* the equalizer (firmware 0.6): the bass gain's MSB is 0, a version starts with a digit or d */
         var e = []; for (k = 0; k < 6; k++) e.push(b[55 + 2 * k] << 7 | b[56 + 2 * k]);
         if (e.every(function (x, i) { return x >= EQR[i][0] && x <= EQR[i][1]; })) { S.eqp = e; vs = 67; }
       }
@@ -588,6 +588,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     if (st.eq !== undefined && !(Array.isArray(st.eq) && st.eq.length === 6 && st.eq.every(function (x, i) { return x >= EQR[i][0] && x <= EQR[i][1]; }))) return "The equalizer in the file is damaged.";
     return "";
   }
+  function bkOldDrive(o) { var m = /^(\d+)\.(\d+)/.exec(o.firmware || ""); return !!m && +m[1] === 0 && +m[2] < 6; }   /* a release before 0.6 (not a "d…" build): the drive was 0..16, the same sound is 4 steps higher now */
   $("bkfile").onchange = function () {
     var f = this.files[0]; bkFile = null; bkArmed = false; $("bkrestore").disabled = true; $("bkrestmsg").textContent = "";
     if (!f) { $("bkinfo").textContent = ""; return; }
@@ -595,10 +596,12 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       var o = null; try { o = JSON.parse(t); } catch (e) {}
       var err = bkCheck(o);
       if (err) { $("bkinfo").textContent = err; return; }
+      if (bkOldDrive(o)) for (var k in o.programs) { var d = o.programs[k].data; d[41] = Math.min(20, d[41] + 4); }   /* the drive's byte */
       bkFile = o; $("bkrestore").disabled = false;
       var names = Object.keys(o.programs).sort(function (a, b) { return a - b; }).map(function (k) { return k + " " + o.programs[k].name; });
       $("bkinfo").textContent = "From " + (o.date || "?") + (o.firmware ? ", firmware " + o.firmware : "") + ". Programs: " + (names.length ? names.join(", ") : "none") +
-        ". Tuning " + Math.round(o.settings.tuning / 10) + " Hz, key click " + (o.settings.keyclick / 10) + " %, character " + o.settings.character + (o.settings.eq ? ", equalizer " + eqText(o.settings.eq) : "") + ".";
+        ". Tuning " + Math.round(o.settings.tuning / 10) + " Hz, key click " + (o.settings.keyclick / 10) + " %, character " + o.settings.character + (o.settings.eq ? ", equalizer " + eqText(o.settings.eq) : "") + "." +
+        (bkOldDrive(o) && Object.keys(o.programs).length ? " Saved before firmware 0.6: the programs' drive is raised by 4 steps to sound the same." : "");
     });
   };
   $("bkrestore").onclick = function () {
@@ -615,7 +618,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     })(n);
     S.chr = o.settings.character; S.lesp = o.settings.leslie.slice(); S.tonp = [o.settings.tuning, o.settings.keyclick];
     nrpn(c, 1, 0, S.chr); S.lesp.forEach(function (v, i) { nrpn14(c, 2, i, v); }); S.tonp.forEach(function (v, i) { nrpn14(c, 3, i, v); });
-    if (o.settings.eq) { S.eqp = o.settings.eq.slice(); eqSend(); }   /* backups before 0.5.2 have none: the FM-1's stays */
+    if (o.settings.eq) { S.eqp = o.settings.eq.slice(); eqSend(); }   /* backups before 0.6 have none: the FM-1's stays */
     save(); paint();
     $("bkrestmsg").textContent = "Sent. The FM-1 writes the programs to its flash when nothing sounds …";
   };
@@ -696,12 +699,12 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   }
   var eqTimer = null, eqBusy = false, eqAgain = false;
   function eqSend() {                            /* one at a time: while one waits for its 47, the newest values follow after it */
-    if (!sysexOk || !out) { logline("dim", "The equalizer needs SysEx (and firmware 0.5.2): not sent."); return; }
+    if (!sysexOk || !out) { logline("dim", "The equalizer needs SysEx (and firmware 0.6): not sent."); return; }
     if (eqBusy) { eqAgain = true; return; }
     eqBusy = true; eqAgain = false;
     function done() { eqBusy = false; if (eqAgain) eqSend(); }
     ask(eqBytes(S.eqp), "equalizer " + eqText(S.eqp), function (c) { if (c === 0x47) { setTimeout(done, 0); return true; } return false; }, 600,
-      function () { eqBusy = false; $("eqmsg").textContent = "No answer: is firmware 0.5.2 on the FM-1?"; });
+      function () { eqBusy = false; $("eqmsg").textContent = "No answer: is firmware 0.6 on the FM-1?"; });
   }
   function eqLater() { clearTimeout(eqTimer); eqTimer = setTimeout(eqSend, 60); }
   EQNAME.forEach(function (nm, i) {

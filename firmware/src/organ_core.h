@@ -570,8 +570,9 @@ typedef struct {
     uint8_t used;                               /* 1: the slot holds a program */
     char name[13];                              /* printable ASCII, 0-terminated */
     uint8_t db[NB], dbl[NB], dbp[2], vtype, vup, vlo, perc, perc3, fast, soft, les, od, drv, chr, rev;
-    uint8_t rsv[2];                             /* (48 bytes a slot) */
+    uint8_t rsv[2];                             /* (48 bytes a slot) rsv[0]: UP_DRV_NEW when the drive is in 0.6's scale */
 } organ_user_t;
+#define UP_DRV_NEW 1u
 static organ_user_t UPGM[UP_N];                 /* loaded from the flash at start (dinghy.c), zero: empty */
 static organ_user_t *user_pgm(uint32_t n) { return n >= UP_FIRST && n < UP_FIRST + UP_N && UPGM[n - UP_FIRST].used == 1u ? &UPGM[n - UP_FIRST] : 0; }
 static const char *pgm_name(uint32_t n)         /* 0: no such program */
@@ -586,7 +587,7 @@ static void user_store(uint32_t n, const uint8_t *name)   /* the sound now into 
     for (i = 0; i < NB; i++) { u->db[i] = P.db[i]; u->dbl[i] = P.dbl[i]; }
     u->dbp[0] = P.dbp[0]; u->dbp[1] = P.dbp[1];
     u->vtype = P.vtype; u->vup = P.vup; u->vlo = P.vlo; u->perc = P.perc; u->perc3 = P.perc3; u->fast = P.fast; u->soft = P.soft;
-    u->les = P.les; u->od = P.od; u->drv = P.drv; u->chr = P.chr; u->rev = P.rev; u->rsv[0] = u->rsv[1] = 0;
+    u->les = P.les; u->od = P.od; u->drv = P.drv; u->chr = P.chr; u->rev = P.rev; u->rsv[0] = UP_DRV_NEW; u->rsv[1] = 0;
     for (i = 0; i < 12u && name[i]; i++) u->name[i] = name[i] >= 32u && name[i] < 127u ? (char)name[i] : '?';
     if (i == 0) { u->name[0] = 'U'; u->name[1] = 'S'; u->name[2] = 'E'; u->name[3] = 'R'; i = 4; }
     for (; i < 13u; i++) u->name[i] = 0;
@@ -602,8 +603,14 @@ static int user_ok(const organ_user_t *u)       /* 1: a used slot with everythin
 static void user_check(void)                    /* after loading: anything out of range makes the slot empty */
 {
     uint32_t k;
-    for (k = 0; k < UP_N; k++)
-        if (!user_ok(&UPGM[k])) UPGM[k].used = 0;
+    for (k = 0; k < UP_N; k++) {
+        organ_user_t *u = &UPGM[k];
+        if (u->used == 1u && u->rsv[0] != UP_DRV_NEW) {   /* stored before 0.6: the drive was 0..16, the same sound is 4 steps higher now */
+            u->drv = (uint8_t)(u->drv + 4u > OD_DRIVE_MAX ? OD_DRIVE_MAX : u->drv + 4u);
+            u->rsv[0] = UP_DRV_NEW;
+        }
+        if (!user_ok(u)) u->used = 0;
+    }
 }
 
 static int pgm_registration(uint32_t n)         /* a program that sets the drawbars: what the PRESETS knob steps through */
