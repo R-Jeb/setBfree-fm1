@@ -56,11 +56,13 @@ programs. 3/0 setBfree's `osc.tuning` in 0.1 Hz (4400 = 440 Hz; rounded to whole
 | `04` n: delete program n | as `03` |
 | `05` n: read all of program n (a backup) | `45` + n, used, then 44 bytes: name 12, upper 9, lower 9, pedal 2 drawbars, vibrato type, upper on, lower on, percussion on, 3rd, fast, soft, Leslie, overdrive on, drive, character, reverb |
 | `06` n + the 44 bytes of `45`: write program n (a restore) | as `03`; status 3: a value out of range, nothing written |
-| `07` the output equalizer: 6 values of 14 bits (bass gain, bass Hz, middle gain, middle Hz, treble gain, treble Hz; gain 0..36 = -9..+9 dB in 0.5 dB steps, 18 = flat; 20..200, 250..3100, 4000..8000 Hz), then the 15 coefficients of the three biquads (low shelf, peak, high shelf; b0 b1 b2 a1 a2, Q28, a0 = 1), 5 bytes each: the top 4 bits, then 4 x 7 bits | `47` status (0 taken, 1 out of range or unstable); saved with the settings |
+| `07` the output equalizer: 6 values of 14 bits (bass gain, bass Hz, middle gain, middle Hz, treble gain, treble Hz; gain 0..36 = -9..+9 dB in 0.5 dB steps, 18 = flat; 20..200, 250..3100, 4000..8000 Hz); the FM-1 computes the filters (bytes after the values are ignored) | `47` status (0 taken, 1 out of range); saved with the settings |
 
-**The output equalizer** (firmware 0.5.2) sits after the Leslie, before the output limiter, like the SK1's: a bass shelf, a middle peak and a treble shelf with
-Robert Bristow-Johnson's biquads (shelves Q 0.707, the peak Q 1). The editor computes the coefficients (the FM-1 has no floating point to spare) and
-`tools/eq_coef.py` prints the same numbers; a band at 0 dB is not computed, so a flat equalizer is bit-exact and costs nothing.
+**The output equalizer** (firmware 0.5.2) sits after the Leslie, before the output limiter: a bass shelf, a middle peak and a treble shelf with
+Robert Bristow-Johnson's biquads (shelves Q 0.707, the peak Q 1), computed on the FM-1 without floating point (Q29, sine and cosine by their
+series; within a few LSB of `tools/eq_coef.py`, at most 0.012 dB apart). A band at 0 dB is not computed, so a flat equalizer is bit-exact and
+costs nothing. The levels are on the pedal screen too: SELECT goes past the two pedal drawbars to BASS, MID and TREB, ALGORITHM sets them in
+0.5 dB steps; the frequencies only in the web editor.
 
 Regenerate the program table with `python3 tools/gen_programs.py` (reads `data/setbfree-default.pgm`).
 `tests/organ_test.c` checks programs and controllers against setBfree's source on a computer, and the level of every key and drawbar against setBfree's own tone generator (`tests/organ_ref.h`).
