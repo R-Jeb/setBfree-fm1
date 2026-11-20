@@ -1,5 +1,5 @@
 {
-  "what": "A B3 tonewheel organ computed from setBfree's own data: 91 wheels, drawbars for three manuals, key click, vibrato and chorus, percussion, overdrive, reverb and a Leslie. All 110 setBfree programs, 16 of your own, and a web editor that reads and stores the FM-1's sound.",
+  "what": "A B3 tonewheel organ computed from setBfree's own data: 91 wheels, drawbars for three manuals, key click, vibrato and chorus, percussion, overdrive, reverb, a Leslie and an output equalizer. All 110 setBfree programs, 16 of your own, and a web editor that reads and stores the FM-1's sound.",
   "author": "R-Jeb",
   "kinds": [
     "synth"
