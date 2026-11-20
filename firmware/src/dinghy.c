@@ -151,6 +151,7 @@ static void draw_digits(int32_t y0, const uint8_t *v, const uint8_t *ids, uint32
 /* the pedal screen's right side: the equalizer's three gains as sliders (up is more, the middle 0 dB), set like the drawbars */
 #define EQ_X0 120
 #define EQ_DX 42
+#define EQ_CAP 6                                /* 38 px of way for 37 steps */
 static const char *const EQN[3] = {"BASS", "MID", "TREB"};
 static void eq_label(char *t, uint32_t g)       /* gain index -> "+4.5", "-9", "0" */
 {
@@ -161,18 +162,18 @@ static void eq_label(char *t, uint32_t g)       /* gain index -> "+4.5", "-9", "
     if (a & 1u) { *t++ = '.'; *t++ = '5'; }
     *t = 0;
 }
-static void draw_eq(int32_t y0, uint32_t selected)   /* selected: 0..2, or none */
+static void draw_eq(int32_t y0, uint32_t selected)   /* selected: 0..2, or none; the cap is half a drawbar's (no digit on it): more way */
 {
     uint32_t k;
     for (k = 0; k < 3u; k++) {
-        int32_t x = EQ_X0 + EQ_DX * (int32_t)k, g = (int32_t)eq_p[2u * k], cy = y0 + (36 - g) * (TRACK - CAP) / 36, mid = y0 + (TRACK - CAP) / 2 + CAP / 2;
+        int32_t x = EQ_X0 + EQ_DX * (int32_t)k, g = (int32_t)eq_p[2u * k], cy = y0 + (36 - g) * (TRACK - EQ_CAP) / 36, mid = y0 + (TRACK - EQ_CAP) / 2 + EQ_CAP / 2;
         char t[6];
         cv_rect(x + 4, y0, 16, TRACK, C_TRK);
         cv_rect(x - 2, mid, 28, 1, C_OFF);                       /* 0 dB: wider than the cap, so it shows beside it */
-        if (cy + CAP / 2 < mid) cv_rect(x + 9, cy + CAP / 2, 6, mid - cy - CAP / 2, RGB(70, 70, 70));
-        else if (cy + CAP / 2 > mid) cv_rect(x + 9, mid + 1, 6, cy + CAP / 2 - mid, RGB(70, 70, 70));
-        cv_rect(x + 1, cy, 22, CAP, g == 18 ? RGB(120, 120, 120) : C_BAR);
-        if (k == selected) cv_box(x, cy - 1, 24, CAP + 2, C_ACC);
+        if (cy + EQ_CAP / 2 < mid) cv_rect(x + 9, cy + EQ_CAP / 2, 6, mid - cy - EQ_CAP / 2, RGB(70, 70, 70));
+        else if (cy + EQ_CAP / 2 > mid) cv_rect(x + 9, mid + 1, 6, cy + EQ_CAP / 2 - mid, RGB(70, 70, 70));
+        cv_rect(x + 1, cy, 22, EQ_CAP, g == 18 ? RGB(120, 120, 120) : C_BAR);
+        if (k == selected) cv_box(x, cy - 1, 24, EQ_CAP + 2, C_ACC);
         eq_label(t, (uint32_t)g);
         cv_text(x + 12 - text_w(&FONT_S, t) / 2, y0 + TRACK + 2, &FONT_S, t, k == selected ? C_ACC : C_BAR);
     }
