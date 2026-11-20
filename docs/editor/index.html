@@ -152,11 +152,11 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       <div class="card">
       <h2>Preamp / overdrive</h2>
       <div class="row"><span class="lbl">Overdrive</span><div class="seg" id="od"></div></div>
-      <div class="slider" style="margin-top:12px"><span class="lbl">Drive</span><input type="range" id="drv" min="0" max="16" step="1"><output id="drvv"></output></div>
-      <div class="ticksrow" data-max="16"><span>0</span><span>4</span><span>8</span><span>12</span><span>16</span></div>
+      <div class="slider" style="margin-top:12px"><span class="lbl">Drive</span><input type="range" id="drv" min="0" max="20" step="1"><output id="drvv"></output></div>
+      <div class="ticksrow" data-max="20"><span>0</span><span>4</span><span>8</span><span>12</span><span>16</span><span>20</span></div>
       <div class="slider" style="margin-top:12px"><span class="lbl">Character</span><input type="range" id="chr" min="0" max="127" step="1"><output id="chrv"></output></div>
       <div class="ticksrow" data-max="127"><span>0</span><span>32</span><span>64</span><span>96</span><span>127</span></div>
-      <p class="note" style="margin-top:10px">CC 65 switches it on, CC 93 sets the drive (0 to 16, as KNOB 3 on the FM-1): setBfree's <code>overdrive.inputgain</code> in steps of 1.5 dB, 12 is its default. The output follows the drive, so on and off are about equally loud.</p>
+      <p class="note" style="margin-top:10px">CC 65 switches it on, CC 93 sets the drive (0 to 20, as KNOB 3 on the FM-1): setBfree's <code>overdrive.inputgain</code> in steps of 1.5 dB; 12 sounds like setBfree's default (measured against setBfree on a Raspberry Pi), 20 is 12 dB hotter. The output follows the drive, so on and off are about equally loud.</p>
       <p class="note" style="margin-top:6px">The character is setBfree's <code>overdrive.character</code> (0 to 127, 16 in firmware 0.4): it sets the two bass filters around the tube curve. It goes as NRPN 1/0 (CC 99 = 1, CC 98 = 0, CC 6 = value) and needs firmware 0.5. The output is matched to character 16: other values can be louder or quieter (in setBfree too: about −17 dB at 32, +6 dB at 127); the limiter keeps the peaks in.</p>
     </div>
       <div class="card">
@@ -250,7 +250,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   }
   try { S = JSON.parse(localStorage.getItem("b3editor") || "null"); } catch (e) { S = null; }
   if (!S || !S.up || !S.ch) S = defaults();
-  if (!S.v) { S.drv = 12; S.v = 2; }   /* saved before firmware 0.4: drv was the character 0..8, now it is the drive 0..16 */
+  if (!S.v) { S.drv = 12; S.v = 2; }   /* saved before firmware 0.4: drv was the character 0..8, now it is the drive (0..20 since 0.5.2) */
   if (S.chr === undefined) S.chr = 16;
   if (!S.lesp) S.lesp = [403, 4234, 360, 3573, 161, 321, 4127, 1371];
   if (!S.tonp) S.tonp = [4400, 500];
@@ -286,7 +286,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   }
   function pc(ch, n) { logline("out", "ch " + ch + "  PC " + n); if (out) try { out.send([0xC0 | (ch - 1), n]); } catch (e) {} }
   var dbv = function (d) { return 127 - Math.round(d * 127 / 8); };      /* setBfree: 127 is pushed in, 0 pulled out */
-  var dig = function (d) { return Math.round(d * 127 / 16); };   /* the firmware: drive = (16 v + 63) / 127 */
+  var dig = function (d) { return Math.round(d * 127 / 20); };   /* the firmware: drive = (20 v + 63) / 127 */
   function sendDb(m, i) {
     var arr = m === 0 ? S.up : m === 1 ? S.lo : S.pd;
     cc(S.ch[m], m === 2 ? (i === 0 ? 70 : 72) : 70 + i, dbv(arr[i]));

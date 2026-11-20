@@ -28,7 +28,7 @@ build.
 | **Key click, key compression** | setBfree's attack click (eight random envelopes) and the gain drop when many keys are held (1.2 dB for 2 keys, to 9 dB for 61). |
 | **Vibrato and chorus** | V1 to V3 and C1 to C3 as setBfree's scanner (a sine-swinging delay at 7.25 Hz); matches a setBfree recording in pitch swing (14.8 cents) and to within half a dB in ripple. |
 | **Percussion** | 2nd or 3rd harmonic, slow or fast decay, soft or normal, level and decay as setBfree's tone generator (within 0.4 dB), and its key click: setBfree differentiates the percussion bus with the key's attack envelope, so the bouncing attack comes out as a click. |
-| **Overdrive** | setBfree's own preamp model: biased transfer curve between two bass filters, feedback, sag; a drive control (setBfree's `overdrive.inputgain`, 17 steps of 1.5 dB, 12 = its default) with a fixed soft character (`overdrive.character` 16); the output follows the drive, so on and off are about equally loud. |
+| **Overdrive** | setBfree's own preamp model: biased transfer curve between two bass filters, feedback, sag; a drive control (setBfree's `overdrive.inputgain`, 21 steps of 1.5 dB, 12 sounds like setBfree's default, measured against setBfree on a Raspberry Pi) with a fixed soft character (`overdrive.character` 16); the output follows the drive, so on and off are about equally loud. |
 | **Two cores, limiter** | The tonewheels run on both processor cores of the FM-1 (even and odd wheels, identical to one core bit for bit); a gain limiter keeps the wheels' sum and the output below full scale (distortion -62 dB), so many keys at full swell do not clip. See [docs/DUAL_CORE.md](docs/DUAL_CORE.md). |
 | **Battery** | A four-bar cell at the bottom right of the screen; a bolt instead when a USB host has the FM-1. |
 | **Reverb** | setBfree's reverb (combs and all-passes), amount on KNOB 4 or CC 91; impulse response within -45 dB of setBfree's. |
@@ -68,7 +68,7 @@ recording to recording by up to 10 dB or more, and the Raspberry Pi has more ene
 | **SELECT** knob / **ALGORITHM** knob | Choose a drawbar / set its level 0 to 8, on the manual of the screen (the pedal has two: 16' and 8') |
 | **PRESETS** knob | Step through setBfree's registrations (e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith; they set the upper manual), then your own 112 to 127 (all three manuals and the effects) |
 | **KNOB 2** | Vibrato / chorus type V1, C1, V2, C2, V3, C3 |
-| **KNOB 3** | Overdrive drive (0 to 16) |
+| **KNOB 3** | Overdrive drive (0 to 20; 12 sounds like setBfree) |
 | **KNOB 4** | Reverb amount (0 to 127), in doubling steps: 0, 1, 2, 4, 8, 16, 32, 64, 127 |
 | **FX** | Vibrato / chorus on or off for the manual of the screen (upper on screen 1, lower on screen 2) |
 | **LFO** | Leslie: stop, slow, fast |

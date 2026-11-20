@@ -191,7 +191,7 @@ int main(void)
     organ_cc(64, 0);   CHECK("  a release (0) does nothing", P.les == 2);
     organ_cc(65, 127); CHECK("CC 65 overdrive on", P.od == 1);
     organ_cc(65, 0);   CHECK("CC 65 overdrive off", P.od == 0);
-    organ_cc(93, 127); CHECK("CC 93 drive 127 = 16", P.drv == 16);
+    organ_cc(93, 127); CHECK("CC 93 drive 127 = 20", P.drv == 20);
     organ_cc(93, 0);   CHECK("CC 93 drive 0 = 0", P.drv == 0);
     mk_lo = 5; organ_cc(123, 0); CHECK("CC 123 releases MIDI notes", mk_lo == 0);
     CHECK("character starts at 16", P.chr == 16);
@@ -205,7 +205,7 @@ int main(void)
         user_store(112, nm); CHECK("store into 112", UPGM[0].used == 1 && P.pgm == 112 && pgm_name(112)[0] == 'M');
         organ_program(5); organ_cc(93, 0); P.chr = 16;
         CHECK("program 5 sets the 5 1/3' back", P.db[1] == 8);
-        organ_program(112); CHECK("program 112 brings it all back", P.db[1] == 0 && P.drv == 16 && P.chr == 77 && P.pgm == 112);
+        organ_program(112); CHECK("program 112 brings it all back", P.db[1] == 0 && P.drv == 20 && P.chr == 77 && P.pgm == 112);
         CHECK("  and the PRESETS knob finds it", pgm_step(110, 1) == 112 && pgm_step(112, -1) == 110);
         organ_pc(111); CHECK("program change 111 selects it", P.pgm == 112);
         UPGM[0].used = 0; organ_program(5); P.chr = 16; P.drv = 0;
@@ -437,7 +437,7 @@ int main(void)
             od_xi = od_yi = 0; od_sag = od_z = od_z1 = od_gf = 0; memset(od_xh, 0, sizeof od_xh); memset(od_yh, 0, sizeof od_yh);
             for (i = 0; i < 4096u; i++)
                 q[i] = (int32_t)lrint(32768.0 * 0.045 * (sin(0.0592 * i) + 0.5 * sin(0.1488 * i) + 0.35 * sin(0.2961 * i)) / 1.85 * 1.6);
-            od_run(q, 4096, ch, 12u);
+            od_run(q, 4096, ch, OD_DRIVE_SETBFREE);
             for (i = 0; i < 4096u; i++) {
                 double xin, bias, norm, u, v, t, in = 32768.0 * 0.045 * (sin(0.0592 * i) + 0.5 * sin(0.1488 * i) + 0.35 * sin(0.2961 * i)) / 1.85 * 1.6;
                 in = floor(in + 0.5) / 32768.0;
@@ -454,7 +454,7 @@ int main(void)
                 yh[0] = v;
                 t = 0.323601515 * yh[16];
                 for (k = 0; k < 8u; k++) t += AF[k] * (yh[15 - 2 * k] + yh[17 + 2 * k]);
-                t *= OD_GOUT[12] / 32768.0 * (ORGAN_LEVEL / 32768.0);   /* the default input gain (drive 12) with its output gain */
+                t *= OD_GOUT[OD_DRIVE_SETBFREE] / 32768.0 * (ORGAN_LEVEL / 32768.0);   /* setBfree's input gain 3.5675 with its output gain */
                 if (i >= 256u) { se += (q[i] / 32768.0 - t) * (q[i] / 32768.0 - t); sr += t * t; }
             }
             if (10 * log10(sr / (se + 1e-30)) < worst) worst = 10 * log10(sr / (se + 1e-30));

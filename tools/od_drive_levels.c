@@ -16,4 +16,4 @@ static double run(int od,int drv,int sw,int nk){ static int32_t out[512]; int i,
  for(b=0;b<100;b++) app_audio(out,256);
  return __builtin_sqrt(s/n);}
 int main(){ int d; double off=run(0,0,80,5);
- for(d=0;d<=16;d++){ double r=run(1,d,80,5)/off; printf("%d %.4f %.0f\n",d,r,28820/r);} }
+ for(d=0;d<=20;d++){ double r=run(1,d,80,5)/off; printf("%d %.4f %.0f\n",d,r,28820/r);} }

@@ -19,7 +19,7 @@ or a tag `v0.5.1` on GitHub: Actions builds `b3organ-0.5.1.fwsc` and attaches it
 ## Controls
 keys (F3..G5, OCT-/OCT+) | SELECT drawbar, ALGORITHM level 0..8 | PRESETS steps through setBfree's registrations
 (default.pgm: 57 of them, e.g. 5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith) |
-KNOB1 screen (upper, lower, pedal, test values) | KNOB2 vibrato V1 C1 V2 C2 V3 C3 | KNOB3 overdrive drive 0..16 | KNOB4 reverb amount (0, 1, 2, 4, 8, 16, 32, 64, 127) |
+KNOB1 screen (upper, lower, pedal, test values) | KNOB2 vibrato V1 C1 V2 C2 V3 C3 | KNOB3 overdrive drive 0..20 | KNOB4 reverb amount (0, 1, 2, 4, 8, 16, 32, 64, 127) |
 FX vibrato on/off of the screen's manual | LFO Leslie cycle | SEL overdrive on/off | REC the FM-1's keys play upper/lower/pedal |
 screen 1 only: ENV percussion | ARP 2nd/3rd | SEQ fast/slow | PLAY soft/normal. EDIT and SAVE are free.
 
@@ -29,7 +29,7 @@ the upper one. Notes fold into C2..C7 (pedal: C1..G3, MIDI 24 to 55). The drawba
 programs of `default.pgm` are in; a program only changes what it names. Programs for the lower manual, pedals, key
 splits are kept but have no effect here (programs set the upper manual). **Controllers** as setBfree's defaults:
 1 Leslie slow/stop/fast (0..42 slow, 43..85 stop, 86..127 fast), 7 and 11 swell, 30 vibrato on (lower), 31 (upper), 95 routing (off, lower, upper, both), 64 rotary toggle, 65 overdrive on,
-66 and 80 percussion on, 81 soft, 82 fast, 83 2nd harmonic (64 and up), 92 vibrato knob, 93 overdrive drive (0..16), **91 reverb mix** (setBfree's `reverb.mix`, 0..127, default 12),
+66 and 80 percussion on, 81 soft, 82 fast, 83 2nd harmonic (64 and up), 92 vibrato knob, 93 overdrive drive (0..20), **91 reverb mix** (setBfree's `reverb.mix`, 0..127, default 12),
 70..78 drawbars **inverted as in setBfree** (127 = pushed in, 0 = fully out), 120 and 123 notes off.
 Not used: 94 convolution. As in setBfree, a program that sets the vibrato knob does not
 switch vibrato on by itself (FX button, CC 31 or program 50 do).
@@ -89,7 +89,7 @@ of a key). Measured against the Raspberry Pi (F4, percussion alone, 3rd): the cl
 setBfree's preamp (`b_overdrive/overdrive.c`) in integers (`firmware/src/organ_od.h`): input gain 3.57, a sag that lowers the bias with the level,
 an 8-tap interpolation filter, the transfer curve 1 / (1 + x^2) (a 1025-entry table, `OD_T` in `organ_tab.h`) around a bias between a bass
 filter before and one after it, global negative feedback, and the 33-tap decimation filter, output gain 0.88. About 20 multiplications per
-sample, no division. KNOB 3 / CC 93 set the drive, 0 to 16: setBfree's `overdrive.inputgain` in steps of 1.5 dB, 12 is its default (3.57), 16 is 6 dB above. The
+sample, no division. KNOB 3 / CC 93 set the drive, 0 to 20: setBfree's `overdrive.inputgain` in steps of 1.5 dB. Calibrated against setBfree (the LV2 plug-in on a Raspberry Pi, the same MIDI file, the Leslie fast so that the rotors' stop angle does not count): drive 12 matches setBfree's default within 1 to 2 dB in every third-octave band. Our tone generator feeds the preamp about 6 dB hotter, so drive 12 is setBfree's input gain 3.57 less 6 dB and drive 16 is 3.57 itself (`OD_DRIVE_SETBFREE`; until 0.5.1 drive 12 was 3.57, 6 dB too hot); 20 is 6 dB above that. The
 character (`overdrive.character`, which sets the two bass filters) is fixed at 16 (`OD_CHARACTER`); until 0.3 the nine steps were the character and the
 input gain stood still. The output gain follows the drive (`OD_GOUT`; the preamp alone is 10 to 30 dB quieter than the tone generator) so that five
 keys at swell 80 are as loud with the overdrive on as off at every step (`tools/od_drive_levels.c`); other playing stays within about 2 dB. Overdrive off bypasses
