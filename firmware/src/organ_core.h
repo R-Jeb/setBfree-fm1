@@ -239,10 +239,11 @@ static void organ_split(uint32_t n, uint32_t *act, uint32_t *vany)
  * only changes the loudness; whatever still gets over (a note that starts inside the first 32 samples) is clipped as before. */
 #define LIM_T 29491                                /* 0.9 of full scale */
 typedef struct { int32_t g; volatile int32_t lo; } lim_t;     /* g: Q15, the gain the last block ended with; lo: the lowest gain since the screen last looked */
-/* ---- the output equalizer (the web editor, SysEx 07), after reverb and Leslie, before the limiter, as on a Hammond SK1: a bass shelf
- * 20..200 Hz, a peak 250..3100 Hz (Q 1), a treble shelf 4..8 kHz, each -9..+9 dB in 0.5 dB steps (gain index 0..36, 18 = 0 dB).
- * The editor computes the biquads (Robert Bristow-Johnson's formulas, as setBfree's eqcomp.c) and sends them in Q28 with the values;
- * the firmware keeps both with its settings. A band at 0 dB is not computed: all flat, the sound is bit for bit without it. */
+/* ---- the output equalizer (the web editor's SysEx 07, or SELECT / ALGORITHM on the pedal screen), after reverb and Leslie, before the
+ * limiter: a bass shelf 20..200 Hz, a peak 250..3100 Hz (Q 1), a treble shelf 4..8 kHz, each -9..+9 dB in 0.5 dB steps (gain index 0..36,
+ * 18 = 0 dB). The biquads are Robert Bristow-Johnson's (as setBfree's eqcomp.c), computed here without floating point (Q29, sine and cosine
+ * by their series): within a few LSB of Q28 of tools/eq_coef.py and the editor's curve. A band at 0 dB is not computed: all flat, the sound
+ * is bit for bit without it. */
 #define EQ_NP 6u
 static const uint16_t EQ_DEF[EQ_NP] = {18, 80, 18, 800, 18, 6000};
 static const uint16_t EQ_MIN[EQ_NP] = {0, 20, 0, 250, 0, 4000}, EQ_MAX[EQ_NP] = {36, 200, 36, 3100, 36, 8000};
@@ -252,17 +253,59 @@ static int32_t eq_new[3][5];
 static volatile uint32_t eq_on, eq_pend;        /* the bands computed (bit k), new coefficients waiting for the next block */
 static uint32_t eq_on_new;
 static bq_t eq_s[2][3];
-static int eq_set(const uint16_t *p, const int32_t c[3][5])   /* main loop: 0 when taken; the audio switches at its next block */
+#define EQ_ONE (1LL << 29)
+static const int32_t EQ_A[37] = {               /* 10^(dB/40), Q29, for the gain index (dB = (i - 18) / 2); 1/A is EQ_A[36 - i] */
+    319793678, 329131822, 338742645, 348634109, 358814409, 369291978, 380075499, 391173904, 402596388, 414352415, 426451724, 438904339,
+    451720577, 464911056, 478486704, 492458768, 506838824, 521638784, 536870912, 552547826, 568682513, 585288343, 602379071, 619968857,
+    638072275, 656704322, 675880434, 695616499, 715928867, 736834368, 758350320, 780494549, 803285401, 826741758, 850883054, 875729287,
+    901301044};
+static const int32_t EQ_SQ[37] = {              /* sqrt(A), Q29 */
+    414352415, 420358539, 426451724, 432633230, 438904339, 445266349, 451720577, 458268361, 464911056, 471650039, 478486704, 485422468,
+    492458768, 499597060, 506838824, 514185558, 521638784, 529200047, 536870912, 544652968, 552547826, 560557121, 568682513, 576925685,
+    585288343, 593772219, 602379071, 611110681, 619968857, 628955435, 638072275, 647321265, 656704322, 666223387, 675880434, 685677461,
+    695616499};
+static int64_t eq_mul(int64_t a, int64_t b) { return (a * b + (1LL << 28)) >> 29; }   /* Q29: |a|, |b| < 2^33 and one of them < 2^30 */
+static int32_t eq_div(int64_t n, int64_t d)     /* n / d in Q28 (n and d Q29, d > 0), rounded */
+{
+    int64_t q = ((n < 0 ? -n : n) * (1LL << 28) + d / 2) / d;
+    return (int32_t)(n < 0 ? -q : q);
+}
+static void eq_calc(uint32_t kind, uint32_t g, uint32_t f, int32_t c[5])   /* kind 0 low shelf (Q 0.7071), 1 peak (Q 1), 2 high shelf */
+{
+    int64_t w = (int64_t)((uint64_t)f * 5012923577ull >> 16), x2 = eq_mul(w, w), sn = w, cs = EQ_ONE, t = w, u = EQ_ONE;   /* 2 pi f / 44100 */
+    int64_t A = EQ_A[g], al, sa, ap, am, b0, b1, b2, a0, a1, a2;
+    uint32_t n;
+    for (n = 1; n < 12u; n++) {                 /* sine and cosine: their series, |w| < 1.2 */
+        t = -eq_mul(t, x2) / (int64_t)((2 * n) * (2 * n + 1)); sn += t;
+        u = -eq_mul(u, x2) / (int64_t)((2 * n - 1) * (2 * n)); cs += u;
+    }
+    if (kind == 1u) {
+        al = sn / 2;                            /* sin / (2 Q), Q 1 */
+        b0 = EQ_ONE + eq_mul(al, A); b1 = -2 * cs; b2 = EQ_ONE - eq_mul(al, A);
+        a0 = EQ_ONE + eq_mul(al, EQ_A[36u - g]); a1 = -2 * cs; a2 = EQ_ONE - eq_mul(al, EQ_A[36u - g]);
+    } else {
+        al = eq_mul(sn, 379628703);             /* sin / (2 x 0.7071) */
+        sa = 2 * eq_mul(EQ_SQ[g], al); ap = A + EQ_ONE; am = A - EQ_ONE;
+        if (kind == 0u) {
+            b0 = eq_mul(A, ap - eq_mul(am, cs) + sa); b1 = 2 * eq_mul(A, am - eq_mul(ap, cs)); b2 = eq_mul(A, ap - eq_mul(am, cs) - sa);
+            a0 = ap + eq_mul(am, cs) + sa; a1 = -2 * (am + eq_mul(ap, cs)); a2 = ap + eq_mul(am, cs) - sa;
+        } else {
+            b0 = eq_mul(A, ap + eq_mul(am, cs) + sa); b1 = -2 * eq_mul(A, am + eq_mul(ap, cs)); b2 = eq_mul(A, ap + eq_mul(am, cs) - sa);
+            a0 = ap - eq_mul(am, cs) + sa; a1 = 2 * (am - eq_mul(ap, cs)); a2 = ap - eq_mul(am, cs) - sa;
+        }
+    }
+    c[0] = eq_div(b0, a0); c[1] = eq_div(b1, a0); c[2] = eq_div(b2, a0); c[3] = eq_div(a1, a0); c[4] = eq_div(a2, a0);
+}
+static int eq_set(const uint16_t *p)           /* main loop: 0 when taken; the audio switches at its next block */
 {
     uint32_t k, on = 0;
     for (k = 0; k < EQ_NP; k++) if (p[k] < EQ_MIN[k] || p[k] > EQ_MAX[k]) return -1;
-    for (k = 0; k < 3u; k++) {
-        if (c[k][4] <= -(1 << 28) || c[k][4] >= (1 << 28)) return -1;   /* a2: inside the unit circle, or it is not a filter */
-        if (p[2u * k] != 18u) on |= 1u << k;
-    }
     eq_pend = 0;                                /* (the audio interrupts this: it takes nothing until all is written) */
     for (k = 0; k < EQ_NP; k++) eq_p[k] = p[k];
-    for (k = 0; k < 15u; k++) eq_new[k / 5u][k % 5u] = c[k / 5u][k % 5u];
+    for (k = 0; k < 3u; k++) {
+        if (p[2u * k] != 18u) on |= 1u << k;
+        eq_calc(k, p[2u * k], p[2u * k + 1u], eq_new[k]);
+    }
     eq_on_new = on;
     eq_pend = 1;
     return 0;

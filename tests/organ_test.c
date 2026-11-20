@@ -470,8 +470,15 @@ int main(void)
         static const double F[5] = {30, 100, 1000, 3000, 12000}, W[5] = {8.91, 4.43, -6.0, -0.61, 2.9}, T[5] = {0.3, 0.3, 0.3, 0.3, 0.3};
         static int32_t l[256], r[256];
         uint32_t f, i, b, ok = 1;
-        CHECK("equalizer: a value out of range is refused", eq_set((const uint16_t[6]){37, 100, 18, 800, 18, 6000}, C) != 0);
-        CHECK("equalizer: taken", eq_set(EP, C) == 0);
+        int32_t cc[5]; int32_t dmax = 0; uint32_t k;
+        for (k = 0; k < 3u; k++) {           /* the firmware's own biquads (integer) against tools/eq_coef.py (double) */
+            eq_calc(k, EP[2u * k], EP[2u * k + 1u], cc);
+            for (i = 0; i < 5u; i++) { int32_t d = cc[i] - C[k][i]; if (d < 0) d = -d; if (d > dmax) dmax = d; }
+        }
+        printf("  equalizer coefficients: at most %d LSB (Q28) from tools/eq_coef.py\n", dmax);
+        CHECK("equalizer: the integer biquads match tools/eq_coef.py within 4 LSB", dmax <= 4);
+        CHECK("equalizer: a value out of range is refused", eq_set((const uint16_t[6]){37, 100, 18, 800, 18, 6000}) != 0);
+        CHECK("equalizer: taken", eq_set(EP) == 0);
         for (f = 0; f < 5u; f++) {
             double ph = 0, si = 0, so = 0, g;
             for (b = 0; b < 400u; b++) {
@@ -485,7 +492,7 @@ int main(void)
             if (fabs(g - W[f]) > T[f]) ok = 0;
         }
         CHECK("equalizer: the gains of the three bands", ok);
-        eq_set((const uint16_t[6]){18, 80, 18, 800, 18, 6000}, C); eq_run(l, r, 0);
+        eq_set((const uint16_t[6]){18, 80, 18, 800, 18, 6000}); eq_run(l, r, 0);
         CHECK("equalizer: all at 0 dB, nothing computed", eq_on == 0);
     }
     {   /* the limiter: a sine over full scale comes out at 0.9 with little distortion; a burst starts with few clipped samples; the gain comes back */

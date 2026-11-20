@@ -11,7 +11,8 @@
  *
  *   keys        play the organ (key 0 = F3, OCT-/OCT+ shifts) on the manual REC chose    MASTER   volume (platform.c)
  *   SELECT      choose a drawbar    ALGORITHM  set it 0..8         PRESETS  setBfree's registrations (default.pgm)
- *   KNOB1       screen: upper, lower, pedal, test values    KNOB2   vibrato V1 C1 V2 C2 V3 C3    KNOB3   overdrive drive 0..16    KNOB4   reverb
+ *               (pedal screen: after its two drawbars the equalizer's bass, middle, treble, -9..+9 dB in 0.5 dB steps)
+ *   KNOB1       screen: upper, lower, pedal, test values    KNOB2   vibrato V1 C1 V2 C2 V3 C3    KNOB3   overdrive drive 0..20    KNOB4   reverb
  *   FX          vibrato on/off (upper on screen 1, lower on screen 2)    LFO    Leslie stop/slow/fast    SEL    overdrive on/off
  *   ENV         percussion on/off   ARP  2nd/3rd   SEQ  fast/slow   PLAY  soft/normal   (screen 1)     REC   keys: upper/lower/pedal
  *   EDIT, SAVE  free
@@ -147,6 +148,35 @@ static void draw_digits(int32_t y0, const uint8_t *v, const uint8_t *ids, uint32
         cv_text((int32_t)colx(ids ? ids[k] : k) + 8, y0, &FONT_S, d, C_OFF);
     }
 }
+/* the pedal screen's right side: the equalizer's three gains as sliders (up is more, the middle 0 dB), set like the drawbars */
+#define EQ_X0 120
+#define EQ_DX 42
+static const char *const EQN[3] = {"BASS", "MID", "TREB"};
+static void eq_label(char *t, uint32_t g)       /* gain index -> "+4.5", "-9", "0" */
+{
+    uint32_t a = g >= 18u ? g - 18u : 18u - g;
+    if (a) *t++ = g > 18u ? '+' : '-';
+    if (a / 2u >= 10u) *t++ = '1';
+    *t++ = (char)('0' + a / 2u % 10u);
+    if (a & 1u) { *t++ = '.'; *t++ = '5'; }
+    *t = 0;
+}
+static void draw_eq(int32_t y0, uint32_t selected)   /* selected: 0..2, or none */
+{
+    uint32_t k;
+    for (k = 0; k < 3u; k++) {
+        int32_t x = EQ_X0 + EQ_DX * (int32_t)k, g = (int32_t)eq_p[2u * k], cy = y0 + (36 - g) * (TRACK - CAP) / 36, mid = y0 + (TRACK - CAP) / 2 + CAP / 2;
+        char t[6];
+        cv_rect(x + 4, y0, 16, TRACK, C_TRK);
+        cv_rect(x - 2, mid, 28, 1, C_OFF);                       /* 0 dB: wider than the cap, so it shows beside it */
+        if (cy + CAP / 2 < mid) cv_rect(x + 9, cy + CAP / 2, 6, mid - cy - CAP / 2, RGB(70, 70, 70));
+        else if (cy + CAP / 2 > mid) cv_rect(x + 9, mid + 1, 6, cy + CAP / 2 - mid, RGB(70, 70, 70));
+        cv_rect(x + 1, cy, 22, CAP, g == 18 ? RGB(120, 120, 120) : C_BAR);
+        if (k == selected) cv_box(x, cy - 1, 24, CAP + 2, C_ACC);
+        eq_label(t, (uint32_t)g);
+        cv_text(x + 12 - text_w(&FONT_S, t) / 2, y0 + TRACK + 2, &FONT_S, t, k == selected ? C_ACC : C_BAR);
+    }
+}
 static uint32_t block_h(uint32_t scr, uint32_t m) { return (m ? 16u : 0u) + (m == scr ? BLK_BARS : 16u); }
 static uint32_t block_y(uint32_t scr, uint32_t m) { uint32_t y = 16, j; for (j = 0; j < m; j++) y += block_h(scr, j); return y; }
 
@@ -169,11 +199,17 @@ static void band_block(uint32_t scr, uint32_t m)
         cv_begin(240, 16, C_BLACK);             /* name and bars together, 78, lost the footage row) */
         cv_text(4, 0, &FONT_S, MAN[m], act ? C_ACC : C_OFF);
         if (!act) cv_text(4 + 8 * 6, 0, &FONT_S, "INFO", C_OFF);
+        if (act && m == 2u) {                   /* the equalizer's names over its sliders */
+            uint32_t k;
+            for (k = 0; k < 3u; k++)
+                cv_text(EQ_X0 + EQ_DX * (int32_t)k + 12 - text_w(&FONT_S, EQN[k]) / 2, 0, &FONT_S, EQN[k], sel[2] == 2u + k ? C_ACC : C_OFF);
+        }
         cv_blit(0, y);
         y += 16u;
     }
     cv_begin(240, act ? BLK_BARS : 16u, C_BLACK);
     if (act) draw_bars(1, v, m == 2 ? PEDID : 0, cnt, sel[m]);
+    if (act && m == 2u) draw_eq(1, sel[2] >= 2u ? sel[2] - 2u : 9u);
     else draw_digits(0, v, m == 2 ? PEDID : 0, cnt);
     cv_blit(0, y);
 }
@@ -392,16 +428,13 @@ static void ed_sysex(const uint8_t *p, uint32_t n)   /* p: the bytes between F0 
             ed_send(0x45, d, sizeof d);
         }
         break;
-    case 0x07:                                                          /* 07: the equalizer: 6 values (14 bits), 15 coefficients (5 bytes each) */
-        if (n >= 4u + 12u + 75u) {
+    case 0x07:                                                          /* 07: the equalizer: 6 values (14 bits); the FM-1 computes the filters */
+        if (n >= 4u + 12u) {                                            /* (the first editor sent coefficients after them: ignored) */
             uint16_t ep[EQ_NP];
-            int32_t ec[3][5];
             uint8_t d[1];
             const uint8_t *q = p + 4;
             for (k = 0; k < EQ_NP; k++, q += 2) ep[k] = (uint16_t)(q[0] << 7 | q[1]);
-            for (k = 0; k < 15u; k++, q += 5)
-                ec[k / 5u][k % 5u] = (int32_t)((uint32_t)(q[0] & 15u) << 28 | (uint32_t)q[1] << 21 | (uint32_t)q[2] << 14 | (uint32_t)q[3] << 7 | q[4]);
-            d[0] = eq_set(ep, (const int32_t (*)[5])ec) ? 1 : 0;
+            d[0] = eq_set(ep) ? 1 : 0;
             ed_send(0x47, d, 1);                                        /* 47 status: 0 taken, 1 out of range */
         }
         break;
@@ -438,7 +471,7 @@ static void app_main(void)
 {
     struct { uint8_t magic, db[NB], vtype, vup, perc, perc3, fast, soft, les, od, drv, pgm, rev; int8_t oct;
              uint8_t dbl[NB], dbp[2], vlo, keys, chr, lesp[2 * LES_NP], tonp[2 * TON_NP],
-             eqp[2 * EQ_NP], eqc[60]; } set;   /* eqc: the equalizer's 15 coefficients, 4 bytes each, low first */   /* les: the Leslie's les_p, low byte first */
+             eqp[2 * EQ_NP], eqc[60]; } set;   /* eqc: unused (the first equalizer builds kept the editor's coefficients; the size stays) */   /* les: the Leslie's les_p, low byte first */
     uint32_t prev = 0, k, i, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
     uint32_t hash[22], drawn_screen = 99, drawn_batt = ~0u, logo_on = 1, logo_drawn = 0, t_input = 0;
     uint8_t held[27], heldm[27];
@@ -471,11 +504,8 @@ static void app_main(void)
         for (i = 0; i < TON_NP; i++) ton_set(i, set.tonp[2 * i] | (uint32_t)set.tonp[2 * i + 1] << 8);
         if (set.eqp[0] | set.eqp[1]) {          /* an equalizer saved (gain index 0 with frequency 0 is never one) */
             uint16_t ep[EQ_NP];
-            int32_t ec[3][5];
             for (i = 0; i < EQ_NP; i++) ep[i] = (uint16_t)(set.eqp[2 * i] | set.eqp[2 * i + 1] << 8);
-            for (i = 0; i < 15u; i++) ec[i / 5u][i % 5u] = (int32_t)((uint32_t)set.eqc[4 * i] | (uint32_t)set.eqc[4 * i + 1] << 8 |
-                                                                   (uint32_t)set.eqc[4 * i + 2] << 16 | (uint32_t)set.eqc[4 * i + 3] << 24);
-            eq_set(ep, (const int32_t (*)[5])ec);
+            eq_set(ep);
         }
         if (P.pgm >= UP_FIRST && !user_pgm(P.pgm)) P.pgm = 0;
     } else
@@ -523,8 +553,13 @@ static void app_main(void)
 
 #define enc_in(id) (t_enc = fm1_enc_take(id), t_enc ? (t_input = fm1_ms, t_enc) : 0)
         if ((e = enc_in(ENC_KNOB1)) != 0) screen = clampu((int32_t)screen + e, 3);
-        if ((e = enc_in(ENC_SELECT)) != 0) if (screen < 3u) sel[screen] = clampu((int32_t)sel[screen] + e, screen == 2 ? 1 : 8);
-        if ((e = enc_in(ENC_ALGORITHM)) != 0 && screen < 3u) {
+        if ((e = enc_in(ENC_SELECT)) != 0) if (screen < 3u) sel[screen] = clampu((int32_t)sel[screen] + e, screen == 2 ? 4 : 8);
+        if ((e = enc_in(ENC_ALGORITHM)) != 0 && screen == 2u && sel[2] >= 2u) {   /* the equalizer: 0.5 dB a step */
+            uint16_t ep[EQ_NP];
+            for (k = 0; k < EQ_NP; k++) ep[k] = eq_p[k];
+            ep[2u * (sel[2] - 2u)] = (uint16_t)clampu((int32_t)ep[2u * (sel[2] - 2u)] + e, 36);
+            eq_set(ep);
+        } else if (e != 0 && screen < 3u) {
             volatile uint8_t *db = screen == 0 ? P.db : screen == 1 ? P.dbl : P.dbp;
             db[sel[screen]] = clampu((int32_t)db[sel[screen]] + e, 8);
         }
@@ -613,6 +648,7 @@ static void app_main(void)
                     h = hmix(hmix(1, screen), m);
                     for (i = 0; i < cnt; i++) h = hmix(h, v[i]);
                     h = hmix(h, sel[m]);
+                    if (m == 2u) for (i = 0; i < 3u; i++) h = hmix(h, eq_p[2u * i]);
                     if (h != hash[1 + m]) { hash[1 + m] = h; band_block(screen, m); }
                 }
                 for (r = 0; r < 4u; r++) {
@@ -644,8 +680,6 @@ static void app_main(void)
             for (i = 0; i < LES_NP; i++) { set.lesp[2 * i] = (uint8_t)les_p[i]; set.lesp[2 * i + 1] = (uint8_t)(les_p[i] >> 8); }
             for (i = 0; i < TON_NP; i++) { set.tonp[2 * i] = (uint8_t)ton_p[i]; set.tonp[2 * i + 1] = (uint8_t)(ton_p[i] >> 8); }
             for (i = 0; i < EQ_NP; i++) { set.eqp[2 * i] = (uint8_t)eq_p[i]; set.eqp[2 * i + 1] = (uint8_t)(eq_p[i] >> 8); }
-            for (i = 0; i < 15u; i++) { uint32_t v = (uint32_t)eq_new[i / 5u][i % 5u];
-                set.eqc[4 * i] = (uint8_t)v; set.eqc[4 * i + 1] = (uint8_t)(v >> 8); set.eqc[4 * i + 2] = (uint8_t)(v >> 16); set.eqc[4 * i + 3] = (uint8_t)(v >> 24); }
             settings_save(&set, sizeof set);
             saved_key = last_key;
             dirty = 0;

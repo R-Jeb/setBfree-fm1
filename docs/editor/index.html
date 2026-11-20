@@ -202,7 +202,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
         <div style="position:relative;height:1.2em;font:400 .75rem var(--mono);color:var(--dim)"><span style="position:absolute;left:0">20</span><span style="position:absolute;left:23.3%;transform:translateX(-50%)">100</span><span style="position:absolute;left:56.6%;transform:translateX(-50%)">1k</span><span style="position:absolute;left:90%;transform:translateX(-50%)">10k</span><span style="position:absolute;right:0">20k Hz</span></div>
         <div id="eqrows" style="display:grid;gap:10px;margin-top:14px;--lw:112px;--ow:84px"></div>
         <div class="row" style="margin-top:12px"><button id="eqflat">Flat</button><span class="note" id="eqmsg"></span></div>
-        <p class="note" style="margin-top:10px">After the Leslie and the reverb, before the limiter, like the SK1's: a bass shelf (20 to 200 Hz), a middle peak (250 Hz to 3.1 kHz, about an octave wide) and a treble shelf (4 to 8 kHz), each ±9 dB in steps of 0.5 dB. A band at 0 dB costs nothing. The editor computes the filters and sends them as SysEx 07, so it needs the FM-1 connected with SysEx allowed, and firmware 0.5.2. Kept with the settings.</p>
+        <p class="note" style="margin-top:10px">After the Leslie and the reverb, before the limiter: a bass shelf (20 to 200 Hz), a middle peak (250 Hz to 3.1 kHz, about an octave wide) and a treble shelf (4 to 8 kHz), each ±9 dB in steps of 0.5 dB. A band at 0 dB costs nothing. The three levels can also be set on the FM-1: on the pedal screen, SELECT goes past the two drawbars to Bass, Mid and Treb, ALGORITHM sets them (Read from FM-1 brings them here). The frequencies are set only here. Sent as SysEx 07, so it needs the FM-1 connected with SysEx allowed, and firmware 0.5.2. Kept with the settings.</p>
       </div>
     </div>
   </section>
@@ -655,8 +655,8 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   $("tunup").onclick = function () { tonTo(0, Math.min(4500, S.tonp[0] + 10)); };
   $("clkdef").onclick = function () { tonTo(1, 500); };
 
-  /* ---- the output equalizer (SysEx 07): gains 0..36 (18 = 0 dB, 0.5 dB steps) and frequencies in Hz; the editor computes the biquads
-     (Robert Bristow-Johnson's formulas, as tools/eq_coef.py) and sends them as Q28 b0 b1 b2 a1 a2: the FM-1 only checks and runs them */
+  /* ---- the output equalizer (SysEx 07): gains 0..36 (18 = 0 dB, 0.5 dB steps) and frequencies in Hz. The FM-1 computes the biquads
+     (Robert Bristow-Johnson's formulas, as tools/eq_coef.py); the editor computes them too, only for the curve */
   var EQR = [[0, 36], [20, 200], [0, 36], [250, 3100], [0, 36], [4000, 8000]];
   var EQNAME = ["Bass", "Bass freq", "Middle", "Middle freq", "Treble", "Treble freq"], EQKIND = ["low", "peak", "high"], EQQ = [0.7071, 1.0, 0.7071];
   function eqDb(g) { return (g - 18) / 2; }
@@ -689,13 +689,9 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     });
     return db;
   }
-  function eqBytes(e) {                          /* SysEx 07's data: 6 values of 14 bits, 15 coefficients of 5 bytes (the top 4 bits, then 4 x 7) */
+  function eqBytes(e) {                          /* SysEx 07's data: 6 values of 14 bits */
     var by = [0x07];
     e.forEach(function (v) { by.push(v >> 7, v & 127); });
-    eqBands(e).forEach(function (q) { q.forEach(function (x) {
-      var v = Math.round(x * 268435456) >>> 0;
-      by.push(v >>> 28 & 15, v >>> 21 & 127, v >>> 14 & 127, v >>> 7 & 127, v & 127);
-    }); });
     return by;
   }
   var eqTimer = null, eqBusy = false, eqAgain = false;
