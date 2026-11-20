@@ -72,8 +72,8 @@
     <img src="logo@2.png" width="300" height="300" alt="The B3 ORGAN start screen: drawbars at an angle over the name">
     <div>
       <p class="kicker">Tonewheel organ firmware for the M-VAVE FM-1</p>
-      <h1>B3 ORGAN <span class="chip" id="ver">0.5.1</span></h1>
-      <p class="lead">91 tonewheels, drawbars for the upper and lower manual and the pedal, key click, vibrato and chorus, percussion, overdrive, reverb and a Leslie, computed from setBfree's own data on both cores of the FM-1.</p>
+      <h1>B3 ORGAN <span class="chip" id="ver">0.6</span></h1>
+      <p class="lead">91 tonewheels, drawbars for the upper and lower manual and the pedal, key click, vibrato and chorus, percussion, overdrive, reverb, a Leslie and an output equalizer, computed from setBfree's own data on both cores of the FM-1.</p>
       <div class="btns">
         <a class="btn primary" href="#install">Install</a>
         <a class="btn" href="play/">Play in the browser</a>
@@ -151,10 +151,11 @@
         </ul>
       </div>
       <div class="card screen">
-        <img src="site/screen-pedal.png" width="480" height="480" alt="Page 3: the pedal's two drawbars and the load" loading="lazy">
+        <img src="site/screen-pedal.png" width="480" height="480" alt="Page 3: the pedal's two drawbars and the equalizer" loading="lazy">
         <h3><span class="nr">3</span>Pedal</h3>
         <ul>
           <li>Two drawbars, 16' and 8' (MIDI channel 3).</li>
+          <li>Right of them the equalizer: <b>SELECT</b> goes on past the 8' to <code>BASS</code>, <code>MID</code>, <code>TREB</code>, <b>ALGORITHM</b> sets each −9 to +9 dB in 0.5 dB steps. The frequencies are in the editor.</li>
         </ul>
       </div>
       <div class="card screen">
@@ -180,7 +181,7 @@
         <tr><td>Keys, OCT− / OCT+</td><td>Play the manual REC chose (F3 to G5), shift the octave</td></tr>
         <tr><td>REC</td><td>The FM-1's keys play the upper manual, the lower manual or the pedal</td></tr>
         <tr><td>KNOB 1</td><td>The page: 1 upper, 2 lower, 3 pedal, 4 test values</td></tr>
-        <tr><td>SELECT / ALGORITHM</td><td>Choose a drawbar / set it 0 to 8, on the page's manual</td></tr>
+        <tr><td>SELECT / ALGORITHM</td><td>Choose a drawbar / set it 0 to 8, on the page's manual; on the pedal page also the equalizer's bass, middle, treble</td></tr>
         <tr><td>PRESETS</td><td>setBfree's registrations (5 Standard B, 11 Brian Auger 3rd, 15 Booker T, 104 Jimmy Smith …), then your own 112 to 127</td></tr>
         <tr><td>KNOB 2</td><td>Vibrato / chorus type V1, C1, V2, C2, V3, C3</td></tr>
         <tr><td>KNOB 3</td><td>Overdrive drive 0 to 20 (12 sounds like setBfree)</td></tr>
@@ -199,7 +200,7 @@
   <div class="wrap">
     <h2>More</h2>
     <div class="feat">
-      <div class="card"><h3>Editor</h3><p>Drawbars of all three manuals, presets, your own programs 112 to 127, overdrive character, Leslie speeds, tuning and key click, and a backup to a file. <a href="editor/">Open it</a>.</p></div>
+      <div class="card"><h3>Editor</h3><p>Drawbars of all three manuals, presets, your own programs 112 to 127, overdrive character, Leslie speeds, tuning and key click, the equalizer, and a backup to a file. <a href="editor/">Open it</a>.</p></div>
       <div class="card"><h3>Play in the browser</h3><p>The same organ engine in the browser, with the computer keyboard or a MIDI keyboard: a first impression. <a href="play/">Play</a>.</p></div>
       <div class="card"><h3>setBfree</h3><p>The tonewheels, the preamp, the vibrato scanner and the Leslie follow setBfree's model and data, in integers and measured against it.</p></div>
       <div class="card"><h3>Releases</h3><p>What changed in each version: the <a href="https://github.com/R-Jeb/setBfree-fm1/releases">release notes</a>. Please report what sounds different from setBfree.</p></div>
@@ -219,7 +220,7 @@
 import { Updater, OUR_LOADER } from "./js/fm1ota.js";
 import { productOf, logicalImage, validateStockPackage } from "./js/fm1pkg.js";
 
-const META = /*META*/{"version": "0.5.1", "pkg": "firmware/b3organ-0.5.1.fwsc", "product": "FM-1_953", "sha256": "840ff7a100c1ec83f02a0b7b4055ab27247b1e2000f55eafbfba9318f600c918"}/*/META*/;
+const META = /*META*/{"version": "0.6", "pkg": "firmware/b3organ-0.6.fwsc", "product": "FM-1_953", "sha256": "4d8750a4babe674d09ff07bf9bcab1a27ecfa77d8d9652fb84093f2565dc5d7b"}/*/META*/;
 const $ = (id) => document.getElementById(id);
 const TEXT = {
   nomidi: "This browser cannot do it: open the page in Chrome or Edge (on a computer).",
