@@ -265,9 +265,26 @@ static const int32_t EQ_SQ[37] = {              /* sqrt(A), Q29 */
     585288343, 593772219, 602379071, 611110681, 619968857, 628955435, 638072275, 647321265, 656704322, 666223387, 675880434, 685677461,
     695616499};
 static int64_t eq_mul(int64_t a, int64_t b) { return (a * b + (1LL << 28)) >> 29; }   /* Q29: |a|, |b| < 2^33 and one of them < 2^30 */
+static uint64_t eq_udiv(uint64_t n, uint64_t d)   /* n / d by shifting and subtracting: the FM-1's libgcc has no 64-bit division */
+{
+    uint64_t q = 0, r = 0;
+    int b;
+    for (b = 63; b >= 0; b--) {
+        r = r << 1 | (n >> b & 1u);
+        if (r >= d) { r -= d; q |= 1ull << b; }
+    }
+    return q;
+}
+static int64_t eq_sdiv(int64_t n, int64_t d)    /* d > 0, toward zero like C */
+{
+    int64_t q = (int64_t)eq_udiv((uint64_t)(n < 0 ? -n : n), (uint64_t)d);
+    return n < 0 ? -q : q;
+}
 static int32_t eq_div(int64_t n, int64_t d)     /* n / d in Q28 (n and d Q29, d > 0), rounded */
 {
-    int64_t q = ((n < 0 ? -n : n) * (1LL << 28) + d / 2) / d;
+    int64_t q = (int64_t)eq_udiv((uint64_t)(n < 0 ? -n : n) << 28, (uint64_t)d);
+    uint64_t r = ((uint64_t)(n < 0 ? -n : n) << 28) - (uint64_t)q * (uint64_t)d;
+    if (2u * r >= (uint64_t)d) q++;
     return (int32_t)(n < 0 ? -q : q);
 }
 static void eq_calc(uint32_t kind, uint32_t g, uint32_t f, int32_t c[5])   /* kind 0 low shelf (Q 0.7071), 1 peak (Q 1), 2 high shelf */
@@ -276,11 +293,11 @@ static void eq_calc(uint32_t kind, uint32_t g, uint32_t f, int32_t c[5])   /* ki
     int64_t A = EQ_A[g], al, sa, ap, am, b0, b1, b2, a0, a1, a2;
     uint32_t n;
     for (n = 1; n < 12u; n++) {                 /* sine and cosine: their series, |w| < 1.2 */
-        t = -eq_mul(t, x2) / (int64_t)((2 * n) * (2 * n + 1)); sn += t;
-        u = -eq_mul(u, x2) / (int64_t)((2 * n - 1) * (2 * n)); cs += u;
+        t = -eq_sdiv(eq_mul(t, x2), (int64_t)((2 * n) * (2 * n + 1))); sn += t;
+        u = -eq_sdiv(eq_mul(u, x2), (int64_t)((2 * n - 1) * (2 * n))); cs += u;
     }
     if (kind == 1u) {
-        al = sn / 2;                            /* sin / (2 Q), Q 1 */
+        al = sn >> 1;                            /* sin / (2 Q), Q 1 */
         b0 = EQ_ONE + eq_mul(al, A); b1 = -2 * cs; b2 = EQ_ONE - eq_mul(al, A);
         a0 = EQ_ONE + eq_mul(al, EQ_A[36u - g]); a1 = -2 * cs; a2 = EQ_ONE - eq_mul(al, EQ_A[36u - g]);
     } else {
