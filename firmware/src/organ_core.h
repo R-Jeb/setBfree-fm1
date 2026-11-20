@@ -239,6 +239,56 @@ static void organ_split(uint32_t n, uint32_t *act, uint32_t *vany)
  * only changes the loudness; whatever still gets over (a note that starts inside the first 32 samples) is clipped as before. */
 #define LIM_T 29491                                /* 0.9 of full scale */
 typedef struct { int32_t g; volatile int32_t lo; } lim_t;     /* g: Q15, the gain the last block ended with; lo: the lowest gain since the screen last looked */
+/* ---- the output equalizer (the web editor, SysEx 07), after reverb and Leslie, before the limiter, as on a Hammond SK1: a bass shelf
+ * 20..200 Hz, a peak 250..3100 Hz (Q 1), a treble shelf 4..8 kHz, each -9..+9 dB in 0.5 dB steps (gain index 0..36, 18 = 0 dB).
+ * The editor computes the biquads (Robert Bristow-Johnson's formulas, as setBfree's eqcomp.c) and sends them in Q28 with the values;
+ * the firmware keeps both with its settings. A band at 0 dB is not computed: all flat, the sound is bit for bit without it. */
+#define EQ_NP 6u
+static const uint16_t EQ_DEF[EQ_NP] = {18, 80, 18, 800, 18, 6000};
+static const uint16_t EQ_MIN[EQ_NP] = {0, 20, 0, 250, 0, 4000}, EQ_MAX[EQ_NP] = {36, 200, 36, 3100, 36, 8000};
+static uint16_t eq_p[EQ_NP] = {18, 80, 18, 800, 18, 6000};
+static int32_t eq_c[3][5];                      /* b0 b1 b2 a1 a2, Q28 (bq_run) */
+static int32_t eq_new[3][5];
+static volatile uint32_t eq_on, eq_pend;        /* the bands computed (bit k), new coefficients waiting for the next block */
+static uint32_t eq_on_new;
+static bq_t eq_s[2][3];
+static int eq_set(const uint16_t *p, const int32_t c[3][5])   /* main loop: 0 when taken; the audio switches at its next block */
+{
+    uint32_t k, on = 0;
+    for (k = 0; k < EQ_NP; k++) if (p[k] < EQ_MIN[k] || p[k] > EQ_MAX[k]) return -1;
+    for (k = 0; k < 3u; k++) {
+        if (c[k][4] <= -(1 << 28) || c[k][4] >= (1 << 28)) return -1;   /* a2: inside the unit circle, or it is not a filter */
+        if (p[2u * k] != 18u) on |= 1u << k;
+    }
+    eq_pend = 0;                                /* (the audio interrupts this: it takes nothing until all is written) */
+    for (k = 0; k < EQ_NP; k++) eq_p[k] = p[k];
+    for (k = 0; k < 15u; k++) eq_new[k / 5u][k % 5u] = c[k / 5u][k % 5u];
+    eq_on_new = on;
+    eq_pend = 1;
+    return 0;
+}
+static void eq_run(int32_t *l, int32_t *r, uint32_t n)   /* Q15 in and out (bq_run: Q19) */
+{
+    uint32_t i, k, on;
+    if (eq_pend) {
+        on = eq_on_new;
+        for (k = 0; k < 3u; k++) {
+            if ((on >> k & 1u) && !(eq_on >> k & 1u)) eq_s[0][k] = eq_s[1][k] = (bq_t){0, 0, 0, 0};   /* a band comes on: from silence */
+            for (i = 0; i < 5u; i++) eq_c[k][i] = eq_new[k][i];
+        }
+        eq_on = on;
+        eq_pend = 0;
+    }
+    on = eq_on;
+    if (!on) return;
+    for (i = 0; i < n; i++) {
+        int32_t a = l[i] << 4, b = r[i] << 4;
+        for (k = 0; k < 3u; k++)
+            if (on >> k & 1u) { a = bq_run(&eq_s[0][k], eq_c[k], a); b = bq_run(&eq_s[1][k], eq_c[k], b); }
+        l[i] = a >> 4; r[i] = b >> 4;
+    }
+}
+
 static lim_t lim_sum = {32768, 32768}, lim_out = {32768, 32768};
 /* x and y (y may be 0): one block; returns its peak before the limiter */
 static uint32_t block_limit(lim_t *s, int32_t *x, int32_t *y, uint32_t n)
@@ -381,6 +431,7 @@ static void app_audio(int32_t *out, uint32_t n)
         t3 = fm1_ticks();
         leslie_run(mono, lbuf, rbuf, n, les);
     }
+    eq_run(lbuf, rbuf, n);                      /* the output equalizer (flat: nothing) */
     t4 = fm1_ticks();
     opk = block_limit(&lim_out, lbuf, rbuf, n);      /* the output, after reverb and Leslie (they add gain too): the same limiter, over both channels */
     for (i = 0; i < n; i++) {

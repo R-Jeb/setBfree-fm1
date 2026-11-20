@@ -33,6 +33,7 @@ build.
 | **Battery** | A four-bar cell at the bottom right of the screen; a bolt instead when a USB host has the FM-1. |
 | **Reverb** | setBfree's reverb (combs and all-passes), amount on KNOB 4 or CC 91; impulse response within -45 dB of setBfree's. |
 | **Leslie** | setBfree's rotary model: horn and drum with Doppler, horn directivity, reflections, stop / slow / fast with acceleration and braking; the stopped state matches setBfree's to about -40 dB. |
+| **Equalizer** | After the Leslie, like the Hammond SK1's: bass shelf 20 to 200 Hz, middle peak 250 Hz to 3.1 kHz, treble shelf 4 to 8 kHz, each ±9 dB; set in the web editor (Tone & Reverb), kept with the settings. Flat costs nothing. |
 | **Programs** | All 110 programs of setBfree's `default.pgm` (registrations and switch settings), by the PRESETS knob or MIDI program change; 16 of your own (112 to 127), stored with the web editor. |
 | **Manuals** | Upper (MIDI channel 1, with percussion), lower (channel 2, its own drawbars and vibrato switch) and pedal (channel 3, 16' and 8' only, no vibrato or percussion); setBfree's wiring and tapering for all three. |
 | **MIDI** | USB and the TRS jack, channels 1 to 3 as above (other channels play the upper manual), setBfree's default controller numbers (drawbars 70 to 78 follow the channel, swell 7 / 11, Leslie 1 / 64, vibrato 31 / 92, percussion 66 / 80 to 83, overdrive 65 / 93, reverb 91). |
