@@ -18,14 +18,18 @@ static int32_t od_t(int32_t x)               /* 1 / (1 + x^2) for x in Q15, resu
     t0 = OD_T[i]; t1 = OD_T[i + 1u];
     return t0 + (((t1 - t0) * (int32_t)f) >> 9);
 }
-/* The drive (0 .. 16) is setBfree's overdrive.inputgain: 1.5 dB a step, 12 is its default (3.5675, Q13), 16 is 6 dB above. The output gain
- * (Q15; 0.8795 is setBfree's default) follows it: the preamp is 10 to 30 dB quieter than the bare tone generator, so each step is raised until
- * five keys at swell 80 come out as loud as with the overdrive off (tools/od_drive_levels, the numbers are the measured ratios). */
-#define OD_DRIVE_MAX 16u
+/* The drive (0 .. 20) is setBfree's overdrive.inputgain in steps of 1.5 dB, calibrated against setBfree (LV2, on a Raspberry Pi, the same
+ * MIDI file, both recorded the same way): drive 12 sounds like setBfree's default; its spectrum with the Leslie fast matches within 1 to 2 dB.
+ * Our tone generator feeds the preamp about 6 dB hotter than setBfree's, so drive 12 is setBfree's input gain 3.5675 less 6 dB, and drive 16
+ * is 3.5675 itself (until 0.5.1 that was drive 12: the overdrive was 6 dB too hot). The output gain (Q15; 0.8795 is setBfree's default)
+ * follows it: the preamp is 10 to 30 dB quieter than the bare tone generator, so each step is raised until five keys at swell 80 come out
+ * as loud as with the overdrive off (tools/od_drive_levels, the numbers are the measured ratios). */
+#define OD_DRIVE_MAX 20u
+#define OD_DRIVE_SETBFREE 16u                    /* the step whose input gain is setBfree's 3.5675 (tests/organ_test.c) */
 #define OD_CHARACTER 16u                         /* setBfree's overdrive.character at start (P.chr; NRPN 1/0 sets it) */
-static const int32_t OD_GIN[17] = {3679, 4373, 5197, 6176, 7341, 8724, 10369, 12324, 14647, 17408, 20689, 24589, 29224, 34733, 41280, 49061, 58310};
-static const int32_t OD_GOUT[17] = {960667, 811831, 682938, 577555, 488475, 414676, 346811, 293184, 248021, 210827, 178895, 155113, 134296, 118796, 105684, 98027, 89531};
-static void od_run(int32_t *x, uint32_t n, uint32_t chr, uint32_t drv)   /* x: Q15 in and out; chr: setBfree's overdrive.character 0 .. 127; drv 0 .. 16 */
+static const int32_t OD_GIN[21] = {1844, 2191, 2605, 3095, 3679, 4373, 5197, 6176, 7341, 8724, 10369, 12324, 14647, 17408, 20689, 24589, 29224, 34733, 41280, 49061, 58310};
+static const int32_t OD_GOUT[21] = {1910688, 1614413, 1357358, 1146366, 968722, 820961, 684806, 576339, 484521, 408725, 342951, 291990, 247838, 213141, 181127, 158040, 135964, 119623, 105971, 97191, 88619};
+static void od_run(int32_t *x, uint32_t n, uint32_t chr, uint32_t drv)   /* x: Q15 in and out; chr: setBfree's overdrive.character 0 .. 127; drv 0 .. 20 */
 {
     static const int32_t C[8] = {10, 41, 117, 1154, 3805, 117, 41, 10};            /* Q13 */
     static const int32_t A[8] = {6691, -2076, 1074, -607, 338, -175, 82, -40};      /* Q15, at distance 1, 3, 5 .. 15 */

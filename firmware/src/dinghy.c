@@ -302,7 +302,7 @@ static uint32_t state_key(int32_t oct, uint32_t *status)   /* what is worth savi
     for (i = 0; i < NB; i++) dbk = dbk * 9u + P.db[i];
     for (i = 0; i < NB; i++) dbk = dbk * 9u + P.dbl[i];
     dbk = dbk * 9u + P.dbp[0]; dbk = dbk * 9u + P.dbp[1];
-    dbk = dbk * 17u + P.drv;                    /* the drive 0..16 does not fit the bits above */
+    dbk = dbk * 21u + P.drv;                    /* the drive 0..20 does not fit the bits above */
     dbk = dbk * 128u + P.chr;
     for (i = 0; i < LES_NP; i++) dbk = dbk * 31u + les_p[i];
     for (i = 0; i < TON_NP; i++) dbk = dbk * 31u + ton_p[i];
@@ -442,7 +442,7 @@ static void app_main(void)
     if ((settings_load(&set, sizeof set) == 0 || settings_load(&set, sizeof set - 2u * TON_NP) == 0 ||   /* without the tuning, click */
          settings_load(&set, sizeof set - 2u * TON_NP - 2u * LES_NP) == 0 ||                          /* without the Leslie's */
          settings_load(&set, sizeof set - 2u * TON_NP - 2u * LES_NP - 1u) == 0) && set.chr < 128u && set.magic == 0xB6 && set.oct >= -2 && set.oct <= 2 && set.vtype < 6u &&
-        set.les < 3u && set.drv < 17u && set.pgm < 128u && set.rev < 128u && set.keys < 3u) {
+        set.les < 3u && set.drv <= OD_DRIVE_MAX && set.pgm < 128u && set.rev < 128u && set.keys < 3u) {
         for (i = 0; i < NB; i++) { P.db[i] = set.db[i] > 8u ? 8u : set.db[i]; P.dbl[i] = set.dbl[i] > 8u ? 8u : set.dbl[i]; }
         P.dbp[0] = set.dbp[0] > 8u ? 8u : set.dbp[0]; P.dbp[1] = set.dbp[1] > 8u ? 8u : set.dbp[1];
         P.vtype = set.vtype; P.vup = set.vup & 1u; P.vlo = set.vlo & 1u; P.perc = set.perc & 1u; P.perc3 = set.perc3 & 1u;
@@ -508,7 +508,7 @@ static void app_main(void)
             organ_program(n);
         }
         if ((e = enc_in(ENC_KNOB2)) != 0) P.vtype = clampu((int32_t)P.vtype + e, 5);
-        if ((e = enc_in(ENC_KNOB3)) != 0) P.drv = clampu((int32_t)P.drv + e, 16);
+        if ((e = enc_in(ENC_KNOB3)) != 0) P.drv = clampu((int32_t)P.drv + e, OD_DRIVE_MAX);
         if ((e = enc_in(ENC_KNOB4)) != 0) {               /* reverb mix, like CC 91: a doubling a step, fine at the bottom */
             static const uint8_t REVS[9] = {0, 1, 2, 4, 8, 16, 32, 64, 127};
             int32_t j = 0;

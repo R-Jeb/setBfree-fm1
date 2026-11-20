@@ -19,7 +19,7 @@ static volatile struct {
     uint8_t perc, perc3, fast, soft;            /* percussion: on, 3rd (else 2nd), fast decay, soft */
     uint8_t les;                                /* Leslie: 0 stop, 1 slow, 2 fast */
     uint8_t rev;                                /* reverb mix 0..127 (CC 91) */
-    uint8_t od, drv;                            /* overdrive on, and the drive 0..16 (input gain) */
+    uint8_t od, drv;                            /* overdrive on, and the drive 0..20 (input gain; 12 sounds like setBfree) */
     uint8_t swell;                              /* 0..127 (CC 7 / CC 11) */
     uint8_t pgm;                                /* the program last selected (setBfree numbering), 0 none */
     uint8_t dbl[NB];                            /* the lower manual's drawbars (MIDI channel 2) */
@@ -484,7 +484,7 @@ static void user_store(uint32_t n, const uint8_t *name)   /* the sound now into 
 }
 static int user_ok(const organ_user_t *u)       /* 1: a used slot with everything in range */
 {
-    uint32_t i, ok = u->used == 1u && u->name[12] == 0 && u->vtype < 6u && u->les < 3u && u->drv < 17u && u->chr < 128u && u->rev < 128u;
+    uint32_t i, ok = u->used == 1u && u->name[12] == 0 && u->vtype < 6u && u->les < 3u && u->drv <= OD_DRIVE_MAX && u->chr < 128u && u->rev < 128u;
     for (i = 0; ok && i < NB; i++) ok = u->db[i] < 9u && u->dbl[i] < 9u;
     return ok && u->dbp[0] < 9u && u->dbp[1] < 9u;
 }
@@ -562,7 +562,7 @@ static void organ_cc_ch(uint32_t ch, uint32_t cc, uint32_t v)   /* ch 0..15: the
             P.les = P.les == 1u ? 2u : 1u;
         break;
     case 65: P.od = v > 63u; break;                                     /* overdrive on */
-    case 93: P.drv = (uint8_t)((16u * v + 63u) / 127u); break;          /* overdrive drive 0..16 */
+    case 93: P.drv = (uint8_t)((20u * v + 63u) / 127u); break;          /* overdrive drive 0..20 */
     case 66: case 80: P.perc = v > 63u; break;                          /* percussion on */
     case 81: P.soft = v > 63u; break;                                   /* percussion volume: soft at 64 and up */
     case 82: P.fast = v > 63u; break;                                   /* percussion decay: fast at 64 and up */
