@@ -119,7 +119,7 @@ static void app_main(void);
 
 /* the script: at t ms, keys down (bit k = key k, 0 = F3), a button edge, a MIDI message. A script file (the second
  * argument) replaces it, a line each: "T keys MASK" (hex or decimal), "T btn ID", "T midi ST D1 D2", "T enc ID DELTA", "T shot" (a screen as PNG-to-be), "T end" */
-typedef struct { uint32_t t, keys; int btn; uint8_t st, d1, d2; int enc, delta, shot; uint8_t sx[64], sxn; } host_ev_t;
+typedef struct { uint32_t t, keys; int btn; uint8_t st, d1, d2; int enc, delta, shot; uint8_t sx[160], sxn; } host_ev_t;
 static const host_ev_t SCRIPT0[] = {
     {200, 1u << 7, -1, 0, 0, 0, -1, 0, 0},                                /* C4 */
     {700, 1u << 7 | 1u << 11 | 1u << 14, -1, 0, 0, 0},          /* + E4 G4: a chord */
@@ -153,7 +153,7 @@ static void read_script(const char *path)
         else if (!strcmp(what, "sysex")) {      /* hex pairs, spaces allowed */
             const char *q = strstr(line, "sysex") + 5;
             unsigned v;
-            while (*q && e.sxn < 64u) {
+            while (*q && e.sxn < 160u) {
                 while (*q == ' ' || *q == '\t') q++;
                 if (sscanf(q, "%2x", &v) != 1) break;
                 e.sx[e.sxn++] = (uint8_t)v;

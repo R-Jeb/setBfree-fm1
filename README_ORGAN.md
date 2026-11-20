@@ -50,12 +50,17 @@ programs. 3/0 setBfree's `osc.tuning` in 0.1 Hz (4400 = 440 Hz; rounded to whole
 
 | To the FM-1 | Answer |
 | --- | --- |
-| `01` read the sound | `41` + upper 9, lower 9, pedal 2 drawbars, vibrato type, upper on, lower on, percussion on, 3rd, fast, soft, Leslie (0 stop, 1 slow, 2 fast), overdrive on, drive, character, reverb, swell, program, keys (0 upper, 1 lower, 2 pedal), the Leslie's 2/0..2/7 and the tuning and key click 3/0..3/1 (two bytes each, MSB first), then the version in ASCII |
+| `01` read the sound | `41` + upper 9, lower 9, pedal 2 drawbars, vibrato type, upper on, lower on, percussion on, 3rd, fast, soft, Leslie (0 stop, 1 slow, 2 fast), overdrive on, drive, character, reverb, swell, program, keys (0 upper, 1 lower, 2 pedal), the Leslie's 2/0..2/7 the tuning and key click 3/0..3/1 and the equalizer's six values (as `07`) (two bytes each, MSB first), then the version in ASCII |
 | `02` read your programs | `42` + number, used (0/1), name (12 bytes, 0 = end), once for each of 112..127 |
 | `03` n name[12]: store the sound now as program n | when the flash is written (nothing sounding): `43` n status (0 saved, 1 not 112..127, 2 flash error), then `42` for n |
 | `04` n: delete program n | as `03` |
 | `05` n: read all of program n (a backup) | `45` + n, used, then 44 bytes: name 12, upper 9, lower 9, pedal 2 drawbars, vibrato type, upper on, lower on, percussion on, 3rd, fast, soft, Leslie, overdrive on, drive, character, reverb |
 | `06` n + the 44 bytes of `45`: write program n (a restore) | as `03`; status 3: a value out of range, nothing written |
+| `07` the output equalizer: 6 values of 14 bits (bass gain, bass Hz, middle gain, middle Hz, treble gain, treble Hz; gain 0..36 = -9..+9 dB in 0.5 dB steps, 18 = flat; 20..200, 250..3100, 4000..8000 Hz), then the 15 coefficients of the three biquads (low shelf, peak, high shelf; b0 b1 b2 a1 a2, Q28, a0 = 1), 5 bytes each: the top 4 bits, then 4 x 7 bits | `47` status (0 taken, 1 out of range or unstable); saved with the settings |
+
+**The output equalizer** (firmware 0.5.2) sits after the Leslie, before the output limiter, like the SK1's: a bass shelf, a middle peak and a treble shelf with
+Robert Bristow-Johnson's biquads (shelves Q 0.707, the peak Q 1). The editor computes the coefficients (the FM-1 has no floating point to spare) and
+`tools/eq_coef.py` prints the same numbers; a band at 0 dB is not computed, so a flat equalizer is bit-exact and costs nothing.
 
 Regenerate the program table with `python3 tools/gen_programs.py` (reads `data/setbfree-default.pgm`).
 `tests/organ_test.c` checks programs and controllers against setBfree's source on a computer, and the level of every key and drawbar against setBfree's own tone generator (`tests/organ_ref.h`).

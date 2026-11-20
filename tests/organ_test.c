@@ -462,6 +462,32 @@ int main(void)
         printf("overdrive vs setBfree's preamp model: worst SNR %.1f dB (characters 0, 64, 127)\n", worst);
         CHECK("overdrive = setBfree's preamp (SNR > 35 dB)", worst > 35.0);
     }
+    {   /* the output equalizer: bass +9 dB at 100 Hz, mid -6 dB at 1 kHz, treble +3 dB at 6 kHz (tools/eq_coef.py); gains measured on sines against the exact biquad response */
+        static const int32_t C[3][5] = {{269855968, -532667224, 262902030, -532696507, 264293259},
+                                        {256231159, -482993494, 231706375, -482993494, 219502078},
+                                        {343491397, -321185190, 113559353, -207541646, 74971751}};
+        static const uint16_t EP[6] = {36, 100, 6, 1000, 24, 6000};
+        static const double F[5] = {30, 100, 1000, 3000, 12000}, W[5] = {8.91, 4.43, -6.0, -0.61, 2.9}, T[5] = {0.3, 0.3, 0.3, 0.3, 0.3};
+        static int32_t l[256], r[256];
+        uint32_t f, i, b, ok = 1;
+        CHECK("equalizer: a value out of range is refused", eq_set((const uint16_t[6]){37, 100, 18, 800, 18, 6000}, C) != 0);
+        CHECK("equalizer: taken", eq_set(EP, C) == 0);
+        for (f = 0; f < 5u; f++) {
+            double ph = 0, si = 0, so = 0, g;
+            for (b = 0; b < 400u; b++) {
+                for (i = 0; i < 256u; i++) { l[i] = r[i] = (int32_t)(8000 * sin(ph)); ph += 2 * M_PI * F[f] / 44100; }
+                if (b >= 200u) for (i = 0; i < 256u; i++) si += (double)l[i] * l[i];
+                eq_run(l, r, 256);
+                if (b >= 200u) for (i = 0; i < 256u; i++) so += (double)l[i] * l[i];
+            }
+            g = 10 * log10(so / si);
+            printf("  equalizer at %5.0f Hz: %+5.1f dB (expected about %+4.1f)\n", F[f], g, W[f]);
+            if (fabs(g - W[f]) > T[f]) ok = 0;
+        }
+        CHECK("equalizer: the gains of the three bands", ok);
+        eq_set((const uint16_t[6]){18, 80, 18, 800, 18, 6000}, C); eq_run(l, r, 0);
+        CHECK("equalizer: all at 0 dB, nothing computed", eq_on == 0);
+    }
     {   /* the limiter: a sine over full scale comes out at 0.9 with little distortion; a burst starts with few clipped samples; the gain comes back */
         static int32_t x[256], all[256 * 40], yy[256];
         lim_t st = {32768, 32768};

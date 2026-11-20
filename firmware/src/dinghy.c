@@ -306,6 +306,7 @@ static uint32_t state_key(int32_t oct, uint32_t *status)   /* what is worth savi
     dbk = dbk * 128u + P.chr;
     for (i = 0; i < LES_NP; i++) dbk = dbk * 31u + les_p[i];
     for (i = 0; i < TON_NP; i++) dbk = dbk * 31u + ton_p[i];
+    for (i = 0; i < EQ_NP; i++) dbk = dbk * 31u + eq_p[i];
     *status = k;
     return (k ^ dbk * 2654435761u) + (uint32_t)(oct + 2);
 }
@@ -314,7 +315,7 @@ static uint32_t state_key(int32_t oct, uint32_t *status)   /* what is worth savi
 static uint32_t up_pend, up_dirty, up_gen;     /* slots waiting for the flash (bit k: program 112 + k), anything to save, a count for the screen */
 static void ed_send(uint32_t cmd, const uint8_t *d, uint32_t n)
 {
-    uint8_t m[84];
+    uint8_t m[104];
     uint32_t i, w = 0;
     m[w++] = 0xF0; m[w++] = 0x7D; m[w++] = 0x42; m[w++] = 0x33; m[w++] = (uint8_t)cmd;
     for (i = 0; i < n && w < sizeof m - 1u; i++) m[w++] = d[i] & 0x7Fu;
@@ -323,7 +324,7 @@ static void ed_send(uint32_t cmd, const uint8_t *d, uint32_t n)
 }
 static void ed_state(void)                      /* 41: the sound now, then the version */
 {
-    uint8_t d[76];
+    uint8_t d[96];
     uint32_t i, w = 0;
     const char *v = APP_VER;
     for (i = 0; i < NB; i++) d[w++] = P.db[i];
@@ -333,6 +334,7 @@ static void ed_state(void)                      /* 41: the sound now, then the v
     d[w++] = P.les; d[w++] = P.od; d[w++] = P.drv; d[w++] = P.chr; d[w++] = P.rev; d[w++] = P.swell; d[w++] = P.pgm; d[w++] = P.keys;
     for (i = 0; i < LES_NP; i++) { d[w++] = (uint8_t)(les_p[i] >> 7); d[w++] = (uint8_t)(les_p[i] & 127u); }   /* the Leslie's, 14 bits: MSB, LSB */
     for (i = 0; i < TON_NP; i++) { d[w++] = (uint8_t)(ton_p[i] >> 7); d[w++] = (uint8_t)(ton_p[i] & 127u); }   /* tuning, key click */
+    for (i = 0; i < EQ_NP; i++) { d[w++] = (uint8_t)(eq_p[i] >> 7); d[w++] = (uint8_t)(eq_p[i] & 127u); }       /* the equalizer */
     while (*v && w < sizeof d) d[w++] = (uint8_t)*v++;
     ed_send(0x41, d, w);
 }
@@ -390,6 +392,19 @@ static void ed_sysex(const uint8_t *p, uint32_t n)   /* p: the bytes between F0 
             ed_send(0x45, d, sizeof d);
         }
         break;
+    case 0x07:                                                          /* 07: the equalizer: 6 values (14 bits), 15 coefficients (5 bytes each) */
+        if (n >= 4u + 12u + 75u) {
+            uint16_t ep[EQ_NP];
+            int32_t ec[3][5];
+            uint8_t d[1];
+            const uint8_t *q = p + 4;
+            for (k = 0; k < EQ_NP; k++, q += 2) ep[k] = (uint16_t)(q[0] << 7 | q[1]);
+            for (k = 0; k < 15u; k++, q += 5)
+                ec[k / 5u][k % 5u] = (int32_t)((uint32_t)(q[0] & 15u) << 28 | (uint32_t)q[1] << 21 | (uint32_t)q[2] << 14 | (uint32_t)q[3] << 7 | q[4]);
+            d[0] = eq_set(ep, (const int32_t (*)[5])ec) ? 1 : 0;
+            ed_send(0x47, d, 1);                                        /* 47 status: 0 taken, 1 out of range */
+        }
+        break;
     case 0x06:                                                          /* 06 slot + UP_BYTES: write it (a restore); answer as 03 */
         if (slot < UP_FIRST || slot >= UP_FIRST + UP_N || n < 5u + UP_BYTES) { uint8_t d[2] = {(uint8_t)slot, 1}; ed_send(0x43, d, 2); break; }
         {
@@ -422,7 +437,8 @@ static uint8_t clampu(int32_t v, int32_t hi) { return (uint8_t)(v < 0 ? 0 : v > 
 static void app_main(void)
 {
     struct { uint8_t magic, db[NB], vtype, vup, perc, perc3, fast, soft, les, od, drv, pgm, rev; int8_t oct;
-             uint8_t dbl[NB], dbp[2], vlo, keys, chr, lesp[2 * LES_NP], tonp[2 * TON_NP]; } set;   /* les: the Leslie's les_p, low byte first */
+             uint8_t dbl[NB], dbp[2], vlo, keys, chr, lesp[2 * LES_NP], tonp[2 * TON_NP],
+             eqp[2 * EQ_NP], eqc[60]; } set;   /* eqc: the equalizer's 15 coefficients, 4 bytes each, low first */   /* les: the Leslie's les_p, low byte first */
     uint32_t prev = 0, k, i, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
     uint32_t hash[22], drawn_screen = 99, drawn_batt = ~0u, logo_on = 1, logo_drawn = 0, t_input = 0;
     uint8_t held[27], heldm[27];
@@ -439,9 +455,12 @@ static void app_main(void)
     else for (i = 0; i < UP_N; i++) UPGM[i].used = 0;
     for (i = 0; i < LES_NP; i++) { set.lesp[2 * i] = (uint8_t)LES_DEF[i]; set.lesp[2 * i + 1] = (uint8_t)(LES_DEF[i] >> 8); }
     for (i = 0; i < TON_NP; i++) { set.tonp[2 * i] = (uint8_t)TON_DEF[i]; set.tonp[2 * i + 1] = (uint8_t)(TON_DEF[i] >> 8); }
-    if ((settings_load(&set, sizeof set) == 0 || settings_load(&set, sizeof set - 2u * TON_NP) == 0 ||   /* without the tuning, click */
-         settings_load(&set, sizeof set - 2u * TON_NP - 2u * LES_NP) == 0 ||                          /* without the Leslie's */
-         settings_load(&set, sizeof set - 2u * TON_NP - 2u * LES_NP - 1u) == 0) && set.chr < 128u && set.magic == 0xB6 && set.oct >= -2 && set.oct <= 2 && set.vtype < 6u &&
+    for (i = 0; i < 2u * EQ_NP; i++) set.eqp[i] = 0;   /* (no equalizer saved: flat) */
+#define SET_EQ (2u * EQ_NP + 60u)
+    if ((settings_load(&set, sizeof set) == 0 || settings_load(&set, sizeof set - SET_EQ) == 0 ||          /* 0.5.1: no equalizer */
+         settings_load(&set, sizeof set - SET_EQ - 2u * TON_NP) == 0 ||                                      /* without the tuning, click */
+         settings_load(&set, sizeof set - SET_EQ - 2u * TON_NP - 2u * LES_NP) == 0 ||                        /* without the Leslie's */
+         settings_load(&set, sizeof set - SET_EQ - 2u * TON_NP - 2u * LES_NP - 1u) == 0) && set.chr < 128u && set.magic == 0xB6 && set.oct >= -2 && set.oct <= 2 && set.vtype < 6u &&
         set.les < 3u && set.drv <= OD_DRIVE_MAX && set.pgm < 128u && set.rev < 128u && set.keys < 3u) {
         for (i = 0; i < NB; i++) { P.db[i] = set.db[i] > 8u ? 8u : set.db[i]; P.dbl[i] = set.dbl[i] > 8u ? 8u : set.dbl[i]; }
         P.dbp[0] = set.dbp[0] > 8u ? 8u : set.dbp[0]; P.dbp[1] = set.dbp[1] > 8u ? 8u : set.dbp[1];
@@ -450,6 +469,14 @@ static void app_main(void)
         P.pgm = set.pgm; P.rev = set.rev; P.keys = set.keys; P.chr = set.chr; oct = set.oct;
         for (i = 0; i < LES_NP; i++) les_set(i, set.lesp[2 * i] | (uint32_t)set.lesp[2 * i + 1] << 8);
         for (i = 0; i < TON_NP; i++) ton_set(i, set.tonp[2 * i] | (uint32_t)set.tonp[2 * i + 1] << 8);
+        if (set.eqp[0] | set.eqp[1]) {          /* an equalizer saved (gain index 0 with frequency 0 is never one) */
+            uint16_t ep[EQ_NP];
+            int32_t ec[3][5];
+            for (i = 0; i < EQ_NP; i++) ep[i] = (uint16_t)(set.eqp[2 * i] | set.eqp[2 * i + 1] << 8);
+            for (i = 0; i < 15u; i++) ec[i / 5u][i % 5u] = (int32_t)((uint32_t)set.eqc[4 * i] | (uint32_t)set.eqc[4 * i + 1] << 8 |
+                                                                   (uint32_t)set.eqc[4 * i + 2] << 16 | (uint32_t)set.eqc[4 * i + 3] << 24);
+            eq_set(ep, (const int32_t (*)[5])ec);
+        }
         if (P.pgm >= UP_FIRST && !user_pgm(P.pgm)) P.pgm = 0;
     } else
         organ_program(5u);                      /* Standard B, 88 8000 000 */
@@ -616,6 +643,9 @@ static void app_main(void)
             set.chr = P.chr;
             for (i = 0; i < LES_NP; i++) { set.lesp[2 * i] = (uint8_t)les_p[i]; set.lesp[2 * i + 1] = (uint8_t)(les_p[i] >> 8); }
             for (i = 0; i < TON_NP; i++) { set.tonp[2 * i] = (uint8_t)ton_p[i]; set.tonp[2 * i + 1] = (uint8_t)(ton_p[i] >> 8); }
+            for (i = 0; i < EQ_NP; i++) { set.eqp[2 * i] = (uint8_t)eq_p[i]; set.eqp[2 * i + 1] = (uint8_t)(eq_p[i] >> 8); }
+            for (i = 0; i < 15u; i++) { uint32_t v = (uint32_t)eq_new[i / 5u][i % 5u];
+                set.eqc[4 * i] = (uint8_t)v; set.eqc[4 * i + 1] = (uint8_t)(v >> 8); set.eqc[4 * i + 2] = (uint8_t)(v >> 16); set.eqc[4 * i + 3] = (uint8_t)(v >> 24); }
             settings_save(&set, sizeof set);
             saved_key = last_key;
             dirty = 0;

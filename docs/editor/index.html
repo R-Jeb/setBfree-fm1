@@ -196,6 +196,14 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       <div class="ticksrow" data-max="8" data-index="1"><span>0</span><span>1</span><span>2</span><span>4</span><span>8</span><span>16</span><span>32</span><span>64</span><span>127</span></div>
       <p class="note" style="margin-top:10px">CC 91, setBfree's <code>reverb.mix</code>. The steps double, like the knob on the FM-1; the first ones are fine.</p>
     </div>
+      <div class="card" style="grid-column:1/-1">
+        <h2>Equalizer</h2>
+        <svg id="eqcurve" viewBox="0 0 600 140" preserveAspectRatio="none" style="width:100%;height:140px;display:block;background:var(--panel2);border-radius:6px" role="img" aria-label="The equalizer's response, 20 Hz to 20 kHz, ±12 dB"></svg>
+        <div style="position:relative;height:1.2em;font:400 .75rem var(--mono);color:var(--dim)"><span style="position:absolute;left:0">20</span><span style="position:absolute;left:23.3%;transform:translateX(-50%)">100</span><span style="position:absolute;left:56.6%;transform:translateX(-50%)">1k</span><span style="position:absolute;left:90%;transform:translateX(-50%)">10k</span><span style="position:absolute;right:0">20k Hz</span></div>
+        <div id="eqrows" style="display:grid;gap:10px;margin-top:14px;--lw:112px;--ow:84px"></div>
+        <div class="row" style="margin-top:12px"><button id="eqflat">Flat</button><span class="note" id="eqmsg"></span></div>
+        <p class="note" style="margin-top:10px">After the Leslie and the reverb, before the limiter, like the SK1's: a bass shelf (20 to 200 Hz), a middle peak (250 Hz to 3.1 kHz, about an octave wide) and a treble shelf (4 to 8 kHz), each ±9 dB in steps of 0.5 dB. A band at 0 dB costs nothing. The editor computes the filters and sends them as SysEx 07, so it needs the FM-1 connected with SysEx allowed, and firmware 0.5.2. Kept with the settings.</p>
+      </div>
     </div>
   </section>
 
@@ -204,7 +212,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     <div class="grid">
       <div class="card">
         <h2>Save a backup</h2>
-        <p class="note">Reads your own programs 112 to 127 and the settings of the extended parameters (overdrive character, Leslie speeds and times, tuning, key click) from the FM-1 and saves them as a file on this computer.</p>
+        <p class="note">Reads your own programs 112 to 127 and the settings of the extended parameters (overdrive character, Leslie speeds and times, tuning, key click, equalizer) from the FM-1 and saves them as a file on this computer.</p>
         <div class="row" style="margin-top:12px"><button id="bksave" class="primary">Save backup file</button></div>
         <p class="note" id="bksavemsg" style="margin-top:8px"></p>
       </div>
@@ -246,7 +254,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 
   function defaults() {
     return { up: [8, 8, 8, 0, 0, 0, 0, 0, 0], lo: [8, 3, 8, 0, 0, 0, 0, 0, 0], pd: [8, 6], vtype: 0, vup: 0, vlo: 0,
-      perc: 0, third: 1, fast: 0, soft: 0, swell: 127, od: 0, drv: 12, chr: 16, lesp: [403, 4234, 360, 3573, 161, 321, 4127, 1371], tonp: [4400, 500], v: 2, les: 0, rev: 12, pgm: 5, ch: [1, 2, 3] };
+      perc: 0, third: 1, fast: 0, soft: 0, swell: 127, od: 0, drv: 12, chr: 16, lesp: [403, 4234, 360, 3573, 161, 321, 4127, 1371], tonp: [4400, 500], eqp: [18, 80, 18, 800, 18, 6000], v: 2, les: 0, rev: 12, pgm: 5, ch: [1, 2, 3] };
   }
   try { S = JSON.parse(localStorage.getItem("b3editor") || "null"); } catch (e) { S = null; }
   if (!S || !S.up || !S.ch) S = defaults();
@@ -254,6 +262,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   if (S.chr === undefined) S.chr = 16;
   if (!S.lesp) S.lesp = [403, 4234, 360, 3573, 161, 321, 4127, 1371];
   if (!S.tonp) S.tonp = [4400, 500];
+  if (!S.eqp || S.eqp.length !== 6) S.eqp = [18, 80, 18, 800, 18, 6000];
   S.tonp[0] = Math.max(4300, Math.min(4500, Math.round(S.tonp[0] / 10) * 10));   /* whole Hz, 430..450 */
   function save() { try { localStorage.setItem("b3editor", JSON.stringify(S)); } catch (e) {} }
   function $(id) { return document.getElementById(id); }
@@ -297,7 +306,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     var c = S.ch[0];
     cc(c, 92, VTCC[S.vtype]); bin(c, 31, S.vup); bin(c, 30, S.vlo);
     bin(c, 80, S.perc); cc(c, 83, S.third ? 0 : 127); bin(c, 82, S.fast); bin(c, 81, S.soft);
-    cc(c, 11, S.swell); bin(c, 65, S.od); cc(c, 93, dig(S.drv)); nrpn(c, 1, 0, S.chr); S.lesp.forEach(function (v, i) { nrpn14(c, 2, i, v); }); S.tonp.forEach(function (v, i) { nrpn14(c, 3, i, v); }); cc(c, 1, [20, 64, 110][S.les === 0 ? 1 : S.les === 1 ? 0 : 2]); cc(c, 91, S.rev);
+    cc(c, 11, S.swell); bin(c, 65, S.od); cc(c, 93, dig(S.drv)); nrpn(c, 1, 0, S.chr); S.lesp.forEach(function (v, i) { nrpn14(c, 2, i, v); }); S.tonp.forEach(function (v, i) { nrpn14(c, 3, i, v); }); eqSend(); cc(c, 1, [20, 64, 110][S.les === 0 ? 1 : S.les === 1 ? 0 : 2]); cc(c, 91, S.rev);
   }
   /* the FM-1 calls itself "Felucca" on USB (the platform's name: the installer and the Firmware Hub look for it); here it is the organ */
   function shown(name) { return /felucca/i.test(name) ? "B3 ORGAN" : name; }
@@ -384,11 +393,17 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
         var tu = b[51] << 7 | b[52], ck = b[53] << 7 | b[54];
         if (tu >= 4000 && tu <= 4800 && ck <= 1000) { S.tonp = [Math.max(4300, Math.min(4500, Math.round(tu / 10) * 10)), ck]; vs = 55; }
       }
+      if (vs === 55 && b.length >= 67 && b[55] === 0) {   /* the equalizer (firmware 0.5.2): the bass gain's MSB is 0, a version starts with a digit or d */
+        var e = []; for (k = 0; k < 6; k++) e.push(b[55 + 2 * k] << 7 | b[56 + 2 * k]);
+        if (e.every(function (x, i) { return x >= EQR[i][0] && x <= EQR[i][1]; })) { S.eqp = e; vs = 67; }
+      }
       var v = String.fromCharCode.apply(null, b.slice(vs));
       $("fwchip").textContent = "FM-1 · firmware " + (v || "?");
       logline("in", "SysEx: the FM-1's sound" + (b[33] ? ", program " + b[33] : "") + ", firmware " + v);
       buildManuals(); save(); paint();
       if (bk) { bk.firmware = v; bk.state = true; if (bk.got === 16) bkDone(); }
+    } else if (cmd === 0x47 && b.length >= 1) {
+      $("eqmsg").textContent = b[0] ? "The FM-1 refused the equalizer (out of range)." : "";
     } else if (cmd === 0x42 && b.length >= 14) {
       var n = b[0], name = String.fromCharCode.apply(null, b.slice(2, 14).filter(function (c) { return c; }));
       if (b[1]) USER[n] = name; else delete USER[n];
@@ -553,7 +568,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   };
   function bkDone() {
     var o = { type: bk.type, format: bk.format, date: bk.date, firmware: bk.firmware, programs: bk.programs,
-      settings: { character: S.chr, leslie: S.lesp.slice(), tuning: S.tonp[0], keyclick: S.tonp[1] } };
+      settings: { character: S.chr, leslie: S.lesp.slice(), tuning: S.tonp[0], keyclick: S.tonp[1], eq: S.eqp.slice() } };
     var blob = new Blob([JSON.stringify(o, null, 1)], { type: "application/json" }), a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = "b3organ-backup-" + o.date + ".json"; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
@@ -570,6 +585,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     }
     var st = o.settings;
     if (!(st.character >= 0 && st.character <= 127) || !Array.isArray(st.leslie) || st.leslie.length !== 8 || !(st.tuning >= 4300 && st.tuning <= 4500) || !(st.keyclick >= 0 && st.keyclick <= 1000)) return "The settings in the file are damaged.";
+    if (st.eq !== undefined && !(Array.isArray(st.eq) && st.eq.length === 6 && st.eq.every(function (x, i) { return x >= EQR[i][0] && x <= EQR[i][1]; }))) return "The equalizer in the file is damaged.";
     return "";
   }
   $("bkfile").onchange = function () {
@@ -582,7 +598,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       bkFile = o; $("bkrestore").disabled = false;
       var names = Object.keys(o.programs).sort(function (a, b) { return a - b; }).map(function (k) { return k + " " + o.programs[k].name; });
       $("bkinfo").textContent = "From " + (o.date || "?") + (o.firmware ? ", firmware " + o.firmware : "") + ". Programs: " + (names.length ? names.join(", ") : "none") +
-        ". Tuning " + Math.round(o.settings.tuning / 10) + " Hz, key click " + (o.settings.keyclick / 10) + " %, character " + o.settings.character + ".";
+        ". Tuning " + Math.round(o.settings.tuning / 10) + " Hz, key click " + (o.settings.keyclick / 10) + " %, character " + o.settings.character + (o.settings.eq ? ", equalizer " + eqText(o.settings.eq) : "") + ".";
     });
   };
   $("bkrestore").onclick = function () {
@@ -599,6 +615,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     })(n);
     S.chr = o.settings.character; S.lesp = o.settings.leslie.slice(); S.tonp = [o.settings.tuning, o.settings.keyclick];
     nrpn(c, 1, 0, S.chr); S.lesp.forEach(function (v, i) { nrpn14(c, 2, i, v); }); S.tonp.forEach(function (v, i) { nrpn14(c, 3, i, v); });
+    if (o.settings.eq) { S.eqp = o.settings.eq.slice(); eqSend(); }   /* backups before 0.5.2 have none: the FM-1's stays */
     save(); paint();
     $("bkrestmsg").textContent = "Sent. The FM-1 writes the programs to its flash when nothing sounds …";
   };
@@ -637,6 +654,80 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   $("tundn").onclick = function () { tonTo(0, Math.max(4300, S.tonp[0] - 10)); };
   $("tunup").onclick = function () { tonTo(0, Math.min(4500, S.tonp[0] + 10)); };
   $("clkdef").onclick = function () { tonTo(1, 500); };
+
+  /* ---- the output equalizer (SysEx 07): gains 0..36 (18 = 0 dB, 0.5 dB steps) and frequencies in Hz; the editor computes the biquads
+     (Robert Bristow-Johnson's formulas, as tools/eq_coef.py) and sends them as Q28 b0 b1 b2 a1 a2: the FM-1 only checks and runs them */
+  var EQR = [[0, 36], [20, 200], [0, 36], [250, 3100], [0, 36], [4000, 8000]];
+  var EQNAME = ["Bass", "Bass freq", "Middle", "Middle freq", "Treble", "Treble freq"], EQKIND = ["low", "peak", "high"], EQQ = [0.7071, 1.0, 0.7071];
+  function eqDb(g) { return (g - 18) / 2; }
+  function eqHz(f) { return f >= 1000 ? +(f / 1000).toFixed(2) + " kHz" : f + " Hz"; }
+  function eqFmt(i, v) { return i & 1 ? eqHz(v) : (v > 18 ? "+" : v < 18 ? "−" : "") + Math.abs(eqDb(v)).toFixed(1) + " dB"; }
+  function eqText(e) { return [0, 2, 4].map(function (i) { return eqFmt(i, e[i]) + " at " + eqHz(e[i + 1]); }).join(", "); }
+  function eqPos(i, f) { var r = EQR[i]; return Math.round(200 * Math.log(f / r[0]) / Math.log(r[1] / r[0])); }   /* frequency sliders: logarithmic, 0..200 */
+  function eqFreq(i, x) {
+    var r = EQR[i], f = r[0] * Math.pow(r[1] / r[0], x / 200), st = f < 100 ? 1 : f < 1000 ? 5 : 50;
+    return Math.max(r[0], Math.min(r[1], Math.round(f / st) * st));
+  }
+  function eqBiquad(kind, f, g, q) {             /* a0 divided out: [b0, b1, b2, a1, a2] */
+    var A = Math.pow(10, g / 40), w = 2 * Math.PI * f / 44100, c = Math.cos(w), s = Math.sin(w), al = s / (2 * q), sa = 2 * Math.sqrt(A) * al, b, a;
+    if (kind === "peak") { b = [1 + al * A, -2 * c, 1 - al * A]; a = [1 + al / A, -2 * c, 1 - al / A]; }
+    else if (kind === "low") {
+      b = [A * ((A + 1) - (A - 1) * c + sa), 2 * A * ((A - 1) - (A + 1) * c), A * ((A + 1) - (A - 1) * c - sa)];
+      a = [(A + 1) + (A - 1) * c + sa, -2 * ((A - 1) + (A + 1) * c), (A + 1) + (A - 1) * c - sa];
+    } else {
+      b = [A * ((A + 1) + (A - 1) * c + sa), -2 * A * ((A - 1) + (A + 1) * c), A * ((A + 1) + (A - 1) * c - sa)];
+      a = [(A + 1) - (A - 1) * c + sa, 2 * ((A - 1) - (A + 1) * c), (A + 1) - (A - 1) * c - sa];
+    }
+    return [b[0] / a[0], b[1] / a[0], b[2] / a[0], a[1] / a[0], a[2] / a[0]];
+  }
+  function eqBands(e) { return [0, 1, 2].map(function (k) { return eqBiquad(EQKIND[k], e[2 * k + 1], eqDb(e[2 * k]), EQQ[k]); }); }
+  function eqResp(bs, f) {                       /* |H| in dB at f */
+    var w = 2 * Math.PI * f / 44100, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w), db = 0;
+    bs.forEach(function (q) {
+      var nr = q[0] + q[1] * c1 + q[2] * c2, ni = -q[1] * s1 - q[2] * s2, dr = 1 + q[3] * c1 + q[4] * c2, di = -q[3] * s1 - q[4] * s2;
+      db += 10 * Math.log10((nr * nr + ni * ni) / (dr * dr + di * di));
+    });
+    return db;
+  }
+  function eqBytes(e) {                          /* SysEx 07's data: 6 values of 14 bits, 15 coefficients of 5 bytes (the top 4 bits, then 4 x 7) */
+    var by = [0x07];
+    e.forEach(function (v) { by.push(v >> 7, v & 127); });
+    eqBands(e).forEach(function (q) { q.forEach(function (x) {
+      var v = Math.round(x * 268435456) >>> 0;
+      by.push(v >>> 28 & 15, v >>> 21 & 127, v >>> 14 & 127, v >>> 7 & 127, v & 127);
+    }); });
+    return by;
+  }
+  var eqTimer = null, eqBusy = false, eqAgain = false;
+  function eqSend() {                            /* one at a time: while one waits for its 47, the newest values follow after it */
+    if (!sysexOk || !out) { logline("dim", "The equalizer needs SysEx (and firmware 0.5.2): not sent."); return; }
+    if (eqBusy) { eqAgain = true; return; }
+    eqBusy = true; eqAgain = false;
+    function done() { eqBusy = false; if (eqAgain) eqSend(); }
+    ask(eqBytes(S.eqp), "equalizer " + eqText(S.eqp), function (c) { if (c === 0x47) { setTimeout(done, 0); return true; } return false; }, 600,
+      function () { eqBusy = false; $("eqmsg").textContent = "No answer: is firmware 0.5.2 on the FM-1?"; });
+  }
+  function eqLater() { clearTimeout(eqTimer); eqTimer = setTimeout(eqSend, 60); }
+  EQNAME.forEach(function (nm, i) {
+    var d = document.createElement("div"); d.className = "slider";
+    d.innerHTML = '<span class="lbl"></span><input type="range" id="eq' + i + '" min="0" max="' + (i & 1 ? 200 : 36) + '" step="1"><output id="eqv' + i + '"></output>';
+    d.firstChild.textContent = nm;
+    if (i & 1 && i < 5) d.style.marginBottom = "8px";
+    $("eqrows").appendChild(d);
+    d.querySelector("input").oninput = function () { S.eqp[i] = i & 1 ? eqFreq(i, +this.value) : +this.value; save(); paintEq(); eqLater(); };
+  });
+  $("eqflat").onclick = function () { S.eqp[0] = S.eqp[2] = S.eqp[4] = 18; save(); paintEq(); eqSend(); };
+  function paintEq() {
+    S.eqp.forEach(function (v, i) { $("eq" + i).value = i & 1 ? eqPos(i, v) : v; $("eqv" + i).textContent = eqFmt(i, v); });
+    var W = 600, H = 140, y = function (db) { return H / 2 - db * (H / 2 - 8) / 12; }, x = function (f) { return W * Math.log(f / 20) / Math.log(1000); };
+    var g = "", bs = eqBands(S.eqp), pts = [];
+    [100, 1000, 10000].forEach(function (f) { g += '<line x1="' + x(f) + '" x2="' + x(f) + '" y1="0" y2="' + H + '" stroke="var(--line)" stroke-width="1" vector-effect="non-scaling-stroke"/>'; });
+    [-9, 9].forEach(function (db) { g += '<line x1="0" x2="' + W + '" y1="' + y(db) + '" y2="' + y(db) + '" stroke="var(--line)" stroke-dasharray="3 4" stroke-width="1" vector-effect="non-scaling-stroke"/>'; });
+    g += '<line x1="0" x2="' + W + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="var(--dim)" stroke-width="1" vector-effect="non-scaling-stroke"/>';
+    for (var k = 0; k <= 150; k++) { var f = 20 * Math.pow(1000, k / 150); pts.push(x(f).toFixed(1) + "," + y(eqResp(bs, f)).toFixed(1)); }
+    g += '<polyline points="' + pts.join(" ") + '" fill="none" stroke="var(--accent)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>';
+    $("eqcurve").innerHTML = g;
+  }
 
   /* ---- a MIDI file to the FM-1: parsed into [ms, bytes], sent with time stamps a little ahead (Web MIDI keeps the timing) */
   var smf = null, smfRun = null;
@@ -730,6 +821,7 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     S.lesp.forEach(function (v, i) { $("lp" + i).value = v; $("lpv" + i).textContent = lesFmt(i, v); });
     $("tun").value = S.tonp[0]; $("tunv").textContent = Math.round(S.tonp[0] / 10) + " Hz";
     $("clk").value = S.tonp[1]; $("clkv").textContent = (S.tonp[1] / 10).toFixed(1) + " %";
+    paintEq();
     var ri = nearestRev(S.rev); $("rev").value = ri; $("revv").textContent = REVS[ri];
     programList();
     [0, 1, 2].forEach(function (m) { $("ch" + m).value = S.ch[m]; });
