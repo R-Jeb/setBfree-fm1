@@ -409,7 +409,7 @@ static void up_unpack(organ_user_t *u, const uint8_t *d)   /* the name made prin
     u->dbp[0] = d[r++]; u->dbp[1] = d[r++];
     u->vtype = d[r++]; u->vup = d[r++] & 1u; u->vlo = d[r++] & 1u; u->perc = d[r++] & 1u; u->perc3 = d[r++] & 1u; u->fast = d[r++] & 1u;
     u->soft = d[r++] & 1u; u->les = d[r++]; u->od = d[r++] & 1u; u->drv = d[r++]; u->chr = d[r++]; u->rev = d[r++];
-    u->rsv[0] = u->rsv[1] = 0;
+    u->rsv[0] = UP_DRV_NEW; u->rsv[1] = 0;      /* the editor sends the drive in 0.6's scale (it converts older backups) */
     if (!u->name[0]) { u->name[0] = 'U'; u->name[1] = 'S'; u->name[2] = 'E'; u->name[3] = 'R'; }
 }
 static void ed_sysex(const uint8_t *p, uint32_t n)   /* p: the bytes between F0 and F7 */
@@ -480,6 +480,7 @@ static void app_main(void)
     if (getenv("ORGAN_ONE")) organ_two = 0;          /* tests: all the wheels in one call, to compare with the two halves */
 #endif
     int32_t oct = 0;
+    int set_old;
 
     for (i = 0; i < NW; i++) { seed = seed * 1664525u + 1013904223u; wph[i] = seed; }   /* the wheels start anywhere */
     for (i = 0; i < 27u; i++) { held[i] = 255; heldm[i] = 0; }
@@ -491,7 +492,11 @@ static void app_main(void)
     for (i = 0; i < TON_NP; i++) { set.tonp[2 * i] = (uint8_t)TON_DEF[i]; set.tonp[2 * i + 1] = (uint8_t)(TON_DEF[i] >> 8); }
     for (i = 0; i < 2u * EQ_NP; i++) set.eqp[i] = 0;   /* (no equalizer saved: flat) */
 #define SET_EQ (2u * EQ_NP + 60u)
-    if ((settings_load(&set, sizeof set) == 0 || settings_load(&set, sizeof set - SET_EQ) == 0 ||          /* 0.5.1: no equalizer */
+    {
+        int now = settings_load(&set, sizeof set) == 0;   /* 0.6's; anything older has the drive 0..16: the same sound is 4 steps higher now */
+        set_old = !now;
+    }
+    if ((!set_old || settings_load(&set, sizeof set - SET_EQ) == 0 ||                                      /* 0.5.1: no equalizer */
          settings_load(&set, sizeof set - SET_EQ - 2u * TON_NP) == 0 ||                                      /* without the tuning, click */
          settings_load(&set, sizeof set - SET_EQ - 2u * TON_NP - 2u * LES_NP) == 0 ||                        /* without the Leslie's */
          settings_load(&set, sizeof set - SET_EQ - 2u * TON_NP - 2u * LES_NP - 1u) == 0) && set.chr < 128u && set.magic == 0xB6 && set.oct >= -2 && set.oct <= 2 && set.vtype < 6u &&
@@ -499,7 +504,7 @@ static void app_main(void)
         for (i = 0; i < NB; i++) { P.db[i] = set.db[i] > 8u ? 8u : set.db[i]; P.dbl[i] = set.dbl[i] > 8u ? 8u : set.dbl[i]; }
         P.dbp[0] = set.dbp[0] > 8u ? 8u : set.dbp[0]; P.dbp[1] = set.dbp[1] > 8u ? 8u : set.dbp[1];
         P.vtype = set.vtype; P.vup = set.vup & 1u; P.vlo = set.vlo & 1u; P.perc = set.perc & 1u; P.perc3 = set.perc3 & 1u;
-        P.fast = set.fast & 1u; P.soft = set.soft & 1u; P.les = set.les; P.od = set.od & 1u; P.drv = set.drv;
+        P.fast = set.fast & 1u; P.soft = set.soft & 1u; P.les = set.les; P.od = set.od & 1u; P.drv = set_old ? (set.drv + 4u > OD_DRIVE_MAX ? OD_DRIVE_MAX : set.drv + 4u) : set.drv;
         P.pgm = set.pgm; P.rev = set.rev; P.keys = set.keys; P.chr = set.chr; oct = set.oct;
         for (i = 0; i < LES_NP; i++) les_set(i, set.lesp[2 * i] | (uint32_t)set.lesp[2 * i + 1] << 8);
         for (i = 0; i < TON_NP; i++) ton_set(i, set.tonp[2 * i] | (uint32_t)set.tonp[2 * i + 1] << 8);
