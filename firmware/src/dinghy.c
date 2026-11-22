@@ -209,9 +209,10 @@ static void band_block(uint32_t scr, uint32_t m)
         y += 16u;
     }
     cv_begin(240, act ? BLK_BARS : 16u, C_BLACK);
-    if (act) draw_bars(1, v, m == 2 ? PEDID : 0, cnt, sel[m]);
-    if (act && m == 2u) draw_eq(1, sel[2] >= 2u ? sel[2] - 2u : 9u);
-    else draw_digits(0, v, m == 2 ? PEDID : 0, cnt);
+    if (act) {
+        draw_bars(1, v, m == 2 ? PEDID : 0, cnt, sel[m]);
+        if (m == 2u) draw_eq(1, sel[2] >= 2u ? sel[2] - 2u : 9u);
+    } else draw_digits(0, v, m == 2 ? PEDID : 0, cnt);   /* (0.6 drew these over the active manual's bars too) */
     cv_blit(0, y);
 }
 static const char *const VIB[6] = {"V1", "C1", "V2", "C2", "V3", "C3"};
