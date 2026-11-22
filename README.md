@@ -124,7 +124,10 @@ git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
 python3 tools/fm1_install.py build/b3organ.fwsc
 ```
 
-A push to GitHub also builds it (Actions); a tag `vX.Y` makes a release with the package attached.
+A push to GitHub also builds it (Actions). A tag `vX.Y` makes the release: the FM-1 Firmware Hub's shared workflow
+([zvenson/fm1-build](https://github.com/zvenson/fm1-build)) builds the package from that commit, runs the tests, signs a
+build attestation and attaches the package and `SHA256SUMS`. Check a package with
+`gh attestation verify b3organ-X.Y.fwsc --repo R-Jeb/setBfree-fm1 --signer-workflow zvenson/fm1-build/.github/workflows/build.yml`.
 
 ## How it is built
 
