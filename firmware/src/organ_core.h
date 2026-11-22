@@ -663,6 +663,7 @@ static void organ_pc(uint32_t uc)               /* MIDI program change: setBfree
 /* MIDI controllers, as setBfree's defaults. The drawbars (70 to 78) and the notes follow the channel: 1 upper, 2 lower, 3 pedal (16' and 8'
  * only); everything else is accepted on any channel. Not used here, no such part: 94 convolution. */
 static uint32_t nrpn = 0x3FFFu, nrpn_msb;       /* the NRPN chosen by CC 99 / 98 (MSB << 7 | LSB); 0x3FFF none; the data entry's MSB */
+static uint32_t sus_dn;                          /* CC 64 is down (64 and up) */
 static void organ_cc_ch(uint32_t ch, uint32_t cc, uint32_t v)   /* ch 0..15: the drawbars follow the channel, 0 upper, 1 lower, 2 pedal (16' = 70, 8' = 72) */
 {
     if (v > 127u) return;
@@ -675,9 +676,10 @@ static void organ_cc_ch(uint32_t ch, uint32_t cc, uint32_t v)   /* ch 0..15: the
     case 7: case 11: P.swell = (uint8_t)v; break;                       /* swell pedal */
     case 91: P.rev = (uint8_t)v; break;                                 /* reverb mix (setBfree: reverb.mix) */
     case 1: P.les = v / 43u == 0u ? 1u : v / 43u == 1u ? 0u : 2u; break;    /* rotary preset: slow, stop, fast */
-    case 64:                                                            /* rotary speed toggle (sustain pedal) */
-        if (v > 63u)
+    case 64:                                                            /* rotary speed toggle (sustain pedal): once as it goes down past 64; */
+        if (v > 63u && !sus_dn)                                         /* a pedal with values between (32, 63, 95, 127, ...) toggled at each */
             P.les = P.les == 1u ? 2u : 1u;
+        sus_dn = v > 63u;
         break;
     case 65: P.od = v > 63u; break;                                     /* overdrive on */
     case 93: P.drv = (uint8_t)((20u * v + 63u) / 127u); break;          /* overdrive drive 0..20 */

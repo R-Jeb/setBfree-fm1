@@ -187,8 +187,10 @@ int main(void)
     organ_cc(1, 60);   CHECK("CC 1 60 = stop", P.les == 0);
     organ_cc(1, 127);  CHECK("CC 1 127 = fast", P.les == 2);
     organ_cc(64, 127); CHECK("CC 64 sustain toggles fast -> slow", P.les == 1);
-    organ_cc(64, 127); CHECK("  and slow -> fast", P.les == 2);
-    organ_cc(64, 0);   CHECK("  a release (0) does nothing", P.les == 2);
+    organ_cc(64, 127); CHECK("  held (127 again): no second toggle", P.les == 1);
+    organ_cc(64, 0);   CHECK("  a release (0) does nothing", P.les == 1);
+    organ_cc(64, 127); CHECK("  the next press: slow -> fast", P.les == 2);
+    organ_cc(64, 0);
     organ_cc(65, 127); CHECK("CC 65 overdrive on", P.od == 1);
     organ_cc(65, 0);   CHECK("CC 65 overdrive off", P.od == 0);
     organ_cc(93, 127); CHECK("CC 93 drive 127 = 20", P.drv == 20);
@@ -465,6 +467,18 @@ int main(void)
         }
         printf("overdrive vs setBfree's preamp model: worst SNR %.1f dB (characters 0, 64, 127)\n", worst);
         CHECK("overdrive = setBfree's preamp (SNR > 35 dB)", worst > 35.0);
+    }
+    {   /* CC 64 (sustain pedal): one Leslie toggle per press, also from a pedal that sends values between */
+        static const uint8_t SEQ[] = {32, 63, 95, 127, 95, 63, 31, 0};
+        uint32_t k, before;
+        organ_cc(1, 20); before = P.les;
+        for (k = 0; k < sizeof SEQ; k++) organ_cc(64, SEQ[k]);
+        CHECK("sustain pedal with values between: one toggle a press", P.les != before && (P.les == 1u || P.les == 2u));
+        for (k = 0; k < sizeof SEQ; k++) organ_cc(64, SEQ[k]);
+        CHECK("sustain pedal: the second press toggles back", P.les == before);
+        organ_cc(64, 127); organ_cc(64, 0);
+        CHECK("sustain pedal: a plain on / off still toggles", P.les != before);
+        organ_cc(64, 127); organ_cc(64, 0); organ_cc(1, 64);
     }
     {   /* the output equalizer: bass +9 dB at 100 Hz, mid -6 dB at 1 kHz, treble +3 dB at 6 kHz (tools/eq_coef.py); gains measured on sines against the exact biquad response */
         static const int32_t C[3][5] = {{269855968, -532667224, 262902030, -532696507, 264293259},
