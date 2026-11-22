@@ -763,12 +763,21 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
     });
     return { ev: out, len: out.length ? out[out.length - 1][0] : 0, fmt: fmt };
   }
-  function smfOff() {                         /* every note off, on every channel */
+  var SMF_AHEAD = 400, smfQuiet = 0;         /* events go out up to SMF_AHEAD ms early, with their time stamp */
+  function smfOff(at) {                       /* all notes off on every channel, now or at a time */
     if (!out) return;
-    for (var c = 0; c < 16; c++) try { out.send([0xB0 | c, 123, 0, 0xB0 | c, 64, 0]); } catch (e) {}
+    var m = [];
+    for (var c = 0; c < 16; c++) m.push(0xB0 | c, 123, 0);
+    try { at ? out.send(m, at) : out.send(m); } catch (e) {}
   }
-  function smfStop(msg) {
-    if (smfRun) { clearInterval(smfRun.timer); smfRun = null; try { out && out.clear && out.clear(); } catch (e) {} smfOff(); }
+  function smfStop(msg) {                     /* Chrome has no MIDIOutput.clear(): what was sent early still arrives, notes on among it,
+                                                 so all notes off again once the last of it is through (a new start waits for that) */
+    if (smfRun) {
+      clearInterval(smfRun.timer); smfRun = null;
+      try { out && out.clear && out.clear(); } catch (e) {}
+      smfQuiet = performance.now() + SMF_AHEAD + 100;
+      smfOff(); smfOff(smfQuiet);
+    }
     $("smfplay").disabled = !smf || !out; $("smfstop").disabled = true;
     if (msg) $("smfinfo").textContent = msg;
   }
@@ -785,11 +794,11 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   $("smfplay").onclick = function () {
     if (!smf || !out) return;
     smfStop();
-    var t0 = performance.now() + 300, i = 0;
+    var t0 = Math.max(performance.now() + 300, smfQuiet + 50), i = 0;
     logline("out", "MIDI file " + smf.name + ": playing");
     smfRun = { timer: setInterval(function () {
       var now = performance.now();
-      for (; i < smf.ev.length && t0 + smf.ev[i][0] < now + 400; i++) try { out.send(smf.ev[i][1], t0 + smf.ev[i][0]); } catch (e) {}
+      for (; i < smf.ev.length && t0 + smf.ev[i][0] < now + SMF_AHEAD; i++) try { out.send(smf.ev[i][1], t0 + smf.ev[i][0]); } catch (e) {}
       $("smfinfo").textContent = smf.name + ": " + Math.max(0, (now - t0) / 1000).toFixed(1) + " / " + (smf.len / 1000).toFixed(1) + " s";
       if (i >= smf.ev.length && now > t0 + smf.len + 500) { clearInterval(smfRun.timer); smfRun = null; logline("out", "MIDI file: done"); smfStop(smf.name + ": done"); }
     }, 50) };
