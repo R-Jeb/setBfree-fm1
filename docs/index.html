@@ -10,6 +10,7 @@
 <title>B3 ORGAN for the FM-1</title>
 <meta name="description" content="A B3 tonewheel organ for the M-VAVE FM-1, after setBfree: install it from the browser.">
 <link rel="icon" href="logo.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
   :root { --bg: #2e231b; --panel: #3a2c22; --panel2: #443428; --line: #5b4636; --fg: #f4eee2; --dim: #c4b4a2;
           --amber: #e0893a; --amber-fg: #1a0f05; --brown: #6e3a1e; --ok: #8fc46a; --bad: #ff6b5b;
@@ -64,9 +65,20 @@
     .install { grid-template-columns: 1fr; }
     td:first-child { white-space: normal; }
   }
+
+/* the bar the three pages share (install, editor, play in browser) */
+.sitebar { background: #241b14; border-bottom: 1px solid var(--line); }
+.sitebar-in { max-width: 1040px; margin: 0 auto; padding: 8px max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; justify-content: space-between; }
+.sitebar .brand { display: flex; gap: 10px; align-items: center; color: #f4eee2; text-decoration: none; font: 700 .95rem "Inter", system-ui, sans-serif; letter-spacing: .1em; }
+.sitebar .brand img { width: 28px; height: 28px; image-rendering: pixelated; border-radius: 4px; }
+.sitebar .sitelinks { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.sitebar .sitelinks a { color: #c4b4a2; text-decoration: none; font: 500 .9rem "Inter", system-ui, sans-serif; padding: 4px 0; border-bottom: 2px solid transparent; }
+.sitebar .sitelinks a:hover { color: #f4eee2; }
+.sitebar .sitelinks a[aria-current=page] { color: #f4eee2; border-bottom-color: #e0893a; }
 </style>
 </head>
 <body>
+<nav class="sitebar" aria-label="B3 ORGAN pages"><div class="sitebar-in"><a class="brand" href="./"><img src="logo.png" alt="" width="28" height="28">B3 ORGAN</a><div class="sitelinks"><a href="./" aria-current="page">Install</a><a href="editor/">Editor</a><a href="play/">Play in browser</a><a href="https://github.com/R-Jeb/setBfree-fm1">GitHub</a></div></div></nav>
 <header class="hero">
   <div class="wrap">
     <img src="logo@2.png" width="300" height="300" alt="The B3 ORGAN start screen: drawbars at an angle over the name">
