@@ -90,6 +90,30 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
   .manuals { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.35fr) minmax(140px, .55fr) minmax(250px, 1fr); }
   .manuals .storerow { grid-template-columns: 1fr; }
 }
+/* the equalizer: three bands side by side under the curve, each its level (vertical, up is more) and its frequency */
+.eqrows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 14px; }
+.eqband { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.eqlev { display: grid; justify-items: center; gap: 6px; }
+.eqlev output, .eqfrq output { font: 500 .9rem var(--mono); }
+.eqlev .lbl, .eqfrq .lbl { min-width: 0; font-weight: 600; color: var(--fg); }
+.eqfrq .lbl { font-weight: 500; color: var(--dim); }
+.eqfrq { display: grid; gap: 6px; }
+.eqrange { font: 400 .75rem var(--mono); color: var(--dim); }
+.eqlev { position: relative; }
+input.vr, input.hr { -webkit-appearance: none; appearance: none; background: none; margin: 0; }
+input.vr { writing-mode: vertical-lr; direction: rtl; width: 22px; height: 130px;
+  background: linear-gradient(var(--dim), var(--dim)) center / 14px 1px no-repeat; }      /* the line at 0 dB */
+input.hr { width: 100%; height: 22px; }
+input.vr::-webkit-slider-runnable-track { width: 4px; border-radius: 2px; background: var(--line); }
+input.hr::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--line); }
+input.vr::-moz-range-track { width: 4px; border-radius: 2px; background: var(--line); }
+input.hr::-moz-range-track { height: 4px; border-radius: 2px; background: var(--line); }
+input.vr::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 12px; margin-left: -11px; border-radius: 3px; background: var(--accent); border: 0; }
+input.vr::-moz-range-thumb { width: 26px; height: 12px; border-radius: 3px; background: var(--accent); border: 0; }
+input.hr::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: var(--accent); border: 0; }
+input.hr::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 0; }
+@media (max-width: 760px) { .eqrows { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .eq10k { display: none; } }
 .storebtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 @media (max-width: 560px) { :root { --lw: 70px; --ow: 48px; } .track { height: 150px; } }
 @media (prefers-reduced-motion: no-preference) { .knob { transition: top .06s linear; } }
@@ -201,8 +225,8 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       <div class="card" style="grid-column:1/-1">
         <h2>Equalizer</h2>
         <svg id="eqcurve" viewBox="0 0 600 140" preserveAspectRatio="none" style="width:100%;height:140px;display:block;background:var(--panel2);border-radius:6px" role="img" aria-label="The equalizer's response, 20 Hz to 20 kHz, ±12 dB"></svg>
-        <div style="position:relative;height:1.2em;font:400 .75rem var(--mono);color:var(--dim)"><span style="position:absolute;left:0">20</span><span style="position:absolute;left:23.3%;transform:translateX(-50%)">100</span><span style="position:absolute;left:56.6%;transform:translateX(-50%)">1k</span><span style="position:absolute;left:90%;transform:translateX(-50%)">10k</span><span style="position:absolute;right:0">20k Hz</span></div>
-        <div id="eqrows" style="display:grid;gap:10px;margin-top:14px;--lw:112px;--ow:84px"></div>
+        <div style="position:relative;height:1.2em;font:400 .75rem var(--mono);color:var(--dim)"><span style="position:absolute;left:0">20</span><span style="position:absolute;left:23.3%;transform:translateX(-50%)">100</span><span style="position:absolute;left:56.6%;transform:translateX(-50%)">1k</span><span class="eq10k" style="position:absolute;left:90%;transform:translateX(-50%)">10k</span><span style="position:absolute;right:0">20k Hz</span></div>
+        <div id="eqrows" class="eqrows"></div>
         <div class="row" style="margin-top:12px"><button id="eqflat">Flat</button><span class="note" id="eqmsg"></span></div>
         <p class="note" style="margin-top:10px">After the Leslie and the reverb, before the limiter: a bass shelf (20 to 200 Hz), a middle peak (250 Hz to 3.1 kHz, about an octave wide) and a treble shelf (4 to 8 kHz), each ±9 dB in steps of 0.5 dB. A band at 0 dB costs nothing. The three levels can also be set on the FM-1: on the pedal screen, SELECT goes past the two drawbars to Bass, Mid and Treb, ALGORITHM sets them (Read from FM-1 brings them here). The frequencies are set only here. Sent as SysEx 07, so it needs the FM-1 connected with SysEx allowed, and firmware 0.6. Kept with the settings.</p>
       </div>
@@ -709,13 +733,20 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
       function () { eqBusy = false; $("eqmsg").textContent = "No answer: is firmware 0.6 on the FM-1?"; });
   }
   function eqLater() { clearTimeout(eqTimer); eqTimer = setTimeout(eqSend, 60); }
-  EQNAME.forEach(function (nm, i) {
-    var d = document.createElement("div"); d.className = "slider";
-    d.innerHTML = '<span class="lbl"></span><input type="range" id="eq' + i + '" min="0" max="' + (i & 1 ? 200 : 36) + '" step="1"><output id="eqv' + i + '"></output>';
-    d.firstChild.textContent = nm;
-    if (i & 1 && i < 5) d.style.marginBottom = "8px";
+  ["Bass", "Middle", "Treble"].forEach(function (nm, k) {   /* a band: its level as a vertical slider, its frequency beside it, under its part of the curve */
+    var d = document.createElement("div"), i = 2 * k, r = EQR[i + 1];
+    d.className = "eqband";
+    d.innerHTML = '<div class="eqlev"><output id="eqv' + i + '"></output><input type="range" class="vr" id="eq' + i + '" min="0" max="36" step="1" title="Double-click: 0 dB"><span class="lbl"></span></div>' +
+      '<div class="eqfrq"><span class="lbl">Frequency</span><input type="range" class="hr" id="eq' + (i + 1) + '" min="0" max="200" step="1"><output id="eqv' + (i + 1) + '"></output>' +
+      '<span class="eqrange">' + eqHz(r[0]) + ' to ' + eqHz(r[1]) + '</span></div>';
+    d.querySelector(".eqlev .lbl").textContent = nm;
+    d.querySelector("#eq" + i).setAttribute("aria-label", nm + " level");
+    d.querySelector("#eq" + (i + 1)).setAttribute("aria-label", nm + " frequency");
     $("eqrows").appendChild(d);
-    d.querySelector("input").oninput = function () { S.eqp[i] = i & 1 ? eqFreq(i, +this.value) : +this.value; save(); paintEq(); eqLater(); };
+    [i, i + 1].forEach(function (j) {
+      d.querySelector("#eq" + j).oninput = function () { S.eqp[j] = j & 1 ? eqFreq(j, +this.value) : +this.value; save(); paintEq(); eqLater(); };
+    });
+    d.querySelector("#eq" + i).ondblclick = function () { S.eqp[i] = 18; save(); paintEq(); eqLater(); };
   });
   $("eqflat").onclick = function () { S.eqp[0] = S.eqp[2] = S.eqp[4] = 18; save(); paintEq(); eqSend(); };
   function paintEq() {
