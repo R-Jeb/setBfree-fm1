@@ -533,7 +533,7 @@ static void smk_faders(void)
         }
         was = (fad_last[f] * mx + 63) / 127;
         fad_last[f] = (int16_t)pos;
-        if (!fad_live[f] && (v == cur || (was < cur) != (v < cur))) fad_live[f] = 1;   /* reached or passed the value */
+        if (!fad_live[f] && (v == cur || was == cur || (was < cur) != (v < cur))) fad_live[f] = 1;   /* it sat on the value, reached it or passed it */
         if (fad_live[f] && v != cur) smk_fad_set(f, v);
     }
 }

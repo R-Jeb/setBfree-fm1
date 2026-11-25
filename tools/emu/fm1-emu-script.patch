@@ -1,0 +1,26 @@
+diff --git a/crates/fm1-emu/src/main.rs b/crates/fm1-emu/src/main.rs
+index 6fe331f..602e2ec 100644
+--- a/crates/fm1-emu/src/main.rs
++++ b/crates/fm1-emu/src/main.rs
+@@ -454,6 +454,9 @@ fn main() -> ExitCode {
+             }
+         }
+     }
++    if let Ok(sc) = std::env::var("FM1_SCRIPT") {          // (local: fm1-soc's script, analog inputs too)
++        fm1_soc::script::queue(&mut soc, sc.trim());
++    }
+     soc.periph.script.make_contiguous().sort_by_key(|(c, _)| *c);
+     let mut snaps: Vec<u64> = args.snap.clone();
+     snaps.sort_unstable();
+@@ -623,6 +626,11 @@ fn main() -> ExitCode {
+                     if soc.periph.ms() >= at {
+                         snaps.remove(0);
+                         let path = format!("work/lcd_{at}.bmp");
++                        {
++                            let pads: Vec<String> = soc.periph.smk.pads.iter().map(|c| format!("{c:06x}")).collect();
++                            let leds = soc.periph.smk.led_peek();
++                            let _ = std::fs::write(format!("work/pads_{at}.txt"), format!("{}\n{:?}\n", pads.join(" "), &leds[..4]));
++                        }
+                         if let Err(e) = fm1_soc::write_bmp(&path, &soc.lcd.fb, soc.lcd.inverted) {
+                             eprintln!("error: cannot write {path}: {e}");
+                             failed = true;

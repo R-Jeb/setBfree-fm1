@@ -1,6 +1,8 @@
 # Builds the FM-1 firmware package (.fwsc) with JieLi's toolchain and checks the host tests.
 # Push or pull request: both jobs run, the package is kept as a download (Actions tab, the run, "Artifacts").
 # A tag v*: the release is built and signed by release.yml (the Firmware Hub's shared workflow), not here.
+# Run by hand (Actions, build, Run workflow): also the SMK-37 package in Joakim Eriksson's emulator (fm1-emu) with
+# tools/emu/smk37.script; its screens and the pads' colours are the artifact smk37-emu.
 name: build
 
 on:
@@ -120,3 +122,72 @@ jobs:
           path: |
             build/*.fwsc
             build/dinghy.dis
+
+  smk37-emu:
+    name: SMK-37 in the emulator (by hand)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install Pillow
+      - name: Cache toolchain and SDK
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.jieli
+            ~/fw-AC79_AIoT_SDK
+          key: jieli-AC79NN_SDK_V1.2.1_2023-12-13-v1
+      - name: Get JieLi toolchain and SDK
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          tools/get_toolchain.sh
+          git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$HOME/fw-AC79_AIoT_SDK"
+      - name: Build the SMK-37 package
+        run: ./build.sh --board smk37
+      - name: Build the emulator (its batch runner, with fm1-soc's script for the analog inputs)
+        run: |
+          git clone https://github.com/joakimeriksson/fm1-emu.git /tmp/emu
+          git -C /tmp/emu checkout 736aded
+          git -C /tmp/emu apply "$PWD/tools/emu/fm1-emu-script.patch"
+          (cd /tmp/emu && cargo build --release -p fm1-emu)
+      - name: Run it
+        run: |
+          PKG=$(ls build/b3organ-smk37*.fwsc | head -1)
+          SCRIPT=$(grep -v '^#' tools/emu/smk37.script | tr -d ' \n')
+          mkdir -p /tmp/emu/work && cd /tmp/emu
+          FM1_SCRIPT="$SCRIPT" ./target/release/fm1-emu --fwsc "$GITHUB_WORKSPACE/$PKG" --ms 5200 --snap 1000,2600,3500,4500,5100 --quiet | tail -20
+      - name: The pictures (and in the log, as base64 PNG)
+        run: |
+          mkdir -p build/emu
+          python3 - <<'PY'
+          import base64, glob, io, os
+          from PIL import Image
+          for b in sorted(glob.glob("/tmp/emu/work/lcd_*.bmp")):
+              t = b.split("_")[-1][:-4]
+              im = Image.open(b).convert("RGB")
+              pads = open(f"/tmp/emu/work/pads_{t}.txt").read().split("\n")
+              cols = pads[0].split()
+              out = Image.new("RGB", (240, 300), (24, 24, 24))
+              out.paste(im, (0, 0))
+              for i, c in enumerate(cols):
+                  v = int(c, 16); rgb = (v >> 16 & 255, v >> 8 & 255, v & 255)
+                  x0, y0 = (i % 8) * 30 + 3, 246 + (i // 8) * 26
+                  for x in range(x0, x0 + 24):
+                      for y in range(y0, y0 + 22):
+                          out.putpixel((x, y), rgb)
+              p = f"build/emu/smk37-{t}.png"
+              out.save(p)
+              buf = io.BytesIO(); out.save(buf, "PNG")
+              print(f"PNG {t} {base64.b64encode(buf.getvalue()).decode()}")
+              print(f"PADS {t} {pads[0]} LEDS {pads[1]}")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smk37-emu
+          path: build/emu/*.png
