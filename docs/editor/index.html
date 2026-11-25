@@ -4,40 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>B3 Organ Editor</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="icon" href="../logo.png">
 <style>
 /* Layout: a console. Header with the connection, tabs, then one page of controls at a time; the drawbars are the hero of the first page.
-   Palette: the FM-1's own: warm graphite, the LCD's orange, and the three drawbar colours of a Hammond. */
+   Palette: the install page's (warm brown, amber), with the three drawbar colours of a Hammond. */
 :root {
-  --bg: #f1efea; --panel: #fbfaf7; --panel2: #e9e6df; --line: #cfcac0; --fg: #1d1c1a; --dim: #6b675f;
-  --accent: #c2570c; --accent-fg: #fff; --ok: #2f7d3c; --warn: #a6620a;
-  --db-brown: #7a4b26; --db-white: #f3efe4; --db-black: #1c1c1e; --db-edge: #8d887c;
-  --font: "Barlow Semi Condensed", "Segoe UI", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #141517; --panel: #1c1e21; --panel2: #25282c; --line: #34383d; --fg: #e8e5dd; --dim: #8e9096;
-    --accent: #f08a2c; --accent-fg: #1a1208; --ok: #6cc17a; --warn: #e2a24a;
-    --db-brown: #8d5a30; --db-white: #ece7d8; --db-black: #08080a; --db-edge: #4d5056; color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #141517; --panel: #1c1e21; --panel2: #25282c; --line: #34383d; --fg: #e8e5dd; --dim: #8e9096;
-  --accent: #f08a2c; --accent-fg: #1a1208; --ok: #6cc17a; --warn: #e2a24a;
-  --db-brown: #8d5a30; --db-white: #ece7d8; --db-black: #08080a; --db-edge: #4d5056; color-scheme: dark;
+  --bg: #2e231b; --panel: #3a2c22; --panel2: #443428; --line: #5b4636; --fg: #f4eee2; --dim: #c4b4a2;
+  --accent: #e0893a; --accent-fg: #1a0f05; --ok: #8fc46a; --warn: #f0b860;
+  --db-brown: #8d5a30; --db-white: #ece7d8; --db-black: #120d0a; --db-edge: #6e5644;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
-body { background: var(--bg); color: var(--fg); font: 400 16px/1.4 var(--font); margin: 0;
-  padding-block: 16px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 16px; }
-h1 { font-size: 1.35rem; font-weight: 600; letter-spacing: .02em; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+body { background: var(--bg); color: var(--fg); font: 400 16px/1.45 var(--font); margin: 0; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 16px;
+  padding-block: 20px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+a { color: var(--accent); }
+h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
 h2 { font-size: .8rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 0 0 10px; }
 .top { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
 .conn { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .chip { white-space: nowrap; font: 500 .8rem var(--mono); padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--dim); background: var(--panel); }
 .chip.on { color: var(--ok); border-color: var(--ok); }
 .chip.off { color: var(--warn); border-color: var(--warn); }
-button, select, input[type=number] { font: 500 .95rem var(--font); color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; }
+button, select, input[type=number] { font: 500 .95rem var(--font); color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; }
 button { cursor: pointer; }
 button:hover { border-color: var(--dim); }
 button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
@@ -47,7 +38,7 @@ nav.tabs button { border: 0; border-bottom: 3px solid transparent; border-radius
 nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var(--accent); }
 .page[hidden] { display: none; }
 .page { display: grid; gap: 16px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0; }
 .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
@@ -102,13 +93,24 @@ nav.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var
 .storebtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 @media (max-width: 560px) { :root { --lw: 70px; --ow: 48px; } .track { height: 150px; } }
 @media (prefers-reduced-motion: no-preference) { .knob { transition: top .06s linear; } }
+
+/* the bar the three pages share (install, editor, play in browser) */
+.sitebar { background: #241b14; border-bottom: 1px solid var(--line); }
+.sitebar-in { max-width: 1240px; margin: 0 auto; padding: 8px max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; justify-content: space-between; }
+.sitebar .brand { display: flex; gap: 10px; align-items: center; color: #f4eee2; text-decoration: none; font: 700 .95rem "Inter", system-ui, sans-serif; letter-spacing: .1em; }
+.sitebar .brand img { width: 28px; height: 28px; image-rendering: pixelated; border-radius: 4px; }
+.sitebar .sitelinks { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.sitebar .sitelinks a { color: #c4b4a2; text-decoration: none; font: 500 .9rem "Inter", system-ui, sans-serif; padding: 4px 0; border-bottom: 2px solid transparent; }
+.sitebar .sitelinks a:hover { color: #f4eee2; }
+.sitebar .sitelinks a[aria-current=page] { color: #f4eee2; border-bottom-color: #e0893a; }
 </style>
 
 </head>
 <body>
+<nav class="sitebar" aria-label="B3 ORGAN pages"><div class="sitebar-in"><a class="brand" href="../"><img src="../logo.png" alt="" width="28" height="28">B3 ORGAN</a><div class="sitelinks"><a href="../">Install</a><a href="../editor/" aria-current="page">Editor</a><a href="../play/">Play in browser</a><a href="https://github.com/R-Jeb/setBfree-fm1">GitHub</a></div></div></nav>
 <div class="wrap">
   <header class="top">
-    <h1>B3 Organ Editor <span class="chip" id="fwchip">for the FM-1 · firmware 0.5</span></h1>
+    <h1>B3 Organ Editor <span class="chip" id="fwchip">for the FM-1 · firmware 0.6</span></h1>
     <div class="conn">
       <span id="status" class="chip off">no MIDI</span>
       <select id="port" aria-label="MIDI output" disabled><option>no output</option></select>
