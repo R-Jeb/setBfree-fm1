@@ -468,15 +468,165 @@ static void ed_sysex(const uint8_t *p, uint32_t n)   /* p: the bytes between F0 
 }
 
 static uint8_t clampu(int32_t v, int32_t hi) { return (uint8_t)(v < 0 ? 0 : v > hi ? hi : v); }
+#if BOARD_SMK37                                 /* 37 keys, keybed key 0 = C3 (fm1_in.keys); the FM-1: 27, key 0 = F3 */
+#define NKEYS 37u
+#define KEY0 48
+typedef uint64_t keys_t;
+#define KEYS_NOW() ((keys_t)fm1_in.keys)
+#else
+#define NKEYS 27u
+#define KEY0 53
+typedef uint32_t keys_t;
+#define KEYS_NOW() fm1_in.notes
+#endif
+
+#if BOARD_SMK37
+/* ---- the SMK-37's own controls (README_SMK37.md). The pads are the drawbars 16' .. 1 1/3' of a manual, one column under each
+ * knob: the top pad pushes the drawbar in (down to 0), the bottom pad pulls it out (up to 8); held, it goes on. Pad bank 1 is the
+ * upper manual, bank 2 the lower one (KNOB BANK + FADER BANK together; the screen follows). The faders: bank A the upper 1' and the
+ * equalizer's bass, middle, treble; bank B the lower 1', -, the pedal's 16' and 8' (FADER BANK). A fader takes over only once it
+ * passes the value it sets (no jump after a bank, a preset or the editor changed it). The mod wheel: down slow, middle stop, up fast.
+ * The pedal jack: the swell, once a pedal has moved. */
+#define SMK_REP_MS 400u                         /* a pad held: the first repeat, then every SMK_REP_EVERY ms */
+#define SMK_REP_EVERY 120u
+static uint8_t pad_bank, fad_bank, fad_live[4], smk_combo;
+static int16_t fad_last[4] = {-1, -1, -1, -1};
+static uint32_t pad_held, pad_t[16];
+static volatile uint8_t *smk_bars(uint32_t bank) { return bank ? P.dbl : P.db; }
+/* the colour of drawbar c (0 = 16' .. 7 = 1 1/3'): brown, white, black as on the B3; the LEDs cannot show black: a cold blue */
+static const uint8_t SMK_DBC[8][3] = {{150, 60, 10}, {150, 60, 10}, {150, 150, 140}, {150, 150, 140},
+                                      {30, 50, 150}, {150, 150, 140}, {30, 50, 150}, {30, 50, 150}};
+static int32_t smk_fad_get(uint32_t f)          /* what fader f sets now, in its own steps; -1: nothing */
+{
+    if (f == 0u) return smk_bars(fad_bank)[8];
+    if (!fad_bank) return eq_p[2u * (f - 1u)];
+    return f == 1u ? -1 : P.dbp[f - 2u];
+}
+static int32_t smk_fad_max(uint32_t f) { return f && !fad_bank ? 36 : 8; }   /* drawbars 0..8, the equalizer 0..36 (18 = 0 dB) */
+static void smk_fad_set(uint32_t f, int32_t v)
+{
+    if (f == 0u) smk_bars(fad_bank)[8] = (uint8_t)v;
+    else if (!fad_bank) {
+        uint16_t ep[EQ_NP];
+        uint32_t k;
+        for (k = 0; k < EQ_NP; k++) ep[k] = eq_p[k];
+        ep[2u * (f - 1u)] = (uint16_t)v;
+        if (eq_p[2u * (f - 1u)] != (uint16_t)v) eq_set(ep);
+    } else if (f >= 2u) P.dbp[f - 2u] = (uint8_t)v;
+}
+static void smk_fad_bank(uint32_t b)            /* a new bank: every fader waits for its value again */
+{
+    uint32_t f;
+    fad_bank = (uint8_t)b;
+    for (f = 0; f < 4u; f++) { fad_live[f] = 0; fad_last[f] = -1; }
+}
+static void smk_faders(void)
+{
+    uint32_t f;
+    for (f = 0; f < 4u; f++) {
+        int32_t pos = fm1_in.fader[f], cur = smk_fad_get(f), mx = smk_fad_max(f), v = (pos * mx + 63) / 127, was;
+        if (cur < 0) continue;
+        if (fad_last[f] < 0) { fad_last[f] = (int16_t)pos; continue; }
+        if (pos == fad_last[f]) {
+            if (fad_live[f] && v != cur) fad_live[f] = 0;      /* changed from elsewhere (a preset, a knob, the editor): wait again */
+            continue;
+        }
+        was = (fad_last[f] * mx + 63) / 127;
+        fad_last[f] = (int16_t)pos;
+        if (!fad_live[f] && (v == cur || (was < cur) != (v < cur))) fad_live[f] = 1;   /* reached or passed the value */
+        if (fad_live[f] && v != cur) smk_fad_set(f, v);
+    }
+}
+static void smk_pad_step(uint32_t pad)          /* top row: in (less), bottom row: out (more) */
+{
+    volatile uint8_t *db = smk_bars(pad_bank);
+    uint32_t c = pad & 7u;
+    db[c] = clampu((int32_t)db[c] + (pad < 8u ? -1 : 1), 8);
+}
+static void smk_pads(uint32_t now)
+{
+    int32_t ev;
+    uint32_t p;
+    while ((ev = smk_pad_take()) >= 0) {
+        p = (uint32_t)ev >> 8 & 15u;
+        if (ev & 0x7F) { pad_held |= 1u << p; pad_t[p] = now + SMK_REP_MS; smk_pad_step(p); }
+        else pad_held &= ~(1u << p);
+    }
+    for (p = 0; p < 16u; p++)
+        if (pad_held >> p & 1u && (int32_t)(now - pad_t[p]) >= 0) { pad_t[p] = now + SMK_REP_EVERY; smk_pad_step(p); }
+    for (p = 0; p < 8u; p++) {                  /* the colours: the bottom pad as bright as the drawbar is out, the top one dim */
+        uint32_t v = smk_bars(pad_bank)[p], lo = 8u + v * 31u, hi = 24u;
+        const uint8_t *c = SMK_DBC[p];
+        if (pad_held >> p & 1u) hi = 255u;      /* (a held pad lights up) */
+        padled_set(p, (uint8_t)(c[0] * hi / 255u), (uint8_t)(c[1] * hi / 255u), (uint8_t)(c[2] * hi / 255u));
+        if (pad_held >> (p + 8u) & 1u) lo = 255u;
+        padled_set(p + 8u, (uint8_t)(c[0] * lo / 255u), (uint8_t)(c[1] * lo / 255u), (uint8_t)(c[2] * lo / 255u));
+    }
+    padled_flush();
+}
+static void smk_modwheel(void)                  /* the mod wheel in three parts (up = a lower reading): slow, stop, fast */
+{
+    static int32_t lo = 474, hi = 629, zone = -1;   /* (a unit's travel; it widens to what the wheel reaches) */
+    int32_t raw = fm1_in.wheel[1], pos, z;
+    if (!raw) return;
+    if (raw < lo) lo = raw;
+    if (raw > hi) hi = raw;
+    pos = (hi - raw) * 300 / (hi - lo);         /* 0 down .. 300 up */
+    z = zone < 0 ? (pos < 100 ? 0 : pos < 200 ? 1 : 2) : zone;
+    if (zone >= 0) {                            /* a margin of 12 around the borders: no flutter */
+        if (pos < 100 - 12) z = 0;
+        else if (pos > 100 + 12 && pos < 200 - 12) z = 1;
+        else if (pos > 200 + 12) z = 2;
+    }
+    if (zone >= 0 && z != zone) P.les = (uint8_t)(z == 0 ? 1u : z == 1 ? 0u : 2u);   /* (P.les: 0 stop, 1 slow, 2 fast) */
+    zone = z;                                   /* (at power-on the wheel only gives its place: the saved Leslie stays) */
+}
+static void smk_pedal(void)                     /* an expression pedal on the jack: the swell, once it has moved (no plug detection) */
+{
+    static int32_t first = -1, lo = 1023, hi = 0, on = 0;
+    int32_t raw = fm1_in.pedal, v;
+    if (!raw) return;
+    v = 1023 - raw;                             /* (as the stock firmware: inverted) */
+    if (first < 0) first = v;
+    if (!on && (v - first > 64 || first - v > 64)) on = 1;
+    if (!on) return;
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+    if (hi - lo >= 200) P.swell = (uint8_t)((v - lo) * 127 / (hi - lo));
+}
+/* the buttons only the SMK has: < > the presets, KNOB BANK + FADER BANK the pads' manual, FADER BANK alone the faders' bank */
+static void smk_buttons(uint32_t b, uint32_t rel)
+{
+    uint32_t both = 1u << BTN_KNOB_BANK | 1u << BTN_FADER_BANK;
+    if (b & (1u << BTN_LEFT | 1u << BTN_RIGHT)) {
+        uint32_t n = P.pgm ? P.pgm : 5u;
+        organ_program(pgm_step(n, b & (1u << BTN_RIGHT) ? 1 : -1));
+        fad_live[0] = fad_live[1] = fad_live[2] = fad_live[3] = 0;
+    }
+    if ((fm1_in.buttons & both) == both && !smk_combo) {
+        smk_combo = 1;
+        pad_bank ^= 1u;
+        screen = pad_bank;                      /* the screen shows the manual the pads set */
+    }
+    if (rel & (1u << BTN_FADER_BANK)) {
+        if (!smk_combo) smk_fad_bank(fad_bank ^ 1u);
+        if (!(fm1_in.buttons & both)) smk_combo = 0;
+    }
+    if (rel & (1u << BTN_KNOB_BANK) && !(fm1_in.buttons & both)) smk_combo = 0;
+    fm1_led_key(BTN_KNOB_BANK, pad_bank != 0);  /* lit: the pads are the lower manual's */
+    fm1_led_key(BTN_FADER_BANK, fad_bank != 0); /* lit: the faders are bank B */
+}
+#endif
 
 static void app_main(void)
 {
     struct { uint8_t magic, db[NB], vtype, vup, perc, perc3, fast, soft, les, od, drv, pgm, rev; int8_t oct;
              uint8_t dbl[NB], dbp[2], vlo, keys, chr, lesp[2 * LES_NP], tonp[2 * TON_NP],
              eqp[2 * EQ_NP], eqc[60]; } set;   /* eqc: unused (the first equalizer builds kept the editor's coefficients; the size stays) */   /* les: the Leslie's les_p, low byte first */
-    uint32_t prev = 0, k, i, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
+    keys_t prev = 0;
+    uint32_t k, i, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
     uint32_t hash[22], drawn_screen = 99, drawn_batt = ~0u, logo_on = 1, logo_drawn = 0, t_input = 0;
-    uint8_t held[27], heldm[27];
+    uint8_t held[NKEYS], heldm[NKEYS];
 #ifdef DINGHY_HOST
     if (getenv("ORGAN_ONE")) organ_two = 0;          /* tests: all the wheels in one call, to compare with the two halves */
 #endif
@@ -484,8 +634,11 @@ static void app_main(void)
     int set_old;
 
     for (i = 0; i < NW; i++) { seed = seed * 1664525u + 1013904223u; wph[i] = seed; }   /* the wheels start anywhere */
-    for (i = 0; i < 27u; i++) { held[i] = 255; heldm[i] = 0; }
+    for (i = 0; i < NKEYS; i++) { held[i] = 255; heldm[i] = 0; }
     sel[0] = sel[1] = 2; sel[2] = 0;
+#if BOARD_SMK37
+    smk_pad_events = 1;                         /* the pads are ours (events), not white keys */
+#endif
     set.chr = OD_CHARACTER;
     if (data_load(UPGM, sizeof UPGM) == 0) user_check();
     else for (i = 0; i < UP_N; i++) UPGM[i].used = 0;
@@ -520,18 +673,19 @@ static void app_main(void)
     last_key = saved_key = state_key(oct, &i);
 
     for (;;) {
-        uint32_t keys, down, up, rel, b;
+        keys_t keys, down, up;
+        uint32_t rel, b;
         int32_t e, t_enc;
         uint8_t st, d1, d2;
         platform_poll();
 
-        keys = fm1_in.notes;
+        keys = KEYS_NOW();
         down = keys & ~prev;
         up = prev & ~keys;
         prev = keys;
-        for (k = 0; k < 27u; k++) {             /* a key stops the note it started, on the manual it started it, whatever the octave is now */
+        for (k = 0; k < NKEYS; k++) {           /* a key stops the note it started, on the manual it started it, whatever the octave is now */
             if (down >> k & 1u) {
-                uint32_t note = (uint32_t)(53 + 12 * oct + (int32_t)k);
+                uint32_t note = (uint32_t)(KEY0 + 12 * oct + (int32_t)k);
                 held[k] = (uint8_t)note; heldm[k] = P.keys;
                 organ_note(P.keys, 1u, note, 1, 0);
             }
@@ -542,7 +696,7 @@ static void app_main(void)
         if (keys || b) t_input = fm1_ms;
         if (logo_on) {                          /* the logo: the first knob or button only brings the controls back; a key plays */
             uint32_t any = keys != 0 || b != 0;
-            for (k = 0; k < 7u; k++) if (fm1_enc_take(k) != 0) any = 1;
+            for (k = 0; k < FM1_NENC; k++) if (fm1_enc_take(k) != 0) any = 1;
             if (any) { logo_on = 0; logo_drawn = 0; screen = 0; drawn_screen = 99; t_input = fm1_ms; b = 0; }
         } else if (fm1_ms - t_input > LOGO_IDLE_MS) { logo_on = 1; logo_drawn = 0; }
         if (b & (1u << BTN_OCT_DOWN) && oct > -2) { oct--; dirty = 1; t_change = fm1_ms; }
@@ -570,12 +724,25 @@ static void app_main(void)
             volatile uint8_t *db = screen == 0 ? P.db : screen == 1 ? P.dbl : P.dbp;
             db[sel[screen]] = clampu((int32_t)db[sel[screen]] + e, 8);
         }
+#if BOARD_SMK37
+        if ((e = enc_in(ENC_SWELL)) != 0) P.swell = clampu((int32_t)P.swell + 4 * e, 127);   /* K7: the swell, as CC 11 */
+        smk_buttons(b, rel);
+        smk_pads(fm1_ms);
+        smk_faders();
+        smk_modwheel();
+        smk_pedal();
+        if (pad_held) {                         /* a pad is a control too: it brings the screen back from the logo */
+            t_input = fm1_ms;
+            if (logo_on) { logo_on = 0; logo_drawn = 0; drawn_screen = 99; }
+        }
+#else
         if ((e = enc_in(ENC_PRESETS)) != 0) {             /* setBfree's registrations, one after the other (the upper manual's) */
             uint32_t n = P.pgm ? P.pgm : 5u;
             for (; e > 0; e--) n = pgm_step(n, 1);
             for (; e < 0; e++) n = pgm_step(n, -1);
             organ_program(n);
         }
+#endif
         if ((e = enc_in(ENC_KNOB2)) != 0) P.vtype = clampu((int32_t)P.vtype + e, 5);
         if ((e = enc_in(ENC_KNOB3)) != 0) P.drv = clampu((int32_t)P.drv + e, OD_DRIVE_MAX);
         if ((e = enc_in(ENC_KNOB4)) != 0) {               /* reverb mix, like CC 91: a doubling a step, fine at the bottom */
@@ -608,8 +775,10 @@ static void app_main(void)
             if (sysex_get(&sx, &sxn)) { ed_sysex(sx, sxn); sysex_done(); }
         }
 
+#if !BOARD_SMK37                                /* (the SMK's keys have no LEDs) */
         for (k = 0; k < 27u; k++)
             fm1_led_key(KEY_LED(k), held[k] != 255);
+#endif
         fm1_led_key(BTN_OCT_DOWN, oct < 0);
         fm1_led_key(BTN_OCT_UP, oct > 0);
         fm1_led_key(BTN_FX, screen == 0 ? P.vup != 0 : screen == 1 ? P.vlo != 0 : 0);

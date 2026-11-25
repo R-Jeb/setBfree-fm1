@@ -1,0 +1,53 @@
+# The SMK-37's controls (BOARD=smk37 tests/run_host.sh tests/scripts/smk37.txt): build/host/smk37-T.png, the pads under the screen.
+# Standard B (88 8000 000) at the start. Pads: top row 0..7 (in, less), bottom row 8..15 (out, more), one column a drawbar.
+50 enc 0 1
+# the upper 4' out to 6 (column 3, bottom), the 16' in to 6 (column 0, top), 2 2/3' held: out to 8 by itself
+200 pad 11 100
+210 pad 11 0
+260 pad 11 90
+270 pad 11 0
+320 pad 11 90
+330 pad 11 0
+380 pad 11 90
+390 pad 11 0
+440 pad 11 90
+450 pad 11 0
+500 pad 11 90
+510 pad 11 0
+600 pad 0 80
+610 pad 0 0
+650 pad 0 80
+660 pad 0 0
+700 pad 12 100
+1900 pad 12 0
+# fader bank A: F1 the upper 1' (picked up once it passes 0), F2..F4 the equalizer
+2000 fader 0 40
+2100 fader 0 0
+2200 fader 0 70
+2300 fader 1 100
+2400 fader 3 20
+2600 shot
+# pads to the lower manual (KNOB BANK + FADER BANK), faders to bank B (FADER BANK)
+2700 down 0
+2710 down 1
+2800 up 1
+2810 up 0
+2900 pad 10 100
+2910 pad 10 0
+3000 down 1
+3050 up 1
+3100 fader 0 127
+3200 fader 2 127
+3250 fader 3 60
+# mod wheel: up (fast), middle (stop), down (slow); K7 swell down 10 steps
+3300 wheel 1 470
+3400 wheel 1 629
+3500 wheel 1 560
+3600 enc 6 -10
+3700 shot
+# keys: the lowest C (bit 0) and the highest C (bit 36)
+3800 keys 0x1000000001
+4200 keys 0
+4300 btn 3
+4500 shot
+5000 end

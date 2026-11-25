@@ -37,6 +37,8 @@ jobs:
           fi
       - name: Firmware engine on this computer (WAV and screen PNGs)
         run: tests/run_host.sh
+      - name: The SMK-37 build on this computer (pads, faders, wheels; the pads under the screen)
+        run: BOARD=smk37 tests/run_host.sh tests/scripts/smk37.txt
       - name: Two halves of the wheels equal all of them (the second core's split)
         run: |
           cp build/host/dinghy.wav build/host/two.wav
@@ -70,10 +72,12 @@ jobs:
           if-no-files-found: warn
 
   firmware:
-    name: FM-1 package
+    name: FM-1 and SMK-37 packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0             # (main too: the FM-1 build is compared with it)
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -95,8 +99,20 @@ jobs:
               https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$HOME/fw-AC79_AIoT_SDK"
       - name: Build
         run: |
-          ./build.sh
+          ./build.sh --board smk37
+          ./build.sh --board smk37 --model elite
+          ./build.sh --board smk37 --model mke
+          ./build.sh                 # the FM-1 last: build/dinghy.bin is its app
           ls -l build/*.fwsc
+        shell: bash
+      - name: The FM-1 app is byte for byte main's (the SMK-37 stays behind BOARD_SMK37)
+        if: github.ref != 'refs/heads/main'
+        run: |
+          ./build.sh --release 9.9 > /dev/null && cp build/dinghy.bin /tmp/branch.bin && cp build/loader/ota.bin /tmp/branch-ota.bin
+          git worktree add /tmp/main origin/main
+          (cd /tmp/main && ./build.sh --release 9.9 > /dev/null)
+          cmp /tmp/main/build/dinghy.bin /tmp/branch.bin && cmp /tmp/main/build/loader/ota.bin /tmp/branch-ota.bin && echo "FM-1 app and loader: the same as main"
+          ./build.sh > /dev/null     # (the dev build again for the artifact)
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
