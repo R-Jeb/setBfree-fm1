@@ -161,7 +161,7 @@ jobs:
           PKG=$(ls build/b3organ-smk37*.fwsc | head -1)
           SCRIPT=$(grep -v '^#' tools/emu/smk37.script | tr -d ' \n')
           mkdir -p /tmp/emu/work && cd /tmp/emu
-          FM1_SCRIPT="$SCRIPT" ./target/release/fm1-emu --fwsc "$GITHUB_WORKSPACE/$PKG" --ms 5200 --snap 1000,2600,3500,4500,5100 --quiet | tail -20
+          FM1_SCRIPT="$SCRIPT" ./target/release/fm1-emu --fwsc "$GITHUB_WORKSPACE/$PKG" --ms 5200 --snap 2600,3500,5100 --quiet | tail -20
       - name: The pictures (and in the log, as base64 PNG)
         run: |
           mkdir -p build/emu

@@ -3,11 +3,11 @@
 # K1 wakes the screen from the logo; the upper 4' out twice (pad 11, bottom), the 16' in once (pad 0, top), the 2 2/3' held out
 300:e0:1,
 600:a11:900, 700:a11:0, 800:a11:900, 900:a11:0, 1100:a0:900, 1200:a0:0, 1300:a12:900, 2200:a12:0,
-# fader 1: the upper 1' (to about 4), fader 2: the bass +5 dB
+# fader 1: the upper 1' (a drawbar: up 0, down 8; to about 4), fader 2: the bass +5 dB (up is more)
 2300:a16:560, 2400:a17:800,
-# KNOB BANK + FADER BANK: the pads (and the screen) to the lower manual; the lower 8' in (pad 2, top)
-2700:knobbank, 2710:faderbank, 2900:faderbank^, 2910:knobbank^, 3000:a2:900, 3100:a2:0,
-# FADER BANK: bank B; the mod wheel: its place, up (fast), down (slow), middle (stop)
-3200:faderbank, 3300:faderbank^, 3350:a21:560, 3600:a21:470, 3900:a21:629, 4200:a21:550,
+# PATCH: bank 2 for pads and faders, the lower manual (the screen follows); the lower 8' in (pad 2, top)
+2700:patch, 2800:patch^, 3000:a2:900, 3100:a2:0,
+# fader 4: the pedal's 8' (from the bottom, 8, up past its value); the mod wheel: its place, up (fast), down (slow), middle (stop)
+3200:a19:0, 3250:a19:700, 3350:a21:560, 3600:a21:470, 3900:a21:629, 4200:a21:550,
 # K7: the swell down; the lowest C; > the next preset
 4300:e6:-5, 4600:k0@100, 4900:k0^, 4950:>, 5000:>^

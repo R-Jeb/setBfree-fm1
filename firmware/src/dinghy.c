@@ -482,14 +482,15 @@ typedef uint32_t keys_t;
 
 #if BOARD_SMK37
 /* ---- the SMK-37's own controls (README_SMK37.md). The pads are the drawbars 16' .. 1 1/3' of a manual, one column under each
- * knob: the top pad pushes the drawbar in (down to 0), the bottom pad pulls it out (up to 8); held, it goes on. Pad bank 1 is the
- * upper manual, bank 2 the lower one (KNOB BANK + FADER BANK together; the screen follows). The faders: bank A the upper 1' and the
- * equalizer's bass, middle, treble; bank B the lower 1', -, the pedal's 16' and 8' (FADER BANK). A fader takes over only once it
- * passes the value it sets (no jump after a bank, a preset or the editor changed it). The mod wheel: down slow, middle stop, up fast.
+ * knob: the top pad pushes the drawbar in (down to 0), the bottom pad pulls it out (up to 8); held, it goes on. One bank switch for
+ * pads and faders (PATCH, or KNOB BANK or FADER BANK; the screen follows): bank 1 the upper manual, the faders its 1' and the
+ * equalizer's bass, middle, treble; bank 2 the lower manual, the faders its 1', -, the pedal's 16' and 8'. A drawbar's fader works as
+ * a drawbar: up is in (0), down is out (8); the equalizer's: up is more. A fader takes over only once it passes the value it sets
+ * (no jump after a bank, a preset or the editor changed it). The mod wheel: down slow, middle stop, up fast.
  * The pedal jack: the swell, once a pedal has moved. */
 #define SMK_REP_MS 400u                         /* a pad held: the first repeat, then every SMK_REP_EVERY ms */
 #define SMK_REP_EVERY 120u
-static uint8_t pad_bank, fad_bank, fad_live[4], smk_combo;
+static uint8_t pad_bank, fad_bank, fad_live[4];   /* (pads and faders switch together: the same bank) */
 static int16_t fad_last[4] = {-1, -1, -1, -1};
 static uint32_t pad_held, pad_t[16];
 static volatile uint8_t *smk_bars(uint32_t bank) { return bank ? P.dbl : P.db; }
@@ -503,6 +504,11 @@ static int32_t smk_fad_get(uint32_t f)          /* what fader f sets now, in its
     return f == 1u ? -1 : P.dbp[f - 2u];
 }
 static int32_t smk_fad_max(uint32_t f) { return f && !fad_bank ? 36 : 8; }   /* drawbars 0..8, the equalizer 0..36 (18 = 0 dB) */
+static int32_t smk_fad_val(uint32_t f, int32_t pos)   /* a position 0..127 (up 127) as the value: a drawbar's is upside down */
+{
+    int32_t mx = smk_fad_max(f), v = (pos * mx + 63) / 127;
+    return f && !fad_bank ? v : mx - v;
+}
 static void smk_fad_set(uint32_t f, int32_t v)
 {
     if (f == 0u) smk_bars(fad_bank)[8] = (uint8_t)v;
@@ -524,14 +530,14 @@ static void smk_faders(void)
 {
     uint32_t f;
     for (f = 0; f < 4u; f++) {
-        int32_t pos = fm1_in.fader[f], cur = smk_fad_get(f), mx = smk_fad_max(f), v = (pos * mx + 63) / 127, was;
+        int32_t pos = fm1_in.fader[f], cur = smk_fad_get(f), v = smk_fad_val(f, pos), was;
         if (cur < 0) continue;
         if (fad_last[f] < 0) { fad_last[f] = (int16_t)pos; continue; }
         if (pos == fad_last[f]) {
             if (fad_live[f] && v != cur) fad_live[f] = 0;      /* changed from elsewhere (a preset, a knob, the editor): wait again */
             continue;
         }
-        was = (fad_last[f] * mx + 63) / 127;
+        was = smk_fad_val(f, fad_last[f]);
         fad_last[f] = (int16_t)pos;
         if (!fad_live[f] && (v == cur || was == cur || (was < cur) != (v < cur))) fad_live[f] = 1;   /* it sat on the value, reached it or passed it */
         if (fad_live[f] && v != cur) smk_fad_set(f, v);
@@ -594,27 +600,23 @@ static void smk_pedal(void)                     /* an expression pedal on the ja
     if (v > hi) hi = v;
     if (hi - lo >= 200) P.swell = (uint8_t)((v - lo) * 127 / (hi - lo));
 }
-/* the buttons only the SMK has: < > the presets, KNOB BANK + FADER BANK the pads' manual, FADER BANK alone the faders' bank */
+/* the buttons only the SMK has: < > the presets; PATCH (or KNOB BANK, FADER BANK) the bank of pads and faders: upper, lower */
 static void smk_buttons(uint32_t b, uint32_t rel)
 {
-    uint32_t both = 1u << BTN_KNOB_BANK | 1u << BTN_FADER_BANK;
+    (void)rel;
     if (b & (1u << BTN_LEFT | 1u << BTN_RIGHT)) {
         uint32_t n = P.pgm ? P.pgm : 5u;
         organ_program(pgm_step(n, b & (1u << BTN_RIGHT) ? 1 : -1));
         fad_live[0] = fad_live[1] = fad_live[2] = fad_live[3] = 0;
     }
-    if ((fm1_in.buttons & both) == both && !smk_combo) {
-        smk_combo = 1;
+    if (b & (1u << BTN_HOME | 1u << BTN_KNOB_BANK | 1u << BTN_FADER_BANK)) {
         pad_bank ^= 1u;
-        screen = pad_bank;                      /* the screen shows the manual the pads set */
+        smk_fad_bank(pad_bank);
+        screen = pad_bank;                      /* the screen shows the manual of the bank */
     }
-    if (rel & (1u << BTN_FADER_BANK)) {
-        if (!smk_combo) smk_fad_bank(fad_bank ^ 1u);
-        if (!(fm1_in.buttons & both)) smk_combo = 0;
-    }
-    if (rel & (1u << BTN_KNOB_BANK) && !(fm1_in.buttons & both)) smk_combo = 0;
-    fm1_led_key(BTN_KNOB_BANK, pad_bank != 0);  /* lit: the pads are the lower manual's */
-    fm1_led_key(BTN_FADER_BANK, fad_bank != 0); /* lit: the faders are bank B */
+    fm1_led_key(BTN_HOME, pad_bank != 0);       /* lit: bank 2, the lower manual */
+    fm1_led_key(BTN_KNOB_BANK, pad_bank != 0);
+    fm1_led_key(BTN_FADER_BANK, pad_bank != 0);
 }
 #endif
 
