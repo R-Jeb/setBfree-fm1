@@ -15,6 +15,7 @@
  *   KNOB1       screen: upper, lower, pedal, test values    KNOB2   vibrato V1 C1 V2 C2 V3 C3    KNOB3   overdrive drive 0..20    KNOB4   reverb
  *   FX          vibrato on/off (upper on screen 1, lower on screen 2)    LFO    Leslie stop/slow/fast    SEL    overdrive on/off
  *   ENV         percussion on/off   ARP  2nd/3rd   SEQ  fast/slow   PLAY  soft/normal   (screen 1)     REC   keys: upper/lower/pedal
+ *   GLO         Leslie bypass on/off (lit: bypassed; the signal after overdrive and reverb on both channels; not saved)
  *   EDIT, SAVE  free
  *   USB-MIDI    and the TRS MIDI IN jack: channel 1 plays the upper manual, 2 the lower one, 3 the pedal (drawbars 70..78 follow the
  *               channel; the pedal has 16' = 70 and 8' = 72), program change (setBfree's default.pgm), and setBfree's controllers
@@ -286,7 +287,7 @@ static void band_ctrl(uint32_t scr, uint32_t r)
         x = chip(x, 0, P.fast ? "FAST" : "SLOW", P.perc, pe) + 3;
         chip(x, 0, P.soft ? "SOFT" : "NORM", P.perc, pe);
     } else if (r == 2) {
-        q = sp(sp(t, "LES "), LES[P.les % 3u]); *q = 0;
+        q = sp(sp(t, "LES "), les_bypass ? "BYP" : LES[P.les % 3u]); *q = 0;
         x = chip(1, 0, t, 1, 1) + 4;
         q = sp(t, P.od ? "OD ON" : "OD OFF"); *q = 0;
         x = chip(x, 0, t, P.od, 1) + 4;
@@ -705,6 +706,7 @@ static void app_main(void)
         if (b & (1u << BTN_OCT_UP) && oct < 2) { oct++; dirty = 1; t_change = fm1_ms; }
         if (b & (1u << BTN_FX)) { if (screen == 0) P.vup ^= 1u; else if (screen == 1) P.vlo ^= 1u; }   /* vibrato / chorus on the manual of the screen */
         if (b & (1u << BTN_LFO)) P.les = (uint8_t)((P.les + 1u) % 3u);   /* Leslie: stop, slow, fast */
+        if (b & (1u << BTN_GLO)) les_bypass ^= 1u;              /* the Leslie bypassed or not (for comparisons; not saved) */
         if (b & (1u << BTN_SEL)) P.od ^= 1u;                    /* overdrive on / off */
         if (b & (1u << BTN_REC)) P.keys = (uint8_t)((P.keys + 1u) % 3u);   /* the FM-1's own keys: upper, lower, pedal */
         if (screen == 0) {                      /* percussion is the upper manual's */
@@ -785,6 +787,7 @@ static void app_main(void)
         fm1_led_key(BTN_OCT_UP, oct > 0);
         fm1_led_key(BTN_FX, screen == 0 ? P.vup != 0 : screen == 1 ? P.vlo != 0 : 0);
         fm1_led_key(BTN_LFO, P.les != 0);
+        fm1_led_key(BTN_GLO, les_bypass != 0);
         fm1_led_key(BTN_ENV, P.perc != 0);
         fm1_led_key(BTN_SEL, P.od != 0);
         fm1_led_key(BTN_ARP, P.perc3 != 0);
@@ -833,7 +836,7 @@ static void app_main(void)
                     h = hmix(2, screen);
                     if (r == 0) h = hmix(hmix(hmix(h, P.vtype), P.vup), P.vlo);
                     else if (r == 1) h = hmix(hmix(hmix(hmix(h, P.perc), P.perc3), P.fast), P.soft);
-                    else if (r == 2) h = hmix(hmix(hmix(h, P.les), P.od), P.keys);
+                    else if (r == 2) h = hmix(hmix(hmix(hmix(h, P.les), P.od), P.keys), les_bypass);
                     else h = hmix(hmix(h, P.drv), P.rev);
                     h = hmix(h, r);
                     if (h != hash[4 + r]) { hash[4 + r] = h; band_ctrl(screen, r); }

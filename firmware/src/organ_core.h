@@ -34,6 +34,8 @@ static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi, pl_lo, pl_hi, ml_lo, ml_hi,
 static volatile uint32_t load_us, wheels_on;
 static volatile uint32_t sum_pk, sum_clip, out_pk;      /* the sum of the wheels before the preamp: its peak since the screen last looked, and the samples above full scale since the start */
 static volatile uint32_t load_org, load_od, load_rv, load_le;   /* peaks since the screen last looked: organ, preamp, reverb, Leslie (us) */
+static volatile uint8_t les_bypass;             /* the Leslie bypassed (GLO): the signal after overdrive and reverb on both channels, as setBfree's
+                                                   whirl bypass; not saved: every start has the Leslie */
 static volatile uint8_t fx_bypass;              /* tests: skip the reverb and the Leslie (the tone generator alone, in mono) */    /* the last block: render time, wheels sounding */
 
 /* ---- the sound (runs in the audio ISR: keep it short, no flash, no screen) */
@@ -489,7 +491,8 @@ static void app_audio(int32_t *out, uint32_t n)
     } else {
         reverb_run(mono, n, P.rev);             /* setBfree's order: overdrive, reverb, Leslie */
         t3 = fm1_ticks();
-        leslie_run(mono, lbuf, rbuf, n, les);
+        if (les_bypass) for (i = 0; i < n; i++) lbuf[i] = rbuf[i] = mono[i];
+        else leslie_run(mono, lbuf, rbuf, n, les);
     }
     eq_run(lbuf, rbuf, n);                      /* the output equalizer (flat: nothing) */
     t4 = fm1_ticks();
