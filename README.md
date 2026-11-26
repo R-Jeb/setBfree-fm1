@@ -20,6 +20,10 @@ build.
 
 > **Status:** 0.5.1, tested by one person on an FM-1 (0.4 on one with the older flash chip, Puya P25Q80, and on one with the newer one, UC25HQ80). Please report what sounds different from setBfree.
 
+> **Also for the M-Vave SMK-37 (Pro, Elite, MKE-P37), experimental:** the same organ on the 37-key keyboard, with its
+> pads as drawbars, its faders, wheels and knobs. Tested in an emulator only, not yet on a real keyboard: see
+> [README_SMK37.md](README_SMK37.md), and please report how it goes if you try it.
+
 ## What you get
 
 | | |
