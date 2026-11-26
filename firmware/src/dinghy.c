@@ -13,9 +13,8 @@
  *   SELECT      choose a drawbar    ALGORITHM  set it 0..8         PRESETS  setBfree's registrations (default.pgm)
  *               (pedal screen: after its two drawbars the equalizer's bass, middle, treble, -9..+9 dB in 0.5 dB steps)
  *   KNOB1       screen: upper, lower, pedal, test values    KNOB2   vibrato V1 C1 V2 C2 V3 C3    KNOB3   overdrive drive 0..20    KNOB4   reverb
- *   FX          vibrato on/off (upper on screen 1, lower on screen 2)    LFO    Leslie stop/slow/fast    SEL    overdrive on/off
+ *   FX          vibrato on/off (upper on screen 1, lower on screen 2)    LFO    Leslie stop/slow/fast/bypass    SEL    overdrive on/off
  *   ENV         percussion on/off   ARP  2nd/3rd   SEQ  fast/slow   PLAY  soft/normal   (screen 1)     REC   keys: upper/lower/pedal
- *   GLO         Leslie bypass on/off (lit: bypassed; the signal after overdrive and reverb on both channels; not saved)
  *   EDIT, SAVE  free
  *   USB-MIDI    and the TRS MIDI IN jack: channel 1 plays the upper manual, 2 the lower one, 3 the pedal (drawbars 70..78 follow the
  *               channel; the pedal has 16' = 70 and 8' = 72), program change (setBfree's default.pgm), and setBfree's controllers
@@ -585,7 +584,7 @@ static void smk_modwheel(void)                  /* the mod wheel in three parts 
         else if (pos > 100 + 12 && pos < 200 - 12) z = 1;
         else if (pos > 200 + 12) z = 2;
     }
-    if (zone >= 0 && z != zone) P.les = (uint8_t)(z == 0 ? 1u : z == 1 ? 0u : 2u);   /* (P.les: 0 stop, 1 slow, 2 fast) */
+    if (zone >= 0 && z != zone) { P.les = (uint8_t)(z == 0 ? 1u : z == 1 ? 0u : 2u); les_bypass = 0; }   /* (P.les: 0 stop, 1 slow, 2 fast) */
     zone = z;                                   /* (at power-on the wheel only gives its place: the saved Leslie stays) */
 }
 static void smk_pedal(void)                     /* an expression pedal on the jack: the swell, once it has moved (no plug detection) */
@@ -705,8 +704,12 @@ static void app_main(void)
         if (b & (1u << BTN_OCT_DOWN) && oct > -2) { oct--; dirty = 1; t_change = fm1_ms; }
         if (b & (1u << BTN_OCT_UP) && oct < 2) { oct++; dirty = 1; t_change = fm1_ms; }
         if (b & (1u << BTN_FX)) { if (screen == 0) P.vup ^= 1u; else if (screen == 1) P.vlo ^= 1u; }   /* vibrato / chorus on the manual of the screen */
-        if (b & (1u << BTN_LFO)) P.les = (uint8_t)((P.les + 1u) % 3u);   /* Leslie: stop, slow, fast */
-        if (b & (1u << BTN_GLO)) les_bypass ^= 1u;              /* the Leslie bypassed or not (for comparisons; not saved) */
+        if (b & (1u << BTN_LFO)) {              /* Leslie: stop, slow, fast, bypass (for comparisons: the signal after overdrive and reverb
+                                                   on both channels, as setBfree's whirl bypass; not saved) */
+            if (les_bypass) { les_bypass = 0; P.les = 0; }
+            else if (P.les == 2u) les_bypass = 1;
+            else P.les = (uint8_t)(P.les + 1u);
+        }
         if (b & (1u << BTN_SEL)) P.od ^= 1u;                    /* overdrive on / off */
         if (b & (1u << BTN_REC)) P.keys = (uint8_t)((P.keys + 1u) % 3u);   /* the FM-1's own keys: upper, lower, pedal */
         if (screen == 0) {                      /* percussion is the upper manual's */
@@ -786,8 +789,7 @@ static void app_main(void)
         fm1_led_key(BTN_OCT_DOWN, oct < 0);
         fm1_led_key(BTN_OCT_UP, oct > 0);
         fm1_led_key(BTN_FX, screen == 0 ? P.vup != 0 : screen == 1 ? P.vlo != 0 : 0);
-        fm1_led_key(BTN_LFO, P.les != 0);
-        fm1_led_key(BTN_GLO, les_bypass != 0);
+        fm1_led_key(BTN_LFO, P.les != 0 && !les_bypass);
         fm1_led_key(BTN_ENV, P.perc != 0);
         fm1_led_key(BTN_SEL, P.od != 0);
         fm1_led_key(BTN_ARP, P.perc3 != 0);

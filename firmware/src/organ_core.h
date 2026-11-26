@@ -34,7 +34,7 @@ static volatile uint32_t pk_lo, pk_hi, mk_lo, mk_hi, pl_lo, pl_hi, ml_lo, ml_hi,
 static volatile uint32_t load_us, wheels_on;
 static volatile uint32_t sum_pk, sum_clip, out_pk;      /* the sum of the wheels before the preamp: its peak since the screen last looked, and the samples above full scale since the start */
 static volatile uint32_t load_org, load_od, load_rv, load_le;   /* peaks since the screen last looked: organ, preamp, reverb, Leslie (us) */
-static volatile uint8_t les_bypass;             /* the Leslie bypassed (GLO): the signal after overdrive and reverb on both channels, as setBfree's
+static volatile uint8_t les_bypass;             /* the Leslie bypassed (LFO's fourth step): the signal after overdrive and reverb on both channels, as setBfree's
                                                    whirl bypass; not saved: every start has the Leslie */
 static volatile uint8_t fx_bypass;              /* tests: skip the reverb and the Leslie (the tone generator alone, in mono) */    /* the last block: render time, wheels sounding */
 
