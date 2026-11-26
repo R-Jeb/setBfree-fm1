@@ -1,6 +1,6 @@
 # A release: on a tag v0.7 (X.Y or X.Y.Z), the FM-1 Firmware Hub's shared workflow (zvenson/fm1-build, reviewed tag v1)
-# gets JieLi's toolchain and the AC79 SDK, runs build.sh and the organ's tests, signs a build attestation for the
-# package and attaches it (and SHA256SUMS) to the release of the tag. The hub then shows the firmware as built from
+# gets JieLi's toolchain and the AC79 SDK, runs build.sh (the FM-1 and the three SMK-37 packages, README_SMK37.md) and the
+# organ's tests, signs a build attestation for the packages and attaches them (and SHA256SUMS) to the release of the tag. The hub then shows the firmware as built from
 # source, with the commit and the build log. Check a package:
 #   gh attestation verify b3organ-0.7.fwsc --repo R-Jeb/setBfree-fm1 --signer-workflow zvenson/fm1-build/.github/workflows/build.yml
 name: release
@@ -19,7 +19,11 @@ jobs:
       id-token: write
       attestations: write
     with:
-      build: ./build.sh --release "${GITHUB_REF_NAME#v}"
+      build: >-
+        ./build.sh --release "${GITHUB_REF_NAME#v}" --board smk37 &&
+        ./build.sh --release "${GITHUB_REF_NAME#v}" --board smk37 --model elite &&
+        ./build.sh --release "${GITHUB_REF_NAME#v}" --board smk37 --model mke &&
+        ./build.sh --release "${GITHUB_REF_NAME#v}"
       packages: build/*.fwsc
       test: >-
         mkdir -p build &&
