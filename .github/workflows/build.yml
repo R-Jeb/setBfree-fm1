@@ -107,14 +107,18 @@ jobs:
           ./build.sh                 # the FM-1 last: build/dinghy.bin is its app
           ls -l build/*.fwsc
         shell: bash
-      - name: The FM-1 app is byte for byte main's (the SMK-37 stays behind BOARD_SMK37)
+      - name: "Is the FM-1 app byte for byte main's? (a warning if not; a branch that only touches the SMK-37 must not change it)"
         if: github.ref != 'refs/heads/main'
         run: |
           ./build.sh --release 9.9 > /dev/null && cp build/dinghy.bin /tmp/branch.bin && cp build/loader/ota.bin /tmp/branch-ota.bin
           git worktree add /tmp/main origin/main
           (cd /tmp/main && ./build.sh --release 9.9 > /dev/null)
-          cmp /tmp/main/build/dinghy.bin /tmp/branch.bin && cmp /tmp/main/build/loader/ota.bin /tmp/branch-ota.bin && echo "FM-1 app and loader: the same as main"
+          same=1
+          cmp /tmp/main/build/dinghy.bin /tmp/branch.bin || same=0
+          cmp /tmp/main/build/loader/ota.bin /tmp/branch-ota.bin || same=0
           ./build.sh > /dev/null     # (the dev build again for the artifact)
+          if [ $same = 1 ]; then echo "FM-1 app and loader: the same as main"
+          else echo "::warning::The FM-1 app or loader differs from main's: right if this branch changes the FM-1, wrong if it should not"; fi
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
