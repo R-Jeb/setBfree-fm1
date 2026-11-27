@@ -482,7 +482,8 @@ typedef uint32_t keys_t;
 
 #if BOARD_SMK37
 /* ---- the SMK-37's own controls (README_SMK37.md). The pads are the drawbars 16' .. 1 1/3' of a manual, one column under each
- * knob: the top pad pushes the drawbar in (down to 0), the bottom pad pulls it out (up to 8); held, it goes on. One bank switch for
+ * knob: the top pad pushes the drawbar in (down to 0), the bottom pad pulls it out (up to 8); held, it goes on; hit hard (velocity
+ * SMK_PAD_FULL and up), all the way in or out at once. One bank switch for
  * pads and faders (PATCH, or KNOB BANK or FADER BANK; the screen follows): bank 1 the upper manual, the faders its 1' and the
  * equalizer's bass, middle, treble; bank 2 the lower manual, the faders its 1', -, the pedal's 16' and 8'. A drawbar's fader works as
  * a drawbar: up is in (0), down is out (8); the equalizer's: up is more. A fader takes over only once it passes the value it sets
@@ -490,6 +491,7 @@ typedef uint32_t keys_t;
  * The pedal jack: the swell, once a pedal has moved. */
 #define SMK_REP_MS 400u                         /* a pad held: the first repeat, then every SMK_REP_EVERY ms */
 #define SMK_REP_EVERY 120u
+#define SMK_PAD_FULL 120u                       /* a pad hit this hard (velocity 1..127): the drawbar all the way in (top) or out (bottom) */
 static uint8_t pad_bank, fad_bank, fad_live[4];   /* (pads and faders switch together: the same bank) */
 static int16_t fad_last[4] = {-1, -1, -1, -1};
 static uint32_t pad_held, pad_t[16];
@@ -543,11 +545,12 @@ static void smk_faders(void)
         if (fad_live[f] && v != cur) smk_fad_set(f, v);
     }
 }
-static void smk_pad_step(uint32_t pad)          /* top row: in (less), bottom row: out (more) */
+static void smk_pad_step(uint32_t pad, uint32_t vel)   /* top row: in (less), bottom row: out (more); hit hard: all the way */
 {
     volatile uint8_t *db = smk_bars(pad_bank);
     uint32_t c = pad & 7u;
-    db[c] = clampu((int32_t)db[c] + (pad < 8u ? -1 : 1), 8);
+    if (vel >= SMK_PAD_FULL) db[c] = pad < 8u ? 0u : 8u;
+    else db[c] = clampu((int32_t)db[c] + (pad < 8u ? -1 : 1), 8);
 }
 static void smk_pads(uint32_t now)
 {
@@ -555,11 +558,11 @@ static void smk_pads(uint32_t now)
     uint32_t p;
     while ((ev = smk_pad_take()) >= 0) {
         p = (uint32_t)ev >> 8 & 15u;
-        if (ev & 0x7F) { pad_held |= 1u << p; pad_t[p] = now + SMK_REP_MS; smk_pad_step(p); }
+        if (ev & 0x7F) { pad_held |= 1u << p; pad_t[p] = now + SMK_REP_MS; smk_pad_step(p, (uint32_t)ev & 0x7Fu); }
         else pad_held &= ~(1u << p);
     }
     for (p = 0; p < 16u; p++)
-        if (pad_held >> p & 1u && (int32_t)(now - pad_t[p]) >= 0) { pad_t[p] = now + SMK_REP_EVERY; smk_pad_step(p); }
+        if (pad_held >> p & 1u && (int32_t)(now - pad_t[p]) >= 0) { pad_t[p] = now + SMK_REP_EVERY; smk_pad_step(p, 1u); }
     for (p = 0; p < 8u; p++) {                  /* the colours: the bottom pad as bright as the drawbar is out, the top one dim */
         uint32_t v = smk_bars(pad_bank)[p], lo = 8u + v * 31u, hi = 24u;
         const uint8_t *c = SMK_DBC[p];
@@ -592,7 +595,8 @@ static void smk_pedal(void)                     /* an expression pedal on the ja
     static int32_t first = -1, lo = 1023, hi = 0, on = 0;
     int32_t raw = fm1_in.pedal, v;
     if (!raw) return;
-    v = 1023 - raw;                             /* (as the stock firmware: inverted) */
+    v = raw;                                    /* toe down = more (issue 57: inverted, as the stock firmware does it, it ran backwards with an
+                                                   M-Audio EX-P in either position of its switch); the range adapts to the pedal */
     if (first < 0) first = v;
     if (!on && (v - first > 64 || first - v > 64)) on = 1;
     if (!on) return;

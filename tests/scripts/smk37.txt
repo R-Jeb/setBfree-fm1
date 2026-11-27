@@ -48,5 +48,15 @@
 3800 keys 0x1000000001
 4200 keys 0
 4300 btn 3
+# pads hit hard (velocity 127): the 16' all the way in (top), the 1 1/3' all the way out (bottom)
+4350 pad 0 127
+4360 pad 0 0
+4400 pad 15 127
+4410 pad 15 0
+# an expression pedal: it moves (toe down 900, heel 100): the swell follows, toe down loud
+4420 pedal 500
+4440 pedal 900
+4460 pedal 100
+4480 pedal 700
 4500 shot
 5000 end

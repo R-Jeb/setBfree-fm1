@@ -29,8 +29,8 @@ They are offered as files in the release only: the installer site and the Firmwa
 | Control | Does |
 |---|---|
 | 37 keys (C3 .. C6) | play the manual that SEQ REC chose (upper, lower, pedal); no velocity, as on a B3 |
-| Pads, top row | push a drawbar in (16' .. 1 1/3', one column under each knob), held: on to 0 |
-| Pads, bottom row | pull a drawbar out, held: on to 8; the pads light in the drawbars' colours, brighter the further out |
+| Pads, top row | push a drawbar in (16' .. 1 1/3', one column under each knob), held: on to 0; hit hard: all the way in |
+| Pads, bottom row | pull a drawbar out, held: on to 8; hit hard: all the way out; the pads light in the drawbars' colours, brighter the further out |
 | PATCH (also KNOB BANK, FADER BANK) | the bank of pads and faders: 1 the upper manual, 2 the lower manual and the pedal; the screen follows, the buttons light in bank 2 |
 | Faders, bank 1 | 1: the upper 1'; 2, 3, 4: the equalizer's bass, middle, treble |
 | Faders, bank 2 | 1: the lower 1'; 2: -; 3, 4: the pedal's 16' and 8' |
@@ -44,7 +44,7 @@ They are offered as files in the release only: the installer site and the Firmwa
 | FX, NOTE REPEAT, SCALE, CHORD | as the FM-1's FX, LFO, SEL, ENV: vibrato on / off, Leslie, overdrive, percussion |
 | ARP, SEQ, SEQ PLAY, SEQ REC | as on the FM-1: percussion 2nd / 3rd, fast / slow, soft / normal; the keys' manual |
 | PARA, BT, GLOBE | free (PARA and BT are the FM-1's EDIT and SAVE) |
-| Pedal jack | swell from an expression pedal, once the pedal has moved (untested) |
+| Pedal jack | swell from an expression pedal (toe down is louder), once the pedal has moved; the range adapts to the pedal: move it through its whole travel once |
 
 A drawbar's fader works like a drawbar: up is in (0), down is out (8). The equalizer's faders: up is more, the middle
 0 dB. A fader takes over only when it reaches or passes the value it sets, so nothing jumps after a bank change, a
