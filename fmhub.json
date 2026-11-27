@@ -8,5 +8,11 @@
   "editor": "https://r-jeb.github.io/setBfree-fm1/editor/",
   "cheat": "https://r-jeb.github.io/setBfree-fm1/#controls",
   "image": "docs/logo.png",
-  "color": "#E0893A"
+  "color": "#E0893A",
+  "smk37": {
+    "what": "The same B3 tonewheel organ on the SMK-37 (Pro, Elite and MKE-P37): the pads push and pull the drawbars of the upper and lower manual, the faders set the 1' and the equalizer, the mod wheel the Leslie (slow, stop, fast), K7 the swell, K8 the volume. All 110 setBfree programs and the web editor. Tested on the Elite; the Pro and MKE-P37 packages are not tested yet. Back the keyboard up first.",
+    "image": "docs/logo.png",
+    "install": "https://github.com/R-Jeb/setBfree-fm1/blob/main/README_SMK37.md#install",
+    "guide": "https://github.com/R-Jeb/setBfree-fm1/blob/main/README_SMK37.md#the-controls"
+  }
 }

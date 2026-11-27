@@ -1,9 +1,10 @@
 # B3 ORGAN on the M-Vave SMK-37 (experimental)
 
-> **Tested in an emulator only, not on a real keyboard.** The SMK-37 packages run in Joakim Eriksson's
-> [SMK-37 emulator](https://joakimeriksson.github.io/fm1-emu/smk37/), where everything below works except the
-> expression pedal (the emulator has none). Nobody has played them on real hardware yet. If you try one on your
-> SMK-37, **please tell us how it went**: open a
+> **Experimental, first tested on a real keyboard.** A player has run B3 ORGAN on an SMK-37 Elite
+> ([issue #57](https://github.com/R-Jeb/setBfree-fm1/issues/57)); what he found (the expression pedal's direction,
+> the swell's minimum, a hard pad hit) is fixed in 0.7.1. The Pro and MKE-P37 packages have run only in Joakim
+> Eriksson's [SMK-37 emulator](https://joakimeriksson.github.io/fm1-emu/smk37/). If you try one on your SMK-37,
+> **please tell us how it went**: open a
 > [test report](https://github.com/R-Jeb/setBfree-fm1/issues/new?template=smk37-report.md), whether it works or not.
 > You install it at your own risk; read [Before you install](#before-you-install) first.
 
@@ -19,10 +20,11 @@ Each release has one package per model name. Install the one for the name printe
 | Keyboard | Package | Identity | Status |
 |---|---|---|---|
 | SMK-37 Pro (also Starrykey 37 Play) | `b3organ-X.Y-smk37.fwsc` | `SMK-37 Pro_953` | emulator only |
-| SMK-37 Elite | `b3organ-X.Y-smk37-elite.fwsc` | `SMK-37 Elite_953` | built the same way, not run |
+| SMK-37 Elite | `b3organ-X.Y-smk37-elite.fwsc` | `SMK-37 Elite_953` | tested on the keyboard (issue #57) |
 | MKE-P37 | `b3organ-X.Y-smk37-mke.fwsc` | `MKE-P37_953` | built the same way, not run |
 
-They are offered as files in the release only: the installer site and the Firmware Hub entry are for the FM-1.
+They are offered as files in the release only; the installer site is for the FM-1. The Firmware Hub lists B3 ORGAN
+in its SMK-37 list too and points here to install it.
 
 ## The controls
 
@@ -61,8 +63,8 @@ an update writes.
   [fm1-to-smk37, full flash backup](https://github.com/genkigenki/fm1-to-smk37/blob/main/docs/02-update-and-recovery.md).
 - **The way back:** M-Vave's update package for your model (`.fwsc`, V016) installs over B3 ORGAN with M-Vave's own
   updater, with its calibration intact. Keep it at hand.
-- **Unknown:** B3 ORGAN runs its tone generator on both of the chip's cores; the other SMK firmwares use one. It works
-  in the emulator, on the FM-1 and on the same chip, but not yet seen on an SMK-37.
+- **Both cores:** B3 ORGAN runs its tone generator on both of the chip's cores; the other SMK firmwares use one. It works
+  in the emulator, on the FM-1 and on an SMK-37 Elite.
 
 ## Install
 
