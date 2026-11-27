@@ -49,6 +49,8 @@ static volatile uint8_t fx_bypass;              /* tests: skip the reverb and th
 #define VIB_INC 706089u                         /* 7.25 Hz: f * 2^32 / 44100 */
 
 static uint32_t wph[NW];                        /* tonewheel phases: they turn all the time, as on the organ */
+#define SWELL_MIN 13u                           /* the swell pedal closed (0) still plays about 10 % (-20 dB), as a B3's and the SK1's do
+                                                   (setBfree goes down to silence); 127 is full as ever */
 static int32_t wcur[NW], wtgt[NW];              /* level of each wheel on the direct bus (setBfree's swell bus), Q10 (1024 = one drawbar at 8) */
 static int32_t wcurv[NW], wtgtv[NW];            /* and on the vibrato bus: what goes through the scanner */
 static int32_t wpc[NW], wpt[NW];                /* the percussion's share of it before the high-pass (Q10), now and next: its attack is differentiated too */
@@ -384,7 +386,7 @@ static void app_audio(int32_t *out, uint32_t n)
     uint32_t k, d, w, e, i, nk = 0, nku = 0, act = 0, vany = 0, t0 = fm1_ticks(), t1, t2, t3, t4;
     int32_t pa = 0, kd;
     uint32_t dm = P.drv, od = P.od, les = P.les, vm, spk = 0, scl = 0, opk = 0;
-    int32_t gsw = (int32_t)((1229u * P.swell) / 127u);
+    int32_t gsw = (int32_t)((1229u * (SWELL_MIN + ((127u - SWELL_MIN) * P.swell) / 127u)) / 127u);   /* swell 0 still sounds: SWELL_MIN */
     int32_t *tu = P.vup ? wtgtv : wtgt, *tl = P.vlo ? wtgtv : wtgt;   /* the manuals reach the scanner or not (pedals and percussion never do) */
     if (P.perc && !P.soft) gsw = (gsw * PERC_NORMAL_Q15) >> 15;
     gsw = (gsw * ORGAN_LEVEL) >> 15;
