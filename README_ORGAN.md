@@ -28,7 +28,7 @@ Channel 1 plays the upper manual, 2 the lower one, 3 the pedal (setBfree's `midi
 the upper one. Notes fold into C2..C7 (pedal: C1..G3, MIDI 24 to 55). The drawbars 70..78 follow the channel; the pedal has 16' (70) and 8' (72). **Program change** n selects setBfree program n+1 (its `pgm.controller.offset` default), all 110
 programs of `default.pgm` are in; a program only changes what it names. Programs for the lower manual, pedals, key
 splits are kept but have no effect here (programs set the upper manual). **Controllers** as setBfree's defaults:
-1 Leslie slow/stop/fast (0..42 slow, 43..85 stop, 86..127 fast), 7 and 11 swell, 30 vibrato on (lower), 31 (upper), 95 routing (off, lower, upper, both), 64 rotary toggle, 65 overdrive on,
+1 Leslie slow/stop/fast (0..42 slow, 43..85 stop, 86..127 fast), 7 and 11 swell (0 still about 10 %, -20 dB, as a B3's pedal; setBfree goes to silence), 30 vibrato on (lower), 31 (upper), 95 routing (off, lower, upper, both), 64 rotary toggle, 65 overdrive on,
 66 and 80 percussion on, 81 soft, 82 fast, 83 2nd harmonic (64 and up), 92 vibrato knob, 93 overdrive drive (0..20), **91 reverb mix** (setBfree's `reverb.mix`, 0..127, default 12),
 70..78 drawbars **inverted as in setBfree** (127 = pushed in, 0 = fully out), 120 and 123 notes off.
 Not used: 94 convolution. As in setBfree, a program that sets the vibrato knob does not
