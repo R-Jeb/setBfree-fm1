@@ -54,6 +54,8 @@ enum { ENC_SELECT = 0, ENC_ALGORITHM = 1, ENC_KNOB1 = 2, ENC_KNOB2 = 3, ENC_KNOB
 #define ORGAN_C1_WAIT() fm1_cpu1_wait()
 #if BOARD_SMK37
 #include "smk_input.h"                          /* keys with velocity, buttons, 8 encoders, LEDs, pads, faders, wheels */
+#include "smk_wheel.h"                          /* the pitch wheel as a bend (MIDI out) */
+#include "smk_uart_tx.h"                        /* the TRS jack: MIDI OUT (UART1 TX, PC7) */
 #else
 #include "fm1_input.h"
 #endif
@@ -303,6 +305,9 @@ static int midi_get(uint8_t *st, uint8_t *d1, uint8_t *d2)   /* 1: a message (st
 }
 static void midi_send(uint32_t st, uint32_t d1, uint32_t d2)   /* from the main loop only */
 {
+#if BOARD_SMK37
+    smk_trs_put(st, d1, d2);                    /* the TRS jack too, with or without a computer on USB */
+#endif
     midi_out_event((st >> 4) | st << 8 | (d1 & 0x7Fu) << 16 | (d2 & 0x7Fu) << 24);
 }
 
@@ -315,6 +320,9 @@ void fm1_timer5_irq(void)
     uint32_t t0 = fm1_ticks(), usb_due = sub % 5u == 0u;
     fm1_timer5_ack();
     fm1_input_tick();
+#if BOARD_SMK37
+    smk_trs_tick();                             /* TRS MIDI OUT: a byte per tick at most, nested in a render too */
+#endif
     acc += t0 - last;
     last = t0;
     while (acc >= 1000u * FM1_TICKS_PER_US) {
@@ -520,6 +528,9 @@ void fm1_cstart(void)
 #endif
     fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3);   /* (abuf is zero: .bss) */
     usb_start();
+#if BOARD_SMK37
+    smk_trs_init();                             /* before the timer starts */
+#endif
 #if FELUCCA_UART
     uart_midi_init();                           /* before the timer starts: it does a PORTH read-modify-write */
 #endif

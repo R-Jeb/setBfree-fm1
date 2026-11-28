@@ -79,7 +79,8 @@ recording to recording by up to 10 dB or more, and the Raspberry Pi has more ene
 | **LFO** | Leslie: stop, slow, fast |
 | **SEL** | Overdrive on / off |
 | **ENV**, **ARP**, **SEQ**, **PLAY** | Percussion on / off, 2nd / 3rd, fast / slow, soft / normal (screen 1: percussion belongs to the upper manual) |
-| **EDIT**, **SAVE** | Free |
+| **SAVE** | Store the sound in one of your programs 112 .. 127: SAVE, PRESETS picks the slot (it starts on the program playing if it is one of yours, else on the first free one), SAVE again stores; any other button, or 5 s, cancels. A slot keeps its name, a free one is called USER 112 ..; rename in the editor. The equalizer is not part of a program |
+| **EDIT** | Free |
 
 The screen has three pages, each with the drawbars of its manual as bars and the other two manuals' values above and below; the switches, the
 knob values, the program and the battery are on all three. Page 4 has the test values: the load of the audio block and of each stage, the
