@@ -58,10 +58,12 @@ A drawbar's fader works like a drawbar: up is in (0), down is out (8). The equal
 0 dB. A fader takes over only when it reaches or passes the value it sets, so nothing jumps after a bank change, a
 preset or the editor changed it: move it through the value once.
 
-MIDI out (USB, channel 1): the keys with their velocity and the octave (on the pedal manual too: the two octaves
+MIDI out (USB and the TRS jack, channel 1): the keys with their velocity and the octave (on the pedal manual too: the two octaves
 down are the organ's only), the pitch wheel (pitch bend, the whole travel = 2 semitones on most synths) and the mod
 wheel (CC 1; it still switches the Leslie as well). The pads, knobs and faders send nothing. A program that sends
 MIDI back to the keyboard on channel 1 plays the upper manual twice: switch that echo off there.
+The TRS jack is new and not yet tried on a keyboard; it needs a 3.5 mm to MIDI adapter (type A, as far as known: if a
+synth does not answer, try type B). Please report whether it works.
 
 Differences to the FM-1: no TRS MIDI IN (MIDI comes in over USB only); the update loader's screen stays dark while
 an update writes.
