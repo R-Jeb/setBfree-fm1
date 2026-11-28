@@ -266,6 +266,7 @@ static void band_test(uint32_t r)
     cv_text(4, 2, &FONT_S, t, c);
     cv_blit(0, 24u + 20u * r);
 }
+#define SMK_ANY BOARD_SMK37                     /* the SMK's buttons set the vibrato and the percussion from every screen */
 static void band_ctrl(uint32_t scr, uint32_t r)
 {
     int32_t x;
@@ -275,10 +276,10 @@ static void band_ctrl(uint32_t scr, uint32_t r)
         cv_rect(0, 0, 240, 17, C_PCH);
         x = cv_text(4, 1, &FONT_S, "V/C", C_ACC) + 4;
         x = oval(x, 0, VIB[P.vtype % 6u]) + 6;
-        x = chip(x, 0, P.vup ? "UP ON" : "UP OFF", P.vup, scr == 0) + 4;
-        chip(x, 0, P.vlo ? "LO ON" : "LO OFF", P.vlo, scr == 1);
+        x = chip(x, 0, P.vup ? "UP ON" : "UP OFF", P.vup, SMK_ANY || scr == 0) + 4;
+        chip(x, 0, P.vlo ? "LO ON" : "LO OFF", P.vlo, SMK_ANY || scr == 1);
     } else if (r == 1) {                        /* percussion belongs to the upper manual: set on screen 1, shown on the others */
-        int pe = scr == 0;
+        int pe = SMK_ANY || scr == 0;
         cv_rect(0, 0, 240, 17, C_PCH);
         x = cv_text(4, 1, &FONT_S, "PERC", pe ? C_ACC : C_OFF) + 4;
         x = chip(x, 0, P.perc ? "ON" : "OFF", P.perc, pe) + 3;
@@ -482,16 +483,17 @@ typedef uint32_t keys_t;
 
 #if BOARD_SMK37
 /* ---- the SMK-37's own controls (README_SMK37.md). The pads are the drawbars 16' .. 1 1/3' of a manual, one column under each
- * knob: the top pad pushes the drawbar in (down to 0), the bottom pad pulls it out (up to 8); held, it goes on; hit hard (velocity
- * SMK_PAD_FULL and up), all the way in or out at once. One bank switch for
- * pads and faders (PATCH, or KNOB BANK or FADER BANK; the screen follows): bank 1 the upper manual, the faders its 1' and the
+ * knob: the top pad pushes the drawbar in (down to 0), the bottom pad pulls it out (up to 8): a tap one step; held, a step every
+ * SMK_PAD_EVERY ms (the whole way in 2 s). One bank switch for
+ * pads and faders (PATCH; the screen follows): bank 1 the upper manual, the faders its 1' and the
  * equalizer's bass, middle, treble; bank 2 the lower manual, the faders its 1', -, the pedal's 16' and 8'. A drawbar's fader works as
  * a drawbar: up is in (0), down is out (8); the equalizer's: up is more. A fader takes over only once it passes the value it sets
  * (no jump after a bank, a preset or the editor changed it). The mod wheel: down slow, middle stop, up fast.
  * The pedal jack: the swell, once a pedal has moved. */
-#define SMK_REP_MS 400u                         /* a pad held: the first repeat, then every SMK_REP_EVERY ms */
-#define SMK_REP_EVERY 120u
-#define SMK_PAD_FULL 120u                       /* a pad hit this hard (velocity 1..127): the drawbar all the way in (top) or out (bottom) */
+#define SMK_PAD_EVERY 250u                      /* a pad held: a step every 250 ms after the first (no velocity: a tap is one step) */
+enum { SMK_B_ARP = 6, SMK_B_NOTE_REPEAT = 7, SMK_B_SCALE = 8, SMK_B_CHORD = 9, SMK_B_GLOBE = 10, SMK_B_BT = 11,   /* the printed names */
+       SMK_B_PATCH = 12, SMK_B_PARA = 13, SMK_B_FX = 14, SMK_B_SEQ = 15, SMK_B_PLAY = 16, SMK_B_REC = 17 };
+#define SMK_PEDAL_OCT 2                         /* the keys on the pedal manual: two octaves down (C3 .. C6 plays C1 .. C4) */
 static uint8_t pad_bank, fad_bank, fad_live[4];   /* (pads and faders switch together: the same bank) */
 static int16_t fad_last[4] = {-1, -1, -1, -1};
 static uint32_t pad_held, pad_t[16];
@@ -545,12 +547,11 @@ static void smk_faders(void)
         if (fad_live[f] && v != cur) smk_fad_set(f, v);
     }
 }
-static void smk_pad_step(uint32_t pad, uint32_t vel)   /* top row: in (less), bottom row: out (more); hit hard: all the way */
+static void smk_pad_step(uint32_t pad)          /* top row: in (less), bottom row: out (more) */
 {
     volatile uint8_t *db = smk_bars(pad_bank);
     uint32_t c = pad & 7u;
-    if (vel >= SMK_PAD_FULL) db[c] = pad < 8u ? 0u : 8u;
-    else db[c] = clampu((int32_t)db[c] + (pad < 8u ? -1 : 1), 8);
+    db[c] = clampu((int32_t)db[c] + (pad < 8u ? -1 : 1), 8);
 }
 static void smk_pads(uint32_t now)
 {
@@ -558,11 +559,11 @@ static void smk_pads(uint32_t now)
     uint32_t p;
     while ((ev = smk_pad_take()) >= 0) {
         p = (uint32_t)ev >> 8 & 15u;
-        if (ev & 0x7F) { pad_held |= 1u << p; pad_t[p] = now + SMK_REP_MS; smk_pad_step(p, (uint32_t)ev & 0x7Fu); }
+        if (ev & 0x7F) { pad_held |= 1u << p; pad_t[p] = now + SMK_PAD_EVERY; smk_pad_step(p); }
         else pad_held &= ~(1u << p);
     }
     for (p = 0; p < 16u; p++)
-        if (pad_held >> p & 1u && (int32_t)(now - pad_t[p]) >= 0) { pad_t[p] = now + SMK_REP_EVERY; smk_pad_step(p, 1u); }
+        if (pad_held >> p & 1u && (int32_t)(now - pad_t[p]) >= 0) { pad_t[p] = now + SMK_PAD_EVERY; smk_pad_step(p); }
     for (p = 0; p < 8u; p++) {                  /* the colours: the bottom pad as bright as the drawbar is out, the top one dim */
         uint32_t v = smk_bars(pad_bank)[p], lo = 8u + v * 31u, hi = 24u;
         const uint8_t *c = SMK_DBC[p];
@@ -604,23 +605,48 @@ static void smk_pedal(void)                     /* an expression pedal on the ja
     if (v > hi) hi = v;
     if (hi - lo >= 200) P.swell = (uint8_t)((v - lo) * 127 / (hi - lo));
 }
-/* the buttons only the SMK has: < > the presets; PATCH (or KNOB BANK, FADER BANK) the bank of pads and faders: upper, lower */
+/* the SMK's buttons, laid out as on a live organ (README_SMK37.md), the same whatever manual the screen shows:
+ * KNOB BANK, FADER BANK the vibrato / chorus of the upper, the lower manual (lit: on); ARP, NOTE REPEAT, SCALE, CHORD the percussion
+ * (the upper manual's): on, soft, fast, 3rd (lit: so); BT the Leslie: stop, slow, fast (its LED: on, blinking slowly, fast);
+ * PATCH the bank of pads and faders: upper, lower (lit: lower); PARA the keys' manual: upper, lower, pedal (lit: lower, blinking:
+ * pedal); FX the overdrive (lit: on); < > the presets. GLOBE, SEQ, SEQ PLAY, SEQ REC: free. */
 static void smk_buttons(uint32_t b, uint32_t rel)
 {
+    uint32_t slow = fm1_ms / 600u & 1u, fast = fm1_ms / 100u & 1u;
     (void)rel;
     if (b & (1u << BTN_LEFT | 1u << BTN_RIGHT)) {
         uint32_t n = P.pgm ? P.pgm : 5u;
         organ_program(pgm_step(n, b & (1u << BTN_RIGHT) ? 1 : -1));
         fad_live[0] = fad_live[1] = fad_live[2] = fad_live[3] = 0;
     }
-    if (b & (1u << BTN_HOME | 1u << BTN_KNOB_BANK | 1u << BTN_FADER_BANK)) {
+    if (b & 1u << BTN_KNOB_BANK) P.vup ^= 1u;
+    if (b & 1u << BTN_FADER_BANK) P.vlo ^= 1u;
+    if (b & 1u << SMK_B_ARP) P.perc ^= 1u;
+    if (b & 1u << SMK_B_NOTE_REPEAT) P.soft ^= 1u;
+    if (b & 1u << SMK_B_SCALE) P.fast ^= 1u;
+    if (b & 1u << SMK_B_CHORD) P.perc3 ^= 1u;
+    if (b & 1u << SMK_B_BT) P.les = (uint8_t)((P.les + 1u) % 3u);   /* stop, slow, fast */
+    if (b & 1u << SMK_B_PATCH) {
         pad_bank ^= 1u;
         smk_fad_bank(pad_bank);
         screen = pad_bank;                      /* the screen shows the manual of the bank */
     }
-    fm1_led_key(BTN_HOME, pad_bank != 0);       /* lit: bank 2, the lower manual */
-    fm1_led_key(BTN_KNOB_BANK, pad_bank != 0);
-    fm1_led_key(BTN_FADER_BANK, pad_bank != 0);
+    if (b & 1u << SMK_B_PARA) P.keys = (uint8_t)((P.keys + 1u) % 3u);   /* upper, lower, pedal */
+    if (b & 1u << SMK_B_FX) P.od ^= 1u;
+    fm1_led_key(BTN_KNOB_BANK, P.vup != 0);
+    fm1_led_key(BTN_FADER_BANK, P.vlo != 0);
+    fm1_led_key(SMK_B_ARP, P.perc != 0);
+    fm1_led_key(SMK_B_NOTE_REPEAT, P.soft != 0);
+    fm1_led_key(SMK_B_SCALE, P.fast != 0);
+    fm1_led_key(SMK_B_CHORD, P.perc3 != 0);
+    fm1_led_key(SMK_B_BT, P.les == 0u ? 1 : P.les == 1u ? (int)slow : (int)fast);   /* (P.les: 0 stop, 1 slow, 2 fast) */
+    fm1_led_key(SMK_B_PATCH, pad_bank != 0);
+    fm1_led_key(SMK_B_PARA, P.keys == 1u ? 1 : P.keys == 2u ? (int)slow : 0);
+    fm1_led_key(SMK_B_FX, P.od != 0);
+    fm1_led_key(SMK_B_GLOBE, 0);
+    fm1_led_key(SMK_B_SEQ, 0);
+    fm1_led_key(SMK_B_PLAY, 0);
+    fm1_led_key(SMK_B_REC, 0);
 }
 #endif
 
@@ -691,7 +717,11 @@ static void app_main(void)
         prev = keys;
         for (k = 0; k < NKEYS; k++) {           /* a key stops the note it started, on the manual it started it, whatever the octave is now */
             if (down >> k & 1u) {
+#if BOARD_SMK37
+                uint32_t note = (uint32_t)(KEY0 + 12 * (oct - (P.keys == 2u ? SMK_PEDAL_OCT : 0)) + (int32_t)k);
+#else
                 uint32_t note = (uint32_t)(KEY0 + 12 * oct + (int32_t)k);
+#endif
                 held[k] = (uint8_t)note; heldm[k] = P.keys;
                 organ_note(P.keys, 1u, note, 1, 0);
             }
@@ -707,6 +737,7 @@ static void app_main(void)
         } else if (fm1_ms - t_input > LOGO_IDLE_MS) { logo_on = 1; logo_drawn = 0; }
         if (b & (1u << BTN_OCT_DOWN) && oct > -2) { oct--; dirty = 1; t_change = fm1_ms; }
         if (b & (1u << BTN_OCT_UP) && oct < 2) { oct++; dirty = 1; t_change = fm1_ms; }
+#if !BOARD_SMK37                                /* (the SMK's: smk_buttons) */
         if (b & (1u << BTN_FX)) { if (screen == 0) P.vup ^= 1u; else if (screen == 1) P.vlo ^= 1u; }   /* vibrato / chorus on the manual of the screen */
         if (b & (1u << BTN_LFO)) P.les = (uint8_t)((P.les + 1u) % 3u);   /* Leslie: stop, slow, fast */
         if (b & (1u << BTN_SEL)) P.od ^= 1u;                    /* overdrive on / off */
@@ -717,6 +748,7 @@ static void app_main(void)
             if (b & (1u << BTN_SEQ)) P.fast ^= 1u;
             if (b & (1u << BTN_PLAY)) P.soft ^= 1u;
         }
+#endif
 
 #define enc_in(id) (t_enc = fm1_enc_take(id), t_enc ? (t_input = fm1_ms, t_enc) : 0)
         if ((e = enc_in(ENC_KNOB1)) != 0) screen = clampu((int32_t)screen + e, 3);
@@ -787,6 +819,7 @@ static void app_main(void)
 #endif
         fm1_led_key(BTN_OCT_DOWN, oct < 0);
         fm1_led_key(BTN_OCT_UP, oct > 0);
+#if !BOARD_SMK37
         fm1_led_key(BTN_FX, screen == 0 ? P.vup != 0 : screen == 1 ? P.vlo != 0 : 0);
         fm1_led_key(BTN_LFO, P.les != 0);
         fm1_led_key(BTN_ENV, P.perc != 0);
@@ -795,6 +828,7 @@ static void app_main(void)
         fm1_led_key(BTN_SEQ, P.fast != 0);
         fm1_led_key(BTN_PLAY, P.soft != 0);
         fm1_led_key(BTN_REC, P.keys != 0);
+#endif
 
         if (fm1_ms - t_load > 500u) {           /* how close to the 5800 us a block has: the number to watch */
             t_load = fm1_ms;

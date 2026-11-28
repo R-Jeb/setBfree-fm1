@@ -1,7 +1,7 @@
 # The SMK-37's controls (BOARD=smk37 tests/run_host.sh tests/scripts/smk37.txt): build/host/smk37-T.png, the pads under the screen.
 # Standard B (88 8000 000) at the start. Pads: top row 0..7 (in, less), bottom row 8..15 (out, more), one column a drawbar.
 50 enc 0 1
-# the upper 4' out to 6 (column 3, bottom), the 16' in to 6 (column 0, top), 2 2/3' held: out to 8 by itself
+# the upper 4' out to 6 (column 3, bottom: six taps), the 16' in to 6 (column 0, top: two taps), 2 2/3' held 1.2 s: 0 -> 5 (a step at once, then every 250 ms)
 200 pad 11 100
 210 pad 11 0
 260 pad 11 90
@@ -48,11 +48,20 @@
 3800 keys 0x1000000001
 4200 keys 0
 4300 btn 3
-# pads hit hard (velocity 127): the 16' all the way in (top), the 1 1/3' all the way out (bottom)
-4350 pad 0 127
-4360 pad 0 0
-4400 pad 15 127
-4410 pad 15 0
+# the new buttons: KNOB BANK vibrato upper, FADER BANK vibrato lower, ARP perc, NOTE REPEAT soft, SCALE fast, CHORD 3rd,
+# BT Leslie (stop -> slow), FX overdrive, PARA keys: lower, pedal (the keys two octaves down)
+4310 btn 0
+4320 btn 1
+4330 btn 6
+4340 btn 7
+4350 btn 8
+4360 btn 9
+4370 btn 11
+4380 btn 14
+4390 btn 13
+4400 btn 13
+4405 keys 0x1
+4410 keys 0
 # an expression pedal: it moves (toe down 900, heel 100): the swell follows, toe down loud
 4420 pedal 500
 4440 pedal 900

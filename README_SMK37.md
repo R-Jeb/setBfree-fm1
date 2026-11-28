@@ -30,22 +30,26 @@ in its SMK-37 list too and points here to install it.
 
 | Control | Does |
 |---|---|
-| 37 keys (C3 .. C6) | play the manual that SEQ REC chose (upper, lower, pedal); no velocity, as on a B3 |
-| Pads, top row | push a drawbar in (16' .. 1 1/3', one column under each knob), held: on to 0; hit hard: all the way in |
-| Pads, bottom row | pull a drawbar out, held: on to 8; hit hard: all the way out; the pads light in the drawbars' colours, brighter the further out |
-| PATCH (also KNOB BANK, FADER BANK) | the bank of pads and faders: 1 the upper manual, 2 the lower manual and the pedal; the screen follows, the buttons light in bank 2 |
+| 37 keys (C3 .. C6) | play the manual that PARA chose (upper, lower, pedal); on the pedal two octaves down (C1 .. C4); no velocity, as on a B3 |
+| Pads, top row | push a drawbar in (16' .. 1 1/3', one column under each knob): a tap one step, held a step every 1/4 s (0 to 8 in 2 s) |
+| Pads, bottom row | pull a drawbar out, the same way; the pads light in the drawbars' colours, brighter the further out |
+| KNOB BANK, FADER BANK | vibrato / chorus of the upper, the lower manual on / off (lit: on), whatever manual the screen shows |
+| ARP, NOTE REPEAT, SCALE, CHORD | percussion (the upper manual's, set from any screen): on / off, soft, fast, 3rd (lit: on, soft, fast, 3rd) |
+| BT | Leslie: stop, slow, fast (its light: on, blinking slowly, blinking fast) |
+| GLOBE | free |
+| PATCH | the bank of pads and faders: 1 the upper manual, 2 the lower manual and the pedal; the screen follows, PATCH lights in bank 2 |
+| PARA | the keys' manual: upper, lower, pedal (lit: lower; blinking: pedal) |
+| FX | overdrive on / off (lit: on) |
+| SEQ, SEQ PLAY, SEQ REC | free |
 | Faders, bank 1 | 1: the upper 1'; 2, 3, 4: the equalizer's bass, middle, treble |
 | Faders, bank 2 | 1: the lower 1'; 2: -; 3, 4: the pedal's 16' and 8' |
 | Mod wheel | Leslie: down slow, middle stop, up fast |
-| K1 .. K4 | as KNOB 1 .. 4 on the FM-1: the screen, vibrato / chorus, drive, reverb |
+| K1 .. K4 | as KNOB 1 .. 4 on the FM-1: the screen, vibrato / chorus type, drive, reverb |
 | K5, K6 | SELECT, ALGORITHM (as on the FM-1) |
 | K7 | swell (as CC 11) |
 | K8 | volume (the SMK has no MASTER pot) |
 | < > | the presets |
 | OCTAVE- / OCTAVE+ | octave |
-| FX, NOTE REPEAT, SCALE, CHORD | as the FM-1's FX, LFO, SEL, ENV: vibrato on / off, Leslie, overdrive, percussion |
-| ARP, SEQ, SEQ PLAY, SEQ REC | as on the FM-1: percussion 2nd / 3rd, fast / slow, soft / normal; the keys' manual |
-| PARA, BT, GLOBE | free (PARA and BT are the FM-1's EDIT and SAVE) |
 | Pedal jack | swell from an expression pedal (toe down is louder), once the pedal has moved; the range adapts to the pedal: move it through its whole travel once |
 
 A drawbar's fader works like a drawbar: up is in (0), down is out (8). The equalizer's faders: up is more, the middle
