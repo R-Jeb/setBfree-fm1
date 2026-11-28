@@ -40,7 +40,8 @@ in its SMK-37 list too and points here to install it.
 | PATCH | the bank of pads and faders: 1 the upper manual, 2 the lower manual and the pedal; the screen follows, PATCH lights in bank 2 |
 | PARA | the keys' manual: upper, lower, pedal (lit: lower; blinking: pedal) |
 | FX | overdrive on / off (lit: on) |
-| SEQ, SEQ PLAY, SEQ REC | free |
+| SEQ REC | save the sound in one of your programs 112 .. 127: SEQ REC, `<` `>` pick the slot, SEQ REC again stores (any other button or 5 s cancels; it blinks meanwhile); a free slot is called USER 112 .., rename it in the editor |
+| SEQ, SEQ PLAY | free |
 | Faders, bank 1 | 1: the upper 1'; 2, 3, 4: the equalizer's bass, middle, treble |
 | Faders, bank 2 | 1: the lower 1'; 2: -; 3, 4: the pedal's 16' and 8' |
 | Screen | the upper and lower pages show the pedal and the equalizer (bass, middle, treble) in their info line |

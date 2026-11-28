@@ -1,0 +1,12 @@
+# Saving on the SMK-37 (SEQ REC = btn 17, < > = btn 2 / 3): BOARD=smk37 tests/run_host.sh tests/scripts/smk37_save.txt
+# (a key first: it takes the logo away) SEQ REC opens on 112, > twice: 114, < once: 113, SEQ REC stores
+100 keys 1
+150 keys 0
+200 btn 17
+300 btn 3
+350 btn 3
+400 btn 2
+500 shot
+600 btn 17
+700 shot
+3000 end

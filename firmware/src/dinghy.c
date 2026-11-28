@@ -335,9 +335,47 @@ static void draw_logo(void)                     /* in strips as high as the canv
     }
 }
 
+/* ---- saving the sound into one of the user's programs 112..127 on the unit (SAVE on the FM-1, SEQ REC on the SMK-37):
+ * SAVE opens it on the program playing (one of the user's) or the first free one; PRESETS (the SMK: < >) picks; SAVE again stores,
+ * any other button or SV_IDLE_MS without a move closes it. A slot keeps its name; a free one is named USER 112 .. (the editor renames). */
+static uint32_t up_pend, up_dirty, up_gen;     /* slots waiting for the flash (bit k: program 112 + k), anything to save, a count for the screen */
+#define SV_IDLE_MS 5000u
+#define SV_SHOW_MS 1500u
+static uint8_t sv_on, sv_slot;
+static uint32_t sv_t, sv_done_t;
+static uint32_t sv_first(void)                  /* where SAVE starts */
+{
+    uint32_t k;
+    if (P.pgm >= UP_FIRST && P.pgm < UP_FIRST + UP_N) return P.pgm;
+    for (k = 0; k < UP_N; k++) if (!user_pgm(UP_FIRST + k)) return UP_FIRST + k;
+    return UP_FIRST;
+}
+static void sv_store(void)
+{
+    uint8_t name[13];
+    uint32_t k;
+    const organ_user_t *u = user_pgm(sv_slot);
+    if (u) for (k = 0; k < 13u; k++) name[k] = (uint8_t)u->name[k];   /* (a copy: user_store writes the same slot) */
+    else { char *q = su(sp((char *)name, "USER "), sv_slot); *q = 0; }
+    user_store(sv_slot, name);
+    up_pend |= 1u << (sv_slot - UP_FIRST); up_dirty = 1; up_gen++;     /* to the flash once nothing sounds; the editor hears of it */
+    sv_on = 0; sv_done_t = fm1_ms | 1u;
+}
 static void band_preset(void)
 {
     char s[40], *p = s;
+    if (sv_on || sv_done_t) {                   /* the save window: dark on tungsten */
+        if (sv_on) {
+            p = su(sp(p, "SAVE TO "), sv_slot); p = sp(p, " ");
+            p = sp(p, user_pgm(sv_slot) ? pgm_name(sv_slot) : "(empty)");
+        } else { p = su(sp(p, "SAVED "), P.pgm); p = sp(p, " "); p = sp(p, pgm_name(P.pgm) ? pgm_name(P.pgm) : ""); }
+        *p = 0;
+        while (p > s && text_w(&FONT_S, s) > 202) *--p = 0;
+        cv_begin(208, 16, C_ACC);
+        cv_text(3, 0, &FONT_S, s, C_BLACK);
+        cv_blit(0, 222);
+        return;
+    }
     if (P.pgm && pgm_name(P.pgm)) { p = su(p, P.pgm); p = sp(p, " "); p = sp(p, pgm_name(P.pgm)); }
     *p = 0;
     while (p > s && text_w(&FONT_S, s) > 206) *--p = 0;     /* the corner is the battery's */
@@ -361,7 +399,6 @@ static uint32_t state_key(int32_t oct, uint32_t *status)   /* what is worth savi
 }
 
 /* ---- the web editor's SysEx (docs/editor): F0 7D 42 33 CMD ... F7 ("B3"). README_ORGAN.md has the list. */
-static uint32_t up_pend, up_dirty, up_gen;     /* slots waiting for the flash (bit k: program 112 + k), anything to save, a count for the screen */
 static void ed_send(uint32_t cmd, const uint8_t *d, uint32_t n)
 {
     uint8_t m[104];
@@ -619,7 +656,7 @@ static void smk_pedal(void)                     /* an expression pedal on the ja
  * KNOB BANK, FADER BANK the vibrato / chorus of the upper, the lower manual (lit: on); ARP, NOTE REPEAT, SCALE, CHORD the percussion
  * (the upper manual's): on, soft, fast, 3rd (lit: so); BT the Leslie: stop, slow, fast (its LED: on, blinking slowly, fast);
  * PATCH the bank of pads and faders: upper, lower (lit: lower); PARA the keys' manual: upper, lower, pedal (lit: lower, blinking:
- * pedal); FX the overdrive (lit: on); < > the presets. GLOBE, SEQ, SEQ PLAY, SEQ REC: free. */
+ * pedal); FX the overdrive (lit: on); < > the presets; SEQ REC saves (app_main: SV_BTN). GLOBE, SEQ, SEQ PLAY: free. */
 static void smk_buttons(uint32_t b, uint32_t rel)
 {
     uint32_t slow = fm1_ms / 600u & 1u, fast = fm1_ms / 100u & 1u;
@@ -656,10 +693,14 @@ static void smk_buttons(uint32_t b, uint32_t rel)
     fm1_led_key(SMK_B_GLOBE, 0);
     fm1_led_key(SMK_B_SEQ, 0);
     fm1_led_key(SMK_B_PLAY, 0);
-    fm1_led_key(SMK_B_REC, 0);
 }
 #endif
 
+#if BOARD_SMK37
+#define SV_BTN BTN_REC                          /* SEQ REC (the SMK has no SAVE) */
+#else
+#define SV_BTN BTN_SAVE
+#endif
 static void app_main(void)
 {
     struct { uint8_t magic, db[NB], vtype, vup, perc, perc3, fast, soft, les, od, drv, pgm, rev; int8_t oct;
@@ -745,6 +786,17 @@ static void app_main(void)
             for (k = 0; k < FM1_NENC; k++) if (fm1_enc_take(k) != 0) any = 1;
             if (any) { logo_on = 0; logo_drawn = 0; screen = 0; drawn_screen = 99; t_input = fm1_ms; b = 0; }
         } else if (fm1_ms - t_input > LOGO_IDLE_MS) { logo_on = 1; logo_drawn = 0; }
+        if (sv_done_t && fm1_ms - sv_done_t > SV_SHOW_MS) sv_done_t = 0;
+        if (sv_on) {                            /* the save window takes the buttons: SAVE stores, < > (the SMK) pick, any other closes */
+#if BOARD_SMK37
+            uint32_t pick = b & (1u << BTN_LEFT | 1u << BTN_RIGHT);
+            if (pick) { sv_slot = (uint8_t)(UP_FIRST + (sv_slot - UP_FIRST + (pick & 1u << BTN_RIGHT ? 1u : UP_N - 1u)) % UP_N); sv_t = fm1_ms; }
+            b &= ~pick;
+#endif
+            if (b & 1u << SV_BTN) sv_store();
+            else if (b || fm1_ms - sv_t > SV_IDLE_MS) sv_on = 0;
+            b = 0;
+        } else if (b & 1u << SV_BTN) { sv_on = 1; sv_slot = (uint8_t)sv_first(); sv_t = fm1_ms; sv_done_t = 0; b &= ~(1u << SV_BTN); }
         if (b & (1u << BTN_OCT_DOWN) && oct > -2) { oct--; dirty = 1; t_change = fm1_ms; }
         if (b & (1u << BTN_OCT_UP) && oct < 2) { oct++; dirty = 1; t_change = fm1_ms; }
 #if !BOARD_SMK37                                /* (the SMK's: smk_buttons) */
@@ -784,7 +836,10 @@ static void app_main(void)
             if (logo_on) { logo_on = 0; logo_drawn = 0; drawn_screen = 99; }
         }
 #else
-        if ((e = enc_in(ENC_PRESETS)) != 0) {             /* setBfree's registrations, one after the other (the upper manual's) */
+        if ((e = enc_in(ENC_PRESETS)) != 0 && sv_on) {   /* the save window: the slot */
+            sv_slot = (uint8_t)(UP_FIRST + (uint32_t)((int32_t)(sv_slot - UP_FIRST) + e % (int32_t)UP_N + (int32_t)UP_N) % UP_N);
+            sv_t = fm1_ms;
+        } else if (e != 0) {                              /* setBfree's registrations, one after the other (the upper manual's) */
             uint32_t n = P.pgm ? P.pgm : 5u;
             for (; e > 0; e--) n = pgm_step(n, 1);
             for (; e < 0; e++) n = pgm_step(n, -1);
@@ -827,6 +882,7 @@ static void app_main(void)
         for (k = 0; k < 27u; k++)
             fm1_led_key(KEY_LED(k), held[k] != 255);
 #endif
+        fm1_led_key(SV_BTN, sv_on && (fm1_ms / 250u & 1u));   /* blinks while the save window is open */
         fm1_led_key(BTN_OCT_DOWN, oct < 0);
         fm1_led_key(BTN_OCT_UP, oct > 0);
 #if !BOARD_SMK37
@@ -886,7 +942,7 @@ static void app_main(void)
                     h = hmix(h, r);
                     if (h != hash[4 + r]) { hash[4 + r] = h; band_ctrl(screen, r); }
                 }
-                h = hmix(hmix(3, P.pgm), up_gen);
+                h = hmix(hmix(hmix(hmix(hmix(3, P.pgm), up_gen), sv_on), sv_slot), sv_done_t != 0);
                 if (h != hash[8]) { hash[8] = h; band_preset(); }
             }
         }
