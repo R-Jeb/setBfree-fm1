@@ -2,7 +2,8 @@
 
 > **Experimental, first tested on a real keyboard.** A player has run B3 ORGAN on an SMK-37 Elite
 > ([issue #57](https://github.com/R-Jeb/setBfree-fm1/issues/57)); what he found (the expression pedal's direction,
-> the swell's minimum, a hard pad hit) is fixed in 0.7.1. The Pro and MKE-P37 packages have run only in Joakim
+> the swell's minimum) is fixed in 0.7.1; 0.7.2 lays the buttons and pads out for playing live, after
+> his ideas, and adds MIDI out and saving on the keyboard (the emulator only so far). The Pro and MKE-P37 packages have run only in Joakim
 > Eriksson's [SMK-37 emulator](https://joakimeriksson.github.io/fm1-emu/smk37/). If you try one on your SMK-37,
 > **please tell us how it went**: open a
 > [test report](https://github.com/R-Jeb/setBfree-fm1/issues/new?template=smk37-report.md), whether it works or not.
