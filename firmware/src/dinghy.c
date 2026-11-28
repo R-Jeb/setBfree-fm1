@@ -621,13 +621,15 @@ static void smk_pads(uint32_t now)
     }
     padled_flush();
 }
+static int32_t mw_lo = 474, mw_hi = 629;        /* the mod wheel's travel (a unit's; it widens to what the wheel reaches) */
 static void smk_modwheel(void)                  /* the mod wheel in three parts (up = a lower reading): slow, stop, fast */
 {
-    static int32_t lo = 474, hi = 629, zone = -1;   /* (a unit's travel; it widens to what the wheel reaches) */
-    int32_t raw = fm1_in.wheel[1], pos, z;
+    static int32_t zone = -1;
+    int32_t raw = fm1_in.wheel[1], pos, z, lo, hi;
     if (!raw) return;
-    if (raw < lo) lo = raw;
-    if (raw > hi) hi = raw;
+    if (raw < mw_lo) mw_lo = raw;
+    if (raw > mw_hi) mw_hi = raw;
+    lo = mw_lo; hi = mw_hi;
     pos = (hi - raw) * 300 / (hi - lo);         /* 0 down .. 300 up */
     z = zone < 0 ? (pos < 100 ? 0 : pos < 200 ? 1 : 2) : zone;
     if (zone >= 0) {                            /* a margin of 12 around the borders: no flutter */
@@ -637,6 +639,30 @@ static void smk_modwheel(void)                  /* the mod wheel in three parts 
     }
     if (zone >= 0 && z != zone) P.les = (uint8_t)(z == 0 ? 1u : z == 1 ? 0u : 2u);   /* (P.les: 0 stop, 1 slow, 2 fast) */
     zone = z;                                   /* (at power-on the wheel only gives its place: the saved Leslie stays) */
+}
+/* MIDI out over USB, channel 1: the keys (with their velocity and the octave; not the pedal manual's two octaves down), the pitch
+ * wheel (+-2 semitones' travel; hal/smk_wheel.h) and the mod wheel (CC 1, as well as the Leslie here). Not the pads, knobs, faders. */
+#define SMK_MIDI_CH 0u
+#define SMK_WHEEL_MS 4u
+static void smk_wheels_out(void)
+{
+    static smk_pw_t pw;
+    static int32_t acc = -1, used, last_b = 0, last_m = -1;
+    static uint32_t t_b, t_m;                   /* a message at most every SMK_WHEEL_MS a wheel (the last value always follows) */
+    int32_t raw = fm1_in.wheel[0], r, b, m;
+    if (!raw || !fm1_in.wheel[1] || fm1_in.frames < 300u) return;   /* (the readings settle: about 0.5 s) */
+    if (acc < 0) { acc = raw << 4; used = raw; }
+    acc += ((raw << 4) - acc) / 4;              /* a little smoothing, and a count of hysteresis: a wobble sends nothing */
+    r = (acc + 8) >> 4;
+    if (r > used + 1) used = r - 1;
+    else if (r < used - 1) used = r + 1;
+    b = smk_pw_bend(&pw, used, fm1_ms) * 8192 / (SMK_PW_ST * 4096);
+    b = b > 8191 ? 8191 : b < -8192 ? -8192 : b;
+    if (b != last_b && fm1_ms - t_b >= SMK_WHEEL_MS) { last_b = b; t_b = fm1_ms; b += 8192; midi_send(0xE0u | SMK_MIDI_CH, (uint32_t)b & 0x7Fu, (uint32_t)b >> 7); }
+    m = (mw_hi - fm1_in.wheel[1]) * 127 / (mw_hi - mw_lo);
+    m = m < 0 ? 0 : m > 127 ? 127 : m;
+    if (last_m < 0) last_m = m;                 /* (its place at power-on is not sent: only a move) */
+    if (m != last_m && fm1_ms - t_m >= SMK_WHEEL_MS) { last_m = m; t_m = fm1_ms; midi_send(0xB0u | SMK_MIDI_CH, 1u, (uint32_t)m); }
 }
 static void smk_pedal(void)                     /* an expression pedal on the jack: the swell, once it has moved (no plug detection) */
 {
@@ -710,6 +736,9 @@ static void app_main(void)
     uint32_t k, i, t_change = 0, dirty = 0, t_load = 0, seed = 12345u, saved_key = 0, last_key = 0;
     uint32_t hash[22], drawn_screen = 99, drawn_batt = ~0u, logo_on = 1, logo_drawn = 0, t_input = 0;
     uint8_t held[NKEYS], heldm[NKEYS];
+#if BOARD_SMK37
+    uint8_t heldx[NKEYS];                       /* the note each key sent to MIDI out */
+#endif
 #ifdef DINGHY_HOST
     if (getenv("ORGAN_ONE")) organ_two = 0;          /* tests: all the wheels in one call, to compare with the two halves */
 #endif
@@ -770,13 +799,20 @@ static void app_main(void)
             if (down >> k & 1u) {
 #if BOARD_SMK37
                 uint32_t note = (uint32_t)(KEY0 + 12 * (oct - (P.keys == 2u ? SMK_PEDAL_OCT : 0)) + (int32_t)k);
+                heldx[k] = (uint8_t)(KEY0 + 12 * oct + (int32_t)k);   /* MIDI out: the key as it is, with the octave */
+                midi_send(0x90u | SMK_MIDI_CH, heldx[k], fm1_in.key_vel[k] ? fm1_in.key_vel[k] : 100u);
 #else
                 uint32_t note = (uint32_t)(KEY0 + 12 * oct + (int32_t)k);
 #endif
                 held[k] = (uint8_t)note; heldm[k] = P.keys;
                 organ_note(P.keys, 1u, note, 1, 0);
             }
-            if (up >> k & 1u && held[k] != 255) { organ_note(heldm[k], 1u, held[k], 0, 0); held[k] = 255; }
+            if (up >> k & 1u && held[k] != 255) {
+                organ_note(heldm[k], 1u, held[k], 0, 0); held[k] = 255;
+#if BOARD_SMK37
+                midi_send(0x80u | SMK_MIDI_CH, heldx[k], 64u);
+#endif
+            }
         }
 
         b = fm1_input_edges(&rel);
@@ -830,6 +866,7 @@ static void app_main(void)
         smk_pads(fm1_ms);
         smk_faders();
         smk_modwheel();
+        smk_wheels_out();
         smk_pedal();
         if (pad_held) {                         /* a pad is a control too: it brings the screen back from the logo */
             t_input = fm1_ms;

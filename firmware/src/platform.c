@@ -54,6 +54,7 @@ enum { ENC_SELECT = 0, ENC_ALGORITHM = 1, ENC_KNOB1 = 2, ENC_KNOB2 = 3, ENC_KNOB
 #define ORGAN_C1_WAIT() fm1_cpu1_wait()
 #if BOARD_SMK37
 #include "smk_input.h"                          /* keys with velocity, buttons, 8 encoders, LEDs, pads, faders, wheels */
+#include "smk_wheel.h"                          /* the pitch wheel as a bend (MIDI out) */
 #else
 #include "fm1_input.h"
 #endif

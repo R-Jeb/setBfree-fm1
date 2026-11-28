@@ -1,0 +1,17 @@
+# MIDI out on the SMK-37 (USB, channel 1): BOARD=smk37 tests/run_host.sh tests/scripts/smk37_midi.txt (the log shows "MIDI out")
+# the lowest C (C3 = 48) on and off; OCTAVE+ then C3 again (60); PARA to the pedal: MIDI out stays 60 (only the organ goes down)
+600 keys 0x1
+700 keys 0
+800 btn 5
+900 keys 0x1
+1000 keys 0
+1100 btn 13
+1110 btn 13
+1200 keys 0x1
+1300 keys 0
+# pitch wheel up and back (rest 535), mod wheel up (474 down .. 629 up = lower reading)
+1400 wheel 0 640
+1500 wheel 0 535
+1600 wheel 1 560
+1700 wheel 1 474
+2000 end

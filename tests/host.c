@@ -29,12 +29,15 @@ static volatile uint32_t fm1_ms;
 /* the SMK-37 (hal/smk_input.h's API): 37 keys (fm1_in.keys, bit 0 = C3), the pads as events, 4 faders, 2 wheels, the pedal jack,
  * 8 encoders, 18 buttons with their LEDs, the pads' colours (drawn under the screen in the PPM) */
 #define FM1_NENC 8u
+#include "../firmware/hal/smk_wheel.h"
 static struct {
     uint32_t notes, buttons;
     uint64_t keys;
     uint8_t fader[4];
     uint16_t wheel[2], pedal;
-} fm1_in = {.wheel = {535, 474}, .pedal = 985};   /* (as a unit reads them at rest: the mod wheel down, no pedal) */
+    uint8_t key_vel[37];                        /* (100: the script plays keys without velocity) */
+    uint32_t frames;                            /* scan frames (1.6 ms): the wheels wait for them to settle */
+} fm1_in = {.wheel = {535, 474}, .pedal = 985, .key_vel = {[0 ... 36] = 100}};   /* (as a unit reads them at rest: the mod wheel down, no pedal) */
 static uint8_t smk_pad_events;
 static int32_t host_padq[64];
 static uint32_t host_padq_w, host_padq_r;
@@ -307,6 +310,9 @@ static void platform_poll(void)                 /* one call = one millisecond */
         }
         step++;
     }
+#if BOARD_SMK37
+    fm1_in.frames = fm1_ms * 10u / 16u;
+#endif
     owed += FS;                                 /* the frames this millisecond is worth, in blocks as the ISR renders */
     while (owed >= 1000u * HALF_FRAMES) {
         uint32_t i;
