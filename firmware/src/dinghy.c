@@ -200,10 +200,10 @@ static void band_block(uint32_t scr, uint32_t m)
         cv_begin(240, 16, C_BLACK);             /* name and bars together, 78, lost the footage row) */
         cv_text(4, 0, &FONT_S, MAN[m], act ? C_ACC : C_OFF);
         if (!act) cv_text(4 + 8 * 6, 0, &FONT_S, "INFO", C_OFF);
-        if (act && m == 2u) {                   /* the equalizer's names over its sliders */
+        if (m == 2u) {                          /* the equalizer's names over its sliders (or, on the other screens, over its values) */
             uint32_t k;
             for (k = 0; k < 3u; k++)
-                cv_text(EQ_X0 + EQ_DX * (int32_t)k + 12 - text_w(&FONT_S, EQN[k]) / 2, 0, &FONT_S, EQN[k], sel[2] == 2u + k ? C_ACC : C_OFF);
+                cv_text(EQ_X0 + EQ_DX * (int32_t)k + 12 - text_w(&FONT_S, EQN[k]) / 2, 0, &FONT_S, EQN[k], act && sel[2] == 2u + k ? C_ACC : C_OFF);
         }
         cv_blit(0, y);
         y += 16u;
@@ -212,7 +212,17 @@ static void band_block(uint32_t scr, uint32_t m)
     if (act) {
         draw_bars(1, v, m == 2 ? PEDID : 0, cnt, sel[m]);
         if (m == 2u) draw_eq(1, sel[2] >= 2u ? sel[2] - 2u : 9u);
-    } else draw_digits(0, v, m == 2 ? PEDID : 0, cnt);   /* (0.6 drew these over the active manual's bars too) */
+    } else {
+        draw_digits(0, v, m == 2 ? PEDID : 0, cnt);   /* (0.6 drew these over the active manual's bars too) */
+        if (m == 2u) {                          /* the equalizer's gains, under their names */
+            uint32_t k;
+            char t[6];
+            for (k = 0; k < 3u; k++) {
+                eq_label(t, eq_p[2u * k]);
+                cv_text(EQ_X0 + EQ_DX * (int32_t)k + 12 - text_w(&FONT_S, t) / 2, 0, &FONT_S, t, C_OFF);
+            }
+        }
+    }
     cv_blit(0, y);
 }
 static const char *const VIB[6] = {"V1", "C1", "V2", "C2", "V3", "C3"};

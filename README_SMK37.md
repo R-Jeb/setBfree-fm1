@@ -43,6 +43,7 @@ in its SMK-37 list too and points here to install it.
 | SEQ, SEQ PLAY, SEQ REC | free |
 | Faders, bank 1 | 1: the upper 1'; 2, 3, 4: the equalizer's bass, middle, treble |
 | Faders, bank 2 | 1: the lower 1'; 2: -; 3, 4: the pedal's 16' and 8' |
+| Screen | the upper and lower pages show the pedal and the equalizer (bass, middle, treble) in their info line |
 | Mod wheel | Leslie: down slow, middle stop, up fast |
 | K1 .. K4 | as KNOB 1 .. 4 on the FM-1: the screen, vibrato / chorus type, drive, reverb |
 | K5, K6 | SELECT, ALGORITHM (as on the FM-1) |
